@@ -6,7 +6,6 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/devtools"
-	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/cli-extension-ai-redteam/pkg/redteam"
 )
@@ -20,9 +19,7 @@ func main() {
 		}
 	}
 
-	cmd, err := devtools.Cmd(func(e workflow.Engine) error {
-		return redteam.Init(e)
-	})
+	cmd, err := devtools.Cmd(redteam.Init)
 	if err != nil {
 		log.Fatal(err)
 	}

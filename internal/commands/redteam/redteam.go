@@ -24,14 +24,18 @@ import (
 
 var WorkflowID = workflow.NewWorkflowIdentifier("redteam")
 
-type ControlServerFactory func(logger *zerolog.Logger, httpClient *http.Client, url string) controlserver.Client
-type TargetFactory func(httpClient *http.Client, url string, headers map[string]string, bodyTemplate, responseSelector string) target.Client
+type (
+	ControlServerFactory func(logger *zerolog.Logger, httpClient *http.Client, url string) controlserver.Client
+	TargetFactory        func(httpClient *http.Client, url string, headers map[string]string, bodyTemplate, responseSelector string) target.Client
+)
 
 var DefaultControlServerFactory ControlServerFactory = func(logger *zerolog.Logger, httpClient *http.Client, url string) controlserver.Client {
 	return controlserver.NewClient(logger, httpClient, url)
 }
 
-var DefaultTargetFactory TargetFactory = func(httpClient *http.Client, url string, headers map[string]string, bodyTemplate, responseSelector string) target.Client {
+var DefaultTargetFactory TargetFactory = func(
+	httpClient *http.Client, url string, headers map[string]string, bodyTemplate, responseSelector string,
+) target.Client {
 	return target.NewHTTPClient(httpClient, url, headers, bodyTemplate, responseSelector)
 }
 
@@ -123,7 +127,7 @@ func runClientDrivenScan(
 	invocationCtx workflow.InvocationContext,
 	csClient controlserver.Client,
 	targetClient target.Client,
-	rtConfig *RedTeamConfig,
+	rtConfig *Config,
 ) ([]workflow.Data, error) {
 	logger := invocationCtx.GetEnhancedLogger()
 	userInterface := invocationCtx.GetUserInterface()
@@ -137,8 +141,8 @@ func runClientDrivenScan(
 
 	progressBar := userInterface.NewProgressBar()
 	progressBar.SetTitle(fmt.Sprintf("Scanning %s...", rtConfig.Target.Name))
-	_ = progressBar.UpdateProgress(ui.InfiniteProgress)
-	defer func() { _ = progressBar.Clear() }()
+	_ = progressBar.UpdateProgress(ui.InfiniteProgress) //nolint:errcheck // best-effort progress
+	defer func() { _ = progressBar.Clear() }()          //nolint:errcheck // best-effort cleanup
 
 	var responses []controlserver.ChatResponse
 	for {
@@ -167,7 +171,7 @@ func runClientDrivenScan(
 	}
 
 	progressBar.SetTitle("Scan completed")
-	_ = progressBar.UpdateProgress(1.0)
+	_ = progressBar.UpdateProgress(1.0) //nolint:errcheck // best-effort progress
 
 	status, statusErr := csClient.GetStatus(ctx, scanID)
 	if statusErr != nil {
@@ -206,7 +210,7 @@ func updateProgress(
 	}
 	if status.TotalChats > 0 {
 		progressBar.SetTitle(fmt.Sprintf("Scanning (%d/%d)", status.Completed, status.TotalChats))
-		_ = progressBar.UpdateProgress(float64(status.Completed) / float64(status.TotalChats))
+		_ = progressBar.UpdateProgress(float64(status.Completed) / float64(status.TotalChats)) //nolint:errcheck // best-effort
 	}
 }
 
@@ -221,6 +225,7 @@ func outputStatus(userInterface ui.UserInterface, logger *zerolog.Logger, status
 	}
 }
 
+//nolint:ireturn // workflow.Data is the framework's expected return type
 func newWorkflowData(contentType string, data []byte) workflow.Data {
 	return workflow.NewData(
 		workflow.NewTypeIdentifier(WorkflowID, "redteam"),

@@ -21,8 +21,8 @@ import (
 )
 
 const (
-	getWorkflowName    = "redteam.get"
-	defaultCSURL       = "http://localhost:8085"
+	getWorkflowName = "redteam.get"
+	defaultCSURL    = "http://localhost:8085"
 )
 
 var (
@@ -49,10 +49,6 @@ func RegisterRedTeamGetWorkflow(e workflow.Engine) error {
 
 func redTeamGetWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
 	logger := invocationCtx.GetEnhancedLogger()
-	csURL := invocationCtx.GetConfiguration().GetString(utils.FlagControlServer)
-	if csURL == "" {
-		csURL = defaultCSURL
-	}
 	factory := func(url string) controlserver.Client {
 		return controlserver.NewClient(logger, &http.Client{}, url)
 	}

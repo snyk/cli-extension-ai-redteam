@@ -14,15 +14,15 @@ import (
 )
 
 const (
-	defaultControlServerURL     = "http://localhost:8085"
-	defaultGoal                 = "system_prompt_extraction"
-	defaultResponseSelector     = "response"
-	defaultRequestBodyTemplate  = `{"message": "{{prompt}}"}`
+	defaultControlServerURL    = "http://localhost:8085"
+	defaultGoal                = "system_prompt_extraction"
+	defaultResponseSelector    = "response"
+	defaultRequestBodyTemplate = `{"message": "{{prompt}}"}`
 )
 
 var defaultStrategies = []string{"directly_asking"}
 
-type RedTeamConfig struct {
+type Config struct {
 	Target           ConfigTarget  `yaml:"target"`
 	Options          ConfigOptions `yaml:"options"`
 	ControlServerURL string        `yaml:"control_server_url"`
@@ -66,11 +66,11 @@ type ConfigVulnDefinitions struct {
 	Exclude []string `yaml:"exclude,omitempty"`
 }
 
-func LoadAndValidateConfig(logger *zerolog.Logger, config configuration.Configuration) (*RedTeamConfig, []workflow.Data, error) {
+func LoadAndValidateConfig(logger *zerolog.Logger, config configuration.Configuration) (*Config, []workflow.Data, error) {
 	targetURL := config.GetString(utils.FlagTargetURL)
 	configPath := config.GetString(utils.FlagConfig)
 
-	var rtConfig RedTeamConfig
+	var rtConfig Config
 
 	hasConfigFile := false
 	if configPath != "" {
@@ -135,7 +135,7 @@ func LoadAndValidateConfig(logger *zerolog.Logger, config configuration.Configur
 	return &rtConfig, nil, nil
 }
 
-func applyDefaults(cfg *RedTeamConfig) {
+func applyDefaults(cfg *Config) {
 	if cfg.ControlServerURL == "" {
 		cfg.ControlServerURL = defaultControlServerURL
 	}
@@ -153,7 +153,7 @@ func applyDefaults(cfg *RedTeamConfig) {
 	}
 }
 
-func (cfg *RedTeamConfig) HeadersMap() map[string]string {
+func (cfg *Config) HeadersMap() map[string]string {
 	headers := make(map[string]string)
 	for _, h := range cfg.Target.Settings.Headers {
 		headers[h.Name] = h.Value
@@ -167,7 +167,7 @@ func parseHeaderFlags(config configuration.Configuration) []ConfigHeader {
 	if !ok || len(vals) == 0 {
 		return nil
 	}
-	var headers []ConfigHeader
+	headers := make([]ConfigHeader, 0, len(vals))
 	for _, h := range vals {
 		name, value, found := strings.Cut(h, ":")
 		if !found {

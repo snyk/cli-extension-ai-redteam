@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/jmespath/go-jmespath"
 )
 
 type Client interface {
@@ -98,20 +100,15 @@ func extractResponse(respBytes []byte, selector string) (string, error) {
 		return "", fmt.Errorf("parse target response JSON: %w", err)
 	}
 
-	parts := strings.Split(selector, ".")
-	current := data
-	for _, part := range parts {
-		m, ok := current.(map[string]any)
-		if !ok {
-			return "", fmt.Errorf("response_selector %q: expected object at %q, got %T", selector, part, current)
-		}
-		current, ok = m[part]
-		if !ok {
-			return "", fmt.Errorf("response_selector %q: key %q not found", selector, part)
-		}
+	result, err := jmespath.Search(selector, data)
+	if err != nil {
+		return "", fmt.Errorf("response_selector %q: %w", selector, err)
+	}
+	if result == nil {
+		return "", fmt.Errorf("response_selector %q: no match found", selector)
 	}
 
-	switch v := current.(type) {
+	switch v := result.(type) {
 	case string:
 		return v, nil
 	default:
