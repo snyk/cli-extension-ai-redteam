@@ -23,11 +23,10 @@ const (
 var defaultStrategies = []string{"directly_asking"}
 
 type Config struct {
-	Target           ConfigTarget  `yaml:"target"`
-	Options          ConfigOptions `yaml:"options"`
-	ControlServerURL string        `yaml:"control_server_url"`
-	Goal             string        `yaml:"goal"`
-	Strategies       []string      `yaml:"strategies"`
+	Target           ConfigTarget `yaml:"target"`
+	ControlServerURL string       `yaml:"control_server_url"`
+	Goal             string       `yaml:"goal"`
+	Strategies       []string     `yaml:"strategies"`
 }
 
 type ConfigTarget struct {
@@ -55,15 +54,6 @@ type ConfigSettings struct {
 type ConfigHeader struct {
 	Name  string `yaml:"name"`
 	Value string `yaml:"value"`
-}
-
-type ConfigOptions struct {
-	VulnDefinitions ConfigVulnDefinitions `yaml:"vuln_definitions"`
-	ScanningAgent   string                `yaml:"scanning_agent,omitempty"`
-}
-
-type ConfigVulnDefinitions struct {
-	Exclude []string `yaml:"exclude,omitempty"`
 }
 
 func LoadAndValidateConfig(logger *zerolog.Logger, config configuration.Configuration) (*Config, []workflow.Data, error) {
