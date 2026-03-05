@@ -220,7 +220,7 @@ target:
 	results, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
 	require.NoError(t, err)
 	payload, _ := results[0].GetPayload().([]byte)
-	assert.Contains(t, string(payload), "Configuration file in invalid")
+	assert.Contains(t, string(payload), "Configuration file is invalid")
 }
 
 func TestRunRedTeamWorkflow_ValidationFailure(t *testing.T) {

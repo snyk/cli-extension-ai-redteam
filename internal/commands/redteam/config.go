@@ -1,10 +1,13 @@
 package redteam
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 
+	"github.com/jmespath/go-jmespath"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -118,11 +121,50 @@ func LoadAndValidateConfig(logger *zerolog.Logger, config configuration.Configur
 
 	applyDefaults(&rtConfig)
 
-	if rtConfig.Target.Settings.URL == "" {
-		return nil, nil, fmt.Errorf("target URL is required (set in config file or pass --target-url)")
+	if err := ValidateConfig(&rtConfig); err != nil {
+		return nil, nil, err
 	}
 
 	return &rtConfig, nil, nil
+}
+
+func ValidateConfig(cfg *Config) error {
+	var errs []string
+
+	if cfg.Target.Settings.URL == "" {
+		errs = append(errs, "target URL is required (set in config file or pass --target-url)")
+	} else if err := validateURL(cfg.Target.Settings.URL, "target URL"); err != nil {
+		errs = append(errs, err.Error())
+	}
+
+	if err := validateURL(cfg.ControlServerURL, "control server URL"); err != nil {
+		errs = append(errs, err.Error())
+	}
+
+	if !strings.Contains(cfg.Target.Settings.RequestBodyTemplate, "{{prompt}}") {
+		errs = append(errs, "request_body_template must contain the {{prompt}} placeholder")
+	}
+	replaced := strings.ReplaceAll(cfg.Target.Settings.RequestBodyTemplate, "{{prompt}}", "test")
+	if !json.Valid([]byte(replaced)) {
+		errs = append(errs, "request_body_template is not valid JSON")
+	}
+
+	if _, err := jmespath.Compile(cfg.Target.Settings.ResponseSelector); err != nil {
+		errs = append(errs, fmt.Sprintf("response_selector is not a valid JMESPath expression: %v", err))
+	}
+
+	if len(errs) == 0 {
+		return nil
+	}
+	return fmt.Errorf("invalid configuration:\n  - %s", strings.Join(errs, "\n  - "))
+}
+
+func validateURL(rawURL, label string) error {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return fmt.Errorf("%s must be a valid HTTP(S) URL, got: %q", label, rawURL)
+	}
+	return nil
 }
 
 func applyDefaults(cfg *Config) {
@@ -173,7 +215,7 @@ func parseHeaderFlags(config configuration.Configuration) []ConfigHeader {
 
 func getInvalidConfigMessage() string {
 	return `
-	Configuration file in invalid. Please refer to the following example:
+	Configuration file is invalid. Please refer to the following example:
 
 	target:
 		name: <required, name your target>
