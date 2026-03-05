@@ -3,6 +3,7 @@ package redteam
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -121,6 +122,9 @@ func LoadAndValidateConfig(logger *zerolog.Logger, config configuration.Configur
 	if v := config.GetString(utils.FlagResponseSelector); v != "" {
 		rtConfig.Target.Settings.ResponseSelector = v
 	}
+	if headers := parseHeaderFlags(config); len(headers) > 0 {
+		rtConfig.Target.Settings.Headers = append(rtConfig.Target.Settings.Headers, headers...)
+	}
 
 	applyDefaults(&rtConfig)
 
@@ -153,6 +157,26 @@ func (cfg *RedTeamConfig) HeadersMap() map[string]string {
 	headers := make(map[string]string)
 	for _, h := range cfg.Target.Settings.Headers {
 		headers[h.Name] = h.Value
+	}
+	return headers
+}
+
+func parseHeaderFlags(config configuration.Configuration) []ConfigHeader {
+	raw := config.Get(utils.FlagHeaders)
+	vals, ok := raw.([]string)
+	if !ok || len(vals) == 0 {
+		return nil
+	}
+	var headers []ConfigHeader
+	for _, h := range vals {
+		name, value, found := strings.Cut(h, ":")
+		if !found {
+			continue
+		}
+		headers = append(headers, ConfigHeader{
+			Name:  strings.TrimSpace(name),
+			Value: strings.TrimSpace(value),
+		})
 	}
 	return headers
 }

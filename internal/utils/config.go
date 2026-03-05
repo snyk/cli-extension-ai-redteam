@@ -10,4 +10,5 @@ const (
 	FlagTargetURL          = "target-url"
 	FlagRequestBodyTmpl    = "request-body-template"
 	FlagResponseSelector   = "response-selector"
+	FlagHeaders            = "headers"
 )

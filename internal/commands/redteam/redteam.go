@@ -51,6 +51,7 @@ func RegisterRedTeamWorkflow(e workflow.Engine) error {
 	flagset.String(utils.FlagTargetURL, "", "URL of the target to scan (overrides config file)")
 	flagset.String(utils.FlagRequestBodyTmpl, "", `Request body template with {{prompt}} placeholder (e.g. '{"message": "{{prompt}}"}')`)
 	flagset.String(utils.FlagResponseSelector, "", "Dot-notation path to extract response from target JSON (e.g. response)")
+	flagset.StringArray(utils.FlagHeaders, nil, `Request headers in "Key: Value" format (repeatable)`)
 
 	cfg := workflow.ConfigurationOptionsFromFlagset(flagset)
 	if _, err := e.Register(WorkflowID, cfg, redTeamWorkflow); err != nil {
