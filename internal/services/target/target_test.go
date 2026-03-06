@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -117,8 +118,10 @@ func TestSendPrompt_ComplexTemplate(t *testing.T) {
 	assert.Contains(t, result, "Hello!")
 }
 
-func TestSendPrompt_ServerError(t *testing.T) {
+func TestSendPrompt_ServerError_RetriesAndFails(t *testing.T) {
+	var attempts atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("internal error"))
 	}))
@@ -128,6 +131,44 @@ func TestSendPrompt_ServerError(t *testing.T) {
 	_, err := client.SendPrompt(t.Context(), testPrompt)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "500")
+	assert.Contains(t, err.Error(), "after 3 attempts")
+	assert.Equal(t, int32(3), attempts.Load(), "should retry 3 times on 5xx")
+}
+
+func TestSendPrompt_RetriesOnServerError_ThenSucceeds(t *testing.T) {
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		n := attempts.Add(1)
+		if n < 3 {
+			w.WriteHeader(http.StatusBadGateway)
+			w.Write([]byte("bad gateway"))
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{defaultSelector: "recovered"})
+	}))
+	defer server.Close()
+
+	client := target.NewHTTPClient(nil, server.URL, nil, defaultBodyTemplate, defaultSelector)
+	result, err := client.SendPrompt(t.Context(), testPrompt)
+	require.NoError(t, err)
+	assert.Equal(t, "recovered", result)
+	assert.Equal(t, int32(3), attempts.Load())
+}
+
+func TestSendPrompt_RetriesOn4xx(t *testing.T) {
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts.Add(1)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("bad request"))
+	}))
+	defer server.Close()
+
+	client := target.NewHTTPClient(nil, server.URL, nil, defaultBodyTemplate, defaultSelector)
+	_, err := client.SendPrompt(t.Context(), testPrompt)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "400")
+	assert.Equal(t, int32(3), attempts.Load(), "should retry on 4xx")
 }
 
 func TestSendPrompt_ArrayIndexSelector(t *testing.T) {

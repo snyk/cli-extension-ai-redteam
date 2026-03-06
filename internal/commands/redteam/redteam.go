@@ -3,9 +3,11 @@ package redteam
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/rs/zerolog"
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
@@ -101,10 +103,10 @@ func RunRedTeamWorkflow(
 	userInterface := invocationCtx.GetUserInterface()
 	displayMascot(userInterface, rtConfig)
 
-	httpClient := &http.Client{}
-	controlServerClient := controlServerFactory(logger, httpClient, rtConfig.ControlServerURL)
+	targetHTTPClient := &http.Client{Timeout: target.DefaultTimeout}
+	controlServerClient := controlServerFactory(logger, &http.Client{Timeout: 15 * time.Second}, rtConfig.ControlServerURL)
 	targetClient := targetFactory(
-		httpClient,
+		targetHTTPClient,
 		rtConfig.Target.Settings.URL,
 		rtConfig.HeadersMap(),
 		rtConfig.Target.Settings.RequestBodyTemplate,
@@ -158,6 +160,9 @@ func runClientDrivenScan(
 		for _, chat := range chats {
 			resp, tgtErr := targetClient.SendPrompt(ctx, chat.Prompt)
 			if tgtErr != nil {
+				if errors.Is(tgtErr, target.ErrCircuitOpen) {
+					return nil, fmt.Errorf("aborting scan: %w", tgtErr)
+				}
 				logger.Warn().Err(tgtErr).Str("chatID", chat.ChatID).Msg("target error, using error as response")
 				resp = fmt.Sprintf("[error: %s]", tgtErr.Error())
 			}

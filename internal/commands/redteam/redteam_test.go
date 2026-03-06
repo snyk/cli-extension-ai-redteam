@@ -426,3 +426,39 @@ func TestRunRedTeamWorkflow_TargetErrorContinuesScan(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, results, 1)
 }
+
+func TestRunRedTeamWorkflow_CircuitBreakerAbortsScan(t *testing.T) {
+	ictx := frameworkmock.NewMockInvocationContext(t)
+	ictx.GetConfiguration().Set(experimentalKey, true)
+	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(configFlag, redteamTestConfigFile)
+
+	mockCS := defaultMockCS()
+	mockCS.ChatSeqs = [][]controlserver.ChatPrompt{
+		{
+			{Seq: 1, Prompt: "prompt-1", ChatID: "chat-1"},
+			{Seq: 2, Prompt: "prompt-2", ChatID: "chat-2"},
+			{Seq: 3, Prompt: "prompt-3", ChatID: "chat-3"},
+			{Seq: 4, Prompt: "prompt-4", ChatID: "chat-4"},
+			{Seq: 5, Prompt: "prompt-5", ChatID: "chat-5"},
+		},
+		{
+			{Seq: 6, Prompt: "prompt-6", ChatID: "chat-6"},
+		},
+		{},
+	}
+
+	mockTgt := &targetmock.MockClient{
+		Error:                     fmt.Errorf("target unreachable"),
+		FailuresBeforeCircuitOpen: 5,
+	}
+
+	originalArgs := os.Args
+	os.Args = []string{"snyk", "redteam"}
+	defer func() { os.Args = originalArgs }()
+
+	_, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(mockCS), mockTargetFactory(mockTgt))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "aborting scan")
+	assert.Contains(t, err.Error(), "unreachable")
+}

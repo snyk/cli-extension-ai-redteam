@@ -7,9 +7,11 @@ import (
 )
 
 type MockClient struct {
-	Responses map[string]string
-	Error     error
-	Calls     []string
+	Responses                 map[string]string
+	Error                     error
+	Calls                     []string
+	FailuresBeforeCircuitOpen int
+	failureCount              int
 }
 
 var _ target.Client = (*MockClient)(nil)
@@ -17,6 +19,10 @@ var _ target.Client = (*MockClient)(nil)
 func (m *MockClient) SendPrompt(_ context.Context, prompt string) (string, error) {
 	m.Calls = append(m.Calls, prompt)
 	if m.Error != nil {
+		m.failureCount++
+		if m.FailuresBeforeCircuitOpen > 0 && m.failureCount > m.FailuresBeforeCircuitOpen {
+			return "", target.ErrCircuitOpen
+		}
 		return "", m.Error
 	}
 	if resp, ok := m.Responses[prompt]; ok {
