@@ -17,6 +17,7 @@ import (
 )
 
 const (
+	envControlServerURL        = "CONTROL_SERVER_URL"
 	defaultControlServerURL    = "http://localhost:8085"
 	defaultGoal                = "system_prompt_extraction"
 	defaultResponseSelector    = "response"
@@ -169,7 +170,11 @@ func validateURL(rawURL, label string) error {
 
 func applyDefaults(cfg *Config) {
 	if cfg.ControlServerURL == "" {
-		cfg.ControlServerURL = defaultControlServerURL
+		if v := os.Getenv(envControlServerURL); v != "" {
+			cfg.ControlServerURL = v
+		} else {
+			cfg.ControlServerURL = defaultControlServerURL
+		}
 	}
 	if cfg.Goal == "" {
 		cfg.Goal = defaultGoal
