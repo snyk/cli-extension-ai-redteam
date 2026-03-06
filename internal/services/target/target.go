@@ -4,11 +4,27 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"math"
+	"math/rand/v2"
 	"net/http"
 	"strings"
+	"time"
+
+	"github.com/jmespath/go-jmespath"
 )
+
+const (
+	DefaultTimeout        = 60 * time.Second
+	maxRetries            = 3
+	baseRetryDelay        = 1 * time.Second
+	maxRetryDelay         = 15 * time.Second
+	ConsecutiveFailureMax = 5
+)
+
+var ErrCircuitOpen = errors.New("target appears unreachable, aborting after too many consecutive failures")
 
 type Client interface {
 	SendPrompt(ctx context.Context, prompt string) (string, error)
@@ -20,6 +36,8 @@ type HTTPClient struct {
 	requestBodyTemplate string
 	responseSelector    string
 	httpClient          *http.Client
+	consecutiveFailures int
+	lastErr             error
 }
 
 var _ Client = (*HTTPClient)(nil)
@@ -32,7 +50,7 @@ func NewHTTPClient(
 	responseSelector string,
 ) *HTTPClient {
 	if httpClient == nil {
-		httpClient = &http.Client{}
+		httpClient = &http.Client{Timeout: DefaultTimeout}
 	}
 	return &HTTPClient{
 		url:                 url,
@@ -44,11 +62,46 @@ func NewHTTPClient(
 }
 
 func (c *HTTPClient) SendPrompt(ctx context.Context, prompt string) (string, error) {
+	if c.consecutiveFailures >= ConsecutiveFailureMax {
+		return "", fmt.Errorf("%w: last error: %w", ErrCircuitOpen, c.lastErr)
+	}
+
 	body, err := buildRequestBody(c.requestBodyTemplate, prompt)
 	if err != nil {
 		return "", fmt.Errorf("build request body: %w", err)
 	}
 
+	var lastErr error
+
+	for attempt := range maxRetries {
+		result, err := c.doRequest(ctx, body)
+		if err == nil {
+			c.consecutiveFailures = 0
+			return result, nil
+		}
+		lastErr = err
+
+		if !isRetryable(err) {
+			c.consecutiveFailures++
+			c.lastErr = err
+			return "", err
+		}
+
+		if attempt < maxRetries-1 {
+			select {
+			case <-time.After(retryDelay(attempt)):
+			case <-ctx.Done():
+				return "", fmt.Errorf("target request canceled: %w", ctx.Err())
+			}
+		}
+	}
+
+	c.consecutiveFailures++
+	c.lastErr = lastErr
+	return "", fmt.Errorf("target request failed after %d attempts: %w", maxRetries, lastErr)
+}
+
+func (c *HTTPClient) doRequest(ctx context.Context, body []byte) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url, bytes.NewReader(body))
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
@@ -70,10 +123,40 @@ func (c *HTTPClient) SendPrompt(ctx context.Context, prompt string) (string, err
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("target returned status %d: %s", resp.StatusCode, string(respBytes))
+		return "", &serverError{statusCode: resp.StatusCode, body: string(respBytes)}
 	}
 
 	return extractResponse(respBytes, c.responseSelector)
+}
+
+type serverError struct {
+	statusCode int
+	body       string
+}
+
+func (e *serverError) Error() string {
+	return fmt.Sprintf("target returned status %d: %s", e.statusCode, e.body)
+}
+
+func isRetryable(err error) bool {
+	var se *serverError
+	if errors.As(err, &se) {
+		return true
+	}
+	if strings.Contains(err.Error(), "target request failed:") {
+		return true
+	}
+	return false
+}
+
+// retryDelay returns an exponential backoff duration with jitter.
+func retryDelay(attempt int) time.Duration {
+	delay := baseRetryDelay * time.Duration(math.Pow(2, float64(attempt)))
+	if delay > maxRetryDelay {
+		delay = maxRetryDelay
+	}
+	jitter := time.Duration(rand.Int64N(int64(delay / 2))) //nolint:gosec // jitter doesn't need crypto rand
+	return delay + jitter
 }
 
 func buildRequestBody(template, prompt string) ([]byte, error) {
@@ -98,20 +181,15 @@ func extractResponse(respBytes []byte, selector string) (string, error) {
 		return "", fmt.Errorf("parse target response JSON: %w", err)
 	}
 
-	parts := strings.Split(selector, ".")
-	current := data
-	for _, part := range parts {
-		m, ok := current.(map[string]any)
-		if !ok {
-			return "", fmt.Errorf("response_selector %q: expected object at %q, got %T", selector, part, current)
-		}
-		current, ok = m[part]
-		if !ok {
-			return "", fmt.Errorf("response_selector %q: key %q not found", selector, part)
-		}
+	result, err := jmespath.Search(selector, data)
+	if err != nil {
+		return "", fmt.Errorf("response_selector %q: %w", selector, err)
+	}
+	if result == nil {
+		return "", fmt.Errorf("response_selector %q: no match found", selector)
 	}
 
-	switch v := current.(type) {
+	switch v := result.(type) {
 	case string:
 		return v, nil
 	default:

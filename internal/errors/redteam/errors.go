@@ -7,7 +7,7 @@ import (
 	snyk_common_errors "github.com/snyk/error-catalog-golang-public/snyk"
 )
 
-//nolint:revive
+//nolint:revive // RedTeamError is the canonical name; renaming would break the public API
 type RedTeamError struct {
 	err     error
 	userMsg string

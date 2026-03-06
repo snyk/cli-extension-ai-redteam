@@ -268,3 +268,44 @@ func TestRunRedTeamGetWorkflow_ServerError(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "internal server error")
 }
+
+func TestRunRedTeamGetWorkflow_ControlServerURLFromEnvVar(t *testing.T) {
+	t.Setenv("CONTROL_SERVER_URL", "http://custom-server:9090")
+
+	ictx := frameworkmock.NewMockInvocationContext(t)
+	ictx.GetConfiguration().Set(experimentalKey, true)
+	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set("id", validScanID)
+
+	mock := defaultResultMock()
+	var capturedURL string
+	factory := func(url string) controlserver.Client {
+		capturedURL = url
+		return mock
+	}
+
+	_, err := redteamget.RunRedTeamGetWorkflow(ictx, factory)
+	require.NoError(t, err)
+	assert.Equal(t, "http://custom-server:9090", capturedURL)
+}
+
+func TestRunRedTeamGetWorkflow_ControlServerURLFlagOverridesEnvVar(t *testing.T) {
+	t.Setenv("CONTROL_SERVER_URL", "http://from-env:9090")
+
+	ictx := frameworkmock.NewMockInvocationContext(t)
+	ictx.GetConfiguration().Set(experimentalKey, true)
+	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set("id", validScanID)
+	ictx.GetConfiguration().Set("control-server-url", "http://from-flag:7070")
+
+	mock := defaultResultMock()
+	var capturedURL string
+	factory := func(url string) controlserver.Client {
+		capturedURL = url
+		return mock
+	}
+
+	_, err := redteamget.RunRedTeamGetWorkflow(ictx, factory)
+	require.NoError(t, err)
+	assert.Equal(t, "http://from-flag:7070", capturedURL)
+}

@@ -15,7 +15,7 @@ const (
 	reset = "\033[0m"
 )
 
-func displayMascot(userInterface ui.UserInterface, cfg *RedTeamConfig) {
+func displayMascot(userInterface ui.UserInterface, cfg *Config) {
 	var sb strings.Builder
 
 	sb.WriteString("\n")
@@ -32,5 +32,5 @@ func displayMascot(userInterface ui.UserInterface, cfg *RedTeamConfig) {
 	sb.WriteString(fmt.Sprintf("  Strategies: %s\n", strings.Join(cfg.Strategies, ", ")))
 	sb.WriteString("\n")
 
-	_ = userInterface.Output(sb.String())
+	_ = userInterface.Output(sb.String()) //nolint:errcheck // best-effort display
 }

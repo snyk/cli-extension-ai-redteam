@@ -1,10 +1,13 @@
 package redteam
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 
+	"github.com/jmespath/go-jmespath"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -14,20 +17,20 @@ import (
 )
 
 const (
-	defaultControlServerURL     = "http://localhost:8085"
-	defaultGoal                 = "system_prompt_extraction"
-	defaultResponseSelector     = "response"
-	defaultRequestBodyTemplate  = `{"message": "{{prompt}}"}`
+	envControlServerURL        = "CONTROL_SERVER_URL"
+	defaultControlServerURL    = "http://localhost:8085"
+	defaultGoal                = "system_prompt_extraction"
+	defaultResponseSelector    = "response"
+	defaultRequestBodyTemplate = `{"message": "{{prompt}}"}`
 )
 
 var defaultStrategies = []string{"directly_asking"}
 
-type RedTeamConfig struct {
-	Target           ConfigTarget  `yaml:"target"`
-	Options          ConfigOptions `yaml:"options"`
-	ControlServerURL string        `yaml:"control_server_url"`
-	Goal             string        `yaml:"goal"`
-	Strategies       []string      `yaml:"strategies"`
+type Config struct {
+	Target           ConfigTarget `yaml:"target"`
+	ControlServerURL string       `yaml:"control_server_url"`
+	Goal             string       `yaml:"goal"`
+	Strategies       []string     `yaml:"strategies"`
 }
 
 type ConfigTarget struct {
@@ -57,20 +60,11 @@ type ConfigHeader struct {
 	Value string `yaml:"value"`
 }
 
-type ConfigOptions struct {
-	VulnDefinitions ConfigVulnDefinitions `yaml:"vuln_definitions"`
-	ScanningAgent   string                `yaml:"scanning_agent,omitempty"`
-}
-
-type ConfigVulnDefinitions struct {
-	Exclude []string `yaml:"exclude,omitempty"`
-}
-
-func LoadAndValidateConfig(logger *zerolog.Logger, config configuration.Configuration) (*RedTeamConfig, []workflow.Data, error) {
+func LoadAndValidateConfig(logger *zerolog.Logger, config configuration.Configuration) (*Config, []workflow.Data, error) {
 	targetURL := config.GetString(utils.FlagTargetURL)
 	configPath := config.GetString(utils.FlagConfig)
 
-	var rtConfig RedTeamConfig
+	var rtConfig Config
 
 	hasConfigFile := false
 	if configPath != "" {
@@ -128,16 +122,59 @@ func LoadAndValidateConfig(logger *zerolog.Logger, config configuration.Configur
 
 	applyDefaults(&rtConfig)
 
-	if rtConfig.Target.Settings.URL == "" {
-		return nil, nil, fmt.Errorf("target URL is required (set in config file or pass --target-url)")
+	if err := ValidateConfig(&rtConfig); err != nil {
+		return nil, nil, err
 	}
 
 	return &rtConfig, nil, nil
 }
 
-func applyDefaults(cfg *RedTeamConfig) {
+func ValidateConfig(cfg *Config) error {
+	var errs []string
+
+	if cfg.Target.Settings.URL == "" {
+		errs = append(errs, "target URL is required (set in config file or pass --target-url)")
+	} else if err := validateURL(cfg.Target.Settings.URL, "target URL"); err != nil {
+		errs = append(errs, err.Error())
+	}
+
+	if err := validateURL(cfg.ControlServerURL, "control server URL"); err != nil {
+		errs = append(errs, err.Error())
+	}
+
+	if !strings.Contains(cfg.Target.Settings.RequestBodyTemplate, "{{prompt}}") {
+		errs = append(errs, "request_body_template must contain the {{prompt}} placeholder")
+	}
+	replaced := strings.ReplaceAll(cfg.Target.Settings.RequestBodyTemplate, "{{prompt}}", "test")
+	if !json.Valid([]byte(replaced)) {
+		errs = append(errs, "request_body_template is not valid JSON")
+	}
+
+	if _, err := jmespath.Compile(cfg.Target.Settings.ResponseSelector); err != nil {
+		errs = append(errs, fmt.Sprintf("response_selector is not a valid JMESPath expression: %v", err))
+	}
+
+	if len(errs) == 0 {
+		return nil
+	}
+	return fmt.Errorf("invalid configuration:\n  - %s", strings.Join(errs, "\n  - "))
+}
+
+func validateURL(rawURL, label string) error {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return fmt.Errorf("%s must be a valid HTTP(S) URL, got: %q", label, rawURL)
+	}
+	return nil
+}
+
+func applyDefaults(cfg *Config) {
 	if cfg.ControlServerURL == "" {
-		cfg.ControlServerURL = defaultControlServerURL
+		if v := os.Getenv(envControlServerURL); v != "" {
+			cfg.ControlServerURL = v
+		} else {
+			cfg.ControlServerURL = defaultControlServerURL
+		}
 	}
 	if cfg.Goal == "" {
 		cfg.Goal = defaultGoal
@@ -153,7 +190,7 @@ func applyDefaults(cfg *RedTeamConfig) {
 	}
 }
 
-func (cfg *RedTeamConfig) HeadersMap() map[string]string {
+func (cfg *Config) HeadersMap() map[string]string {
 	headers := make(map[string]string)
 	for _, h := range cfg.Target.Settings.Headers {
 		headers[h.Name] = h.Value
@@ -167,7 +204,7 @@ func parseHeaderFlags(config configuration.Configuration) []ConfigHeader {
 	if !ok || len(vals) == 0 {
 		return nil
 	}
-	var headers []ConfigHeader
+	headers := make([]ConfigHeader, 0, len(vals))
 	for _, h := range vals {
 		name, value, found := strings.Cut(h, ":")
 		if !found {
@@ -183,7 +220,7 @@ func parseHeaderFlags(config configuration.Configuration) []ConfigHeader {
 
 func getInvalidConfigMessage() string {
 	return `
-	Configuration file in invalid. Please refer to the following example:
+	Configuration file is invalid. Please refer to the following example:
 
 	target:
 		name: <required, name your target>

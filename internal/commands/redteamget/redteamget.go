@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/go-playground/validator/v10"
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
@@ -22,6 +23,7 @@ import (
 
 const (
 	getWorkflowName    = "redteam.get"
+	envControlServerURL = "CONTROL_SERVER_URL"
 	defaultCSURL       = "http://localhost:8085"
 )
 
@@ -49,10 +51,6 @@ func RegisterRedTeamGetWorkflow(e workflow.Engine) error {
 
 func redTeamGetWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
 	logger := invocationCtx.GetEnhancedLogger()
-	csURL := invocationCtx.GetConfiguration().GetString(utils.FlagControlServer)
-	if csURL == "" {
-		csURL = defaultCSURL
-	}
 	factory := func(url string) controlserver.Client {
 		return controlserver.NewClient(logger, &http.Client{}, url)
 	}
@@ -101,7 +99,11 @@ func handleGetScanResults(
 
 	csURL := config.GetString(utils.FlagControlServer)
 	if csURL == "" {
-		csURL = defaultCSURL
+		if v := os.Getenv(envControlServerURL); v != "" {
+			csURL = v
+		} else {
+			csURL = defaultCSURL
+		}
 	}
 	csClient := csFactory(csURL)
 

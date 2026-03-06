@@ -45,7 +45,7 @@ func Normalize(result *controlserver.ScanResult, status *controlserver.ScanStatu
 }
 
 func buildSummary(status *controlserver.ScanStatus) *models.AIScanSummary {
-	var vulnSummaries []models.AIScanSummaryVulnerability
+	vulnSummaries := make([]models.AIScanSummaryVulnerability, 0, len(status.Attacks))
 	for _, attack := range status.Attacks {
 		slug := slugFromAttackType(attack.AttackType)
 		name := nameFromAttackType(attack.AttackType)
