@@ -52,3 +52,11 @@ func (m *MockClient) GetResult(_ context.Context, _ string) (*controlserver.Scan
 	}
 	return m.Result, nil
 }
+
+func (m *MockClient) ListGoals(_ context.Context) ([]controlserver.EnumEntry, error) {
+	return nil, nil
+}
+
+func (m *MockClient) ListStrategies(_ context.Context) ([]controlserver.EnumEntry, error) {
+	return nil, nil
+}
