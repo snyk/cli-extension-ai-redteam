@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -58,6 +60,8 @@ func RegisterRedTeamWorkflow(e workflow.Engine) error {
 	flagset.String(utils.FlagRequestBodyTmpl, "", `Request body template with {{prompt}} placeholder (e.g. '{"message": "{{prompt}}"}')`)
 	flagset.String(utils.FlagResponseSelector, "", "Dot-notation path to extract response from target JSON (e.g. response)")
 	flagset.StringArray(utils.FlagHeaders, nil, `Request headers in "Key: Value" format (repeatable)`)
+	flagset.Bool(utils.FlagListGoals, false, "List all available attack goals and exit")
+	flagset.Bool(utils.FlagListStrategies, false, "List all available attack strategies and exit")
 
 	cfg := workflow.ConfigurationOptionsFromFlagset(flagset)
 	if _, err := e.Register(WorkflowID, cfg, redTeamWorkflow); err != nil {
@@ -84,6 +88,12 @@ func RunRedTeamWorkflow(
 	if !experimental {
 		logger.Debug().Msg("Required experimental flag is not present")
 		return nil, cli_errors.NewCommandIsExperimentalError("")
+	}
+
+	listGoals := config.GetBool(utils.FlagListGoals)
+	listStrategies := config.GetBool(utils.FlagListStrategies)
+	if listGoals || listStrategies {
+		return handleListFlags(config, controlServerFactory, logger, listGoals, listStrategies)
 	}
 
 	orgID := config.GetString(configuration.ORGANIZATION)
@@ -123,6 +133,62 @@ func RunRedTeamWorkflow(
 		return nil, fmt.Errorf("HTML report error: %w", htmlErr)
 	}
 	return output, nil
+}
+
+func handleListFlags(
+	config configuration.Configuration,
+	controlServerFactory ControlServerFactory,
+	logger *zerolog.Logger,
+	listGoals, listStrategies bool,
+) ([]workflow.Data, error) {
+	ctx := context.Background()
+	controlServerURL := config.GetString(utils.FlagControlServer)
+	if controlServerURL == "" {
+		controlServerURL = defaultControlServerURL
+	}
+	csClient := controlServerFactory(logger, &http.Client{}, controlServerURL)
+
+	var lines []string
+	if listGoals {
+		goals, err := csClient.ListGoals(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list goals: %w", err)
+		}
+		sort.Slice(goals, func(i, j int) bool { return goals[i].DisplayOrder < goals[j].DisplayOrder })
+		lines = append(lines, "Available goals:", "")
+		lines = appendEnumTable(lines, goals)
+	}
+	if listStrategies {
+		if len(lines) > 0 {
+			lines = append(lines, "")
+		}
+		strategies, err := csClient.ListStrategies(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list strategies: %w", err)
+		}
+		sort.Slice(strategies, func(i, j int) bool { return strategies[i].DisplayOrder < strategies[j].DisplayOrder })
+		lines = append(lines, "Available strategies:", "")
+		lines = appendEnumTable(lines, strategies)
+	}
+
+	output := strings.Join(lines, "\n") + "\n"
+	return []workflow.Data{newWorkflowData("text/plain", []byte(output))}, nil
+}
+
+func appendEnumTable(lines []string, entries []controlserver.EnumEntry) []string {
+	nameWidth := len("NAME")
+	for _, e := range entries {
+		if len(e.Value) > nameWidth {
+			nameWidth = len(e.Value)
+		}
+	}
+	nameWidth += 2 // padding
+
+	lines = append(lines, fmt.Sprintf("  %-*s  %s", nameWidth, "NAME", "DESCRIPTION"))
+	for _, e := range entries {
+		lines = append(lines, fmt.Sprintf("  %-*s  %s", nameWidth, e.Value, e.Description))
+	}
+	return lines
 }
 
 func runClientDrivenScan(

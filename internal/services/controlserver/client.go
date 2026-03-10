@@ -18,6 +18,8 @@ type Client interface {
 	NextChats(ctx context.Context, scanID string, responses []ChatResponse) ([]ChatPrompt, error)
 	GetStatus(ctx context.Context, scanID string) (*ScanStatus, error)
 	GetResult(ctx context.Context, scanID string) (*ScanResult, error)
+	ListGoals(ctx context.Context) ([]EnumEntry, error)
+	ListStrategies(ctx context.Context) ([]EnumEntry, error)
 }
 
 type ClientImpl struct {
@@ -175,4 +177,42 @@ func (c *ClientImpl) GetResult(ctx context.Context, scanID string) (*ScanResult,
 	}
 
 	return &result, nil
+}
+
+func (c *ClientImpl) listEnum(ctx context.Context, endpoint string) ([]EnumEntry, error) {
+	url := fmt.Sprintf("%s/hidden/%s?version=%s", c.baseURL, endpoint, APIVersion)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("build %s request: %w", endpoint, err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("%s request failed: %w", endpoint, err)
+	}
+	defer resp.Body.Close()
+
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read %s response: %w", endpoint, err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%s returned status %d: %s", endpoint, resp.StatusCode, string(respBytes))
+	}
+
+	var entries []EnumEntry
+	if err := json.Unmarshal(respBytes, &entries); err != nil {
+		return nil, fmt.Errorf("unmarshal %s response: %w", endpoint, err)
+	}
+
+	return entries, nil
+}
+
+func (c *ClientImpl) ListGoals(ctx context.Context) ([]EnumEntry, error) {
+	return c.listEnum(ctx, "goals")
+}
+
+func (c *ClientImpl) ListStrategies(ctx context.Context) ([]EnumEntry, error) {
+	return c.listEnum(ctx, "strategies")
 }

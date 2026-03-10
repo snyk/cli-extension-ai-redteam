@@ -76,3 +76,9 @@ type ScanResult struct {
 	Attacks []AttackResult `json:"attacks"`
 	Tags    []string       `json:"tags"`
 }
+
+type EnumEntry struct {
+	Value        string `json:"value"`
+	Description  string `json:"description"`
+	DisplayOrder int    `json:"display_order"`
+}
