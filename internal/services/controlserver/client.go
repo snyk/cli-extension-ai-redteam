@@ -24,15 +24,17 @@ type Client interface {
 
 type ClientImpl struct {
 	baseURL    string
+	tenantID   string
 	httpClient *http.Client
 	logger     *zerolog.Logger
 }
 
 var _ Client = (*ClientImpl)(nil)
 
-func NewClient(logger *zerolog.Logger, httpClient *http.Client, baseURL string) *ClientImpl {
+func NewClient(logger *zerolog.Logger, httpClient *http.Client, baseURL, tenantID string) *ClientImpl {
 	return &ClientImpl{
 		baseURL:    baseURL,
+		tenantID:   tenantID,
 		httpClient: httpClient,
 		logger:     logger,
 	}
@@ -50,7 +52,7 @@ func (c *ClientImpl) CreateScan(ctx context.Context, goal string, strategies []s
 		return "", fmt.Errorf("marshal CreateScan request: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/hidden/scan?version=%s", c.baseURL, APIVersion)
+	url := fmt.Sprintf("%s/hidden/tenants/%s/red_team_scans?version=%s", c.baseURL, c.tenantID, APIVersion)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(reqBytes))
 	if err != nil {
 		return "", fmt.Errorf("build CreateScan request: %w", err)
@@ -95,7 +97,7 @@ func (c *ClientImpl) NextChats(ctx context.Context, scanID string, responses []C
 		return nil, fmt.Errorf("marshal NextChats request: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/hidden/scan/%s/next?version=%s", c.baseURL, scanID, APIVersion)
+	url := fmt.Sprintf("%s/hidden/tenants/%s/red_team_scans/%s/next?version=%s", c.baseURL, c.tenantID, scanID, APIVersion)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(reqBytes))
 	if err != nil {
 		return nil, fmt.Errorf("build NextChats request: %w", err)
@@ -126,7 +128,7 @@ func (c *ClientImpl) NextChats(ctx context.Context, scanID string, responses []C
 }
 
 func (c *ClientImpl) GetStatus(ctx context.Context, scanID string) (*ScanStatus, error) {
-	url := fmt.Sprintf("%s/hidden/scan/%s/status?version=%s", c.baseURL, scanID, APIVersion)
+	url := fmt.Sprintf("%s/hidden/tenants/%s/red_team_scans/%s/status?version=%s", c.baseURL, c.tenantID, scanID, APIVersion)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("build GetStatus request: %w", err)
@@ -156,7 +158,7 @@ func (c *ClientImpl) GetStatus(ctx context.Context, scanID string) (*ScanStatus,
 }
 
 func (c *ClientImpl) GetResult(ctx context.Context, scanID string) (*ScanResult, error) {
-	url := fmt.Sprintf("%s/hidden/scan/%s?version=%s", c.baseURL, scanID, APIVersion)
+	url := fmt.Sprintf("%s/hidden/tenants/%s/red_team_scans/%s?version=%s", c.baseURL, c.tenantID, scanID, APIVersion)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("build GetResult request: %w", err)

@@ -10,8 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
-
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
 	controlservermock "github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver/mock"
@@ -22,15 +20,15 @@ import (
 
 const (
 	experimentalKey       = "experimental"
-	organizationKey       = "organization"
-	testOrgID             = "test-org"
+	tenantIDKey           = "tenant-id"
+	testTenantID          = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 	configFlag            = "config"
 	redteamTestConfigFile = "testdata/redteam.yaml"
 	testScanID            = "test-scan-id"
 )
 
 func mockCSFactory(mock *controlservermock.MockClient) redteam.ControlServerFactory {
-	return func(_ *zerolog.Logger, _ *http.Client, _ string) controlserver.Client {
+	return func(_ *zerolog.Logger, _ *http.Client, _, _ string) controlserver.Client {
 		return mock
 	}
 }
@@ -91,7 +89,7 @@ func defaultMockTarget() *targetmock.MockClient {
 func TestRunRedTeamWorkflow_HappyPath(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set(configFlag, redteamTestConfigFile)
 
 	originalArgs := os.Args
@@ -110,7 +108,7 @@ func TestRunRedTeamWorkflow_HappyPath(t *testing.T) {
 func TestRunRedTeamWorkflow_ScanSummaryPropagated(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set(configFlag, redteamTestConfigFile)
 
 	mockCS := defaultMockCS()
@@ -161,24 +159,10 @@ func TestRunRedTeamWorkflow_ExperimentalFlagRequired(t *testing.T) {
 	assert.Contains(t, err.Error(), "experimental")
 }
 
-func TestRunRedTeamWorkflow_NoOrgID(t *testing.T) {
-	ictx := frameworkmock.NewMockInvocationContext(t)
-	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(configuration.ORGANIZATION, "")
-
-	originalArgs := os.Args
-	os.Args = []string{"snyk", "redteam"}
-	defer func() { os.Args = originalArgs }()
-
-	_, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
-	require.Error(t, err)
-	assert.NotNil(t, err)
-}
-
 func TestRunRedTeamWorkflow_ConfigFileNotFound(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set(configFlag, "nonexistent-config.yaml")
 
 	originalArgs := os.Args
@@ -210,7 +194,7 @@ target:
 
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set(configFlag, "test-invalid.yaml")
 
 	originalArgs := os.Args
@@ -235,7 +219,7 @@ target:
 
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set(configFlag, "test-validation.yaml")
 
 	originalArgs := os.Args
@@ -250,7 +234,7 @@ target:
 func TestRunRedTeamWorkflow_CreateScanError(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set(configFlag, redteamTestConfigFile)
 
 	mockCS := defaultMockCS()
@@ -268,7 +252,7 @@ func TestRunRedTeamWorkflow_CreateScanError(t *testing.T) {
 func TestRunRedTeamWorkflow_CustomConfigPathDoesNotExist(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set(configFlag, "path-that-does-not-exist/test-custom-config.yaml")
 
 	originalArgs := os.Args
@@ -284,7 +268,7 @@ func TestRunRedTeamWorkflow_CustomConfigPathDoesNotExist(t *testing.T) {
 func TestRunRedTeamWorkflow_CustomConfig(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set(configFlag, "testdata/custom/path/test-custom-config.yaml")
 
 	originalArgs := os.Args
@@ -312,7 +296,7 @@ func TestRunRedTeamWorkflow_WithGroundTruthConfig(t *testing.T) {
 func TestRunRedTeamWorkflow_HTMLOutput(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set(configFlag, redteamTestConfigFile)
 	ictx.GetConfiguration().Set("html", true)
 
@@ -335,7 +319,7 @@ func TestRunRedTeamWorkflow_HTMLOutput(t *testing.T) {
 func TestRunRedTeamWorkflow_HTMLOutputWithEmptyResults(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set(configFlag, redteamTestConfigFile)
 	ictx.GetConfiguration().Set("html", true)
 
@@ -370,7 +354,7 @@ func TestRunRedTeamWorkflow_HTMLOutputWithEmptyResults(t *testing.T) {
 func TestRunRedTeamWorkflow_HTMLFileOutput(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set(configFlag, redteamTestConfigFile)
 
 	tmpFile := t.TempDir() + "/report.html"
@@ -395,7 +379,7 @@ func TestRunRedTeamWorkflow_HTMLFileOutput(t *testing.T) {
 func TestRunRedTeamWorkflow_HTMLFileOutputWithHTMLFlag(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set(configFlag, redteamTestConfigFile)
 
 	tmpFile := t.TempDir() + "/report.html"
@@ -425,7 +409,7 @@ func TestRunRedTeamWorkflow_HTMLFileOutputWithHTMLFlag(t *testing.T) {
 func TestRunRedTeamWorkflow_TargetErrorContinuesScan(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set(configFlag, redteamTestConfigFile)
 
 	mockTgt := &targetmock.MockClient{
@@ -629,7 +613,7 @@ func TestRunRedTeamWorkflow_ListGoalsSkipsOrgCheck(t *testing.T) {
 func TestRunRedTeamWorkflow_CircuitBreakerAbortsScan(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set(configFlag, redteamTestConfigFile)
 
 	mockCS := defaultMockCS()

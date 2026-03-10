@@ -14,17 +14,20 @@ import (
 	"github.com/snyk/cli-extension-ai-redteam/mocks/loggermock"
 )
 
-const testScanID = "scan-123"
+const (
+	testScanID   = "scan-123"
+	testTenantID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+)
 
 func newTestClient(t *testing.T, serverURL string) *controlserver.ClientImpl {
 	t.Helper()
-	return controlserver.NewClient(loggermock.NewNoOpLogger(), http.DefaultClient, serverURL)
+	return controlserver.NewClient(loggermock.NewNoOpLogger(), http.DefaultClient, serverURL, testTenantID)
 }
 
 func TestCreateScan_Happy(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Equal(t, "/hidden/scan", r.URL.Path)
+		assert.Equal(t, "/hidden/tenants/"+testTenantID+"/red_team_scans", r.URL.Path)
 		assert.Contains(t, r.URL.RawQuery, "version="+controlserver.APIVersion)
 
 		var req controlserver.CreateScanRequest
@@ -98,7 +101,7 @@ func TestCreateScan_ServerError(t *testing.T) {
 func TestNextChats_Happy(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Equal(t, "/hidden/scan/"+testScanID+"/next", r.URL.Path)
+		assert.Equal(t, "/hidden/tenants/"+testTenantID+"/red_team_scans/"+testScanID+"/next", r.URL.Path)
 
 		json.NewEncoder(w).Encode(controlserver.NextChatsResponse{
 			Chats: []controlserver.ChatPrompt{
@@ -140,7 +143,7 @@ func TestNextChats_WithResponses(t *testing.T) {
 func TestGetStatus_Happy(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodGet, r.Method)
-		assert.Equal(t, "/hidden/scan/"+testScanID+"/status", r.URL.Path)
+		assert.Equal(t, "/hidden/tenants/"+testTenantID+"/red_team_scans/"+testScanID+"/status", r.URL.Path)
 
 		json.NewEncoder(w).Encode(controlserver.ScanStatus{
 			ScanID:     testScanID,
@@ -167,7 +170,7 @@ func TestGetStatus_Happy(t *testing.T) {
 func TestGetResult_Happy(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodGet, r.Method)
-		assert.Equal(t, "/hidden/scan/"+testScanID, r.URL.Path)
+		assert.Equal(t, "/hidden/tenants/"+testTenantID+"/red_team_scans/"+testScanID, r.URL.Path)
 
 		json.NewEncoder(w).Encode(controlserver.ScanResult{
 			ScanID: testScanID,
