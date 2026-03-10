@@ -11,8 +11,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-const DefaultTenantID = "00000000-0000-0000-0000-000000000000"
-
 type tenant struct {
 	ID   string
 	Name string
@@ -33,8 +31,7 @@ type tenantsAPIAttributes struct {
 
 // GetTenantID resolves a tenant ID using the following priority:
 //  1. Already provided (flag / env var)
-//  2. Auto-discover via GET /rest/tenants — single tenant auto selects, multiple prompts
-//  3. Zero tenants: returns DefaultTenantID so the scan still runs
+//  2. Auto-discover via GET /rest/tenants — single tenant auto-selects, multiple prompts
 func GetTenantID(ctx workflow.InvocationContext, tenantID string) (string, error) {
 	if tenantID != "" {
 		return tenantID, nil
@@ -50,8 +47,7 @@ func GetTenantID(ctx workflow.InvocationContext, tenantID string) (string, error
 	}
 
 	if len(tenants) == 0 {
-		logger.Debug().Msg("no tenants found for user, using default tenant ID")
-		return DefaultTenantID, nil
+		return "", fmt.Errorf("no tenants found for your account")
 	}
 
 	if len(tenants) == 1 {

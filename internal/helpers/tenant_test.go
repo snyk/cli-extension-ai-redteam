@@ -48,7 +48,7 @@ func TestGetTenantID_SingleTenant(t *testing.T) {
 	assert.Equal(t, "11111111-2222-3333-4444-555555555555", got)
 }
 
-func TestGetTenantID_ZeroTenants_ReturnsDefault(t *testing.T) {
+func TestGetTenantID_ZeroTenants_ReturnsError(t *testing.T) {
 	resp := map[string]interface{}{
 		"data": []map[string]interface{}{},
 	}
@@ -62,9 +62,9 @@ func TestGetTenantID_ZeroTenants_ReturnsDefault(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(configuration.API_URL, server.URL)
 
-	got, err := helpers.GetTenantID(ictx, "")
-	require.NoError(t, err)
-	assert.Equal(t, helpers.DefaultTenantID, got)
+	_, err := helpers.GetTenantID(ictx, "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no tenants found")
 }
 
 func TestGetTenantID_APIError(t *testing.T) {

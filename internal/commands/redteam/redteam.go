@@ -114,7 +114,9 @@ func RunRedTeamWorkflow(
 	displayMascot(userInterface, rtConfig)
 
 	targetHTTPClient := &http.Client{Timeout: target.DefaultTimeout}
-	controlServerClient := controlServerFactory(logger, &http.Client{Timeout: 15 * time.Second}, rtConfig.ControlServerURL, tenantID)
+	csHTTPClient := invocationCtx.GetNetworkAccess().GetHttpClient()
+	csHTTPClient.Timeout = 15 * time.Second
+	controlServerClient := controlServerFactory(logger, csHTTPClient, rtConfig.ControlServerURL, tenantID)
 	targetClient := targetFactory(
 		targetHTTPClient,
 		rtConfig.Target.Settings.URL,
