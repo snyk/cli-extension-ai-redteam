@@ -51,5 +51,6 @@ func NewMockInvocationContext(
 	ictx.EXPECT().GetEnhancedLogger().Return(&enhancedLogger).AnyTimes()
 	ictx.EXPECT().GetRuntimeInfo().Return(mockRuntimeInfo).AnyTimes()
 	ictx.EXPECT().GetUserInterface().Return(ui).AnyTimes()
+	ictx.EXPECT().Context().Return(t.Context()).AnyTimes()
 	return ictx
 }

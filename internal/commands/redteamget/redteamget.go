@@ -9,22 +9,21 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
-	snyk_common_errors "github.com/snyk/error-catalog-golang-public/snyk"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam/htmlreport"
 	redteam_errors "github.com/snyk/cli-extension-ai-redteam/internal/errors/redteam"
+	"github.com/snyk/cli-extension-ai-redteam/internal/helpers"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/normalizer"
 	"github.com/snyk/cli-extension-ai-redteam/internal/utils"
 )
 
 const (
-	getWorkflowName    = "redteam.get"
+	getWorkflowName     = "redteam.get"
 	envControlServerURL = "CONTROL_SERVER_URL"
-	defaultCSURL       = "http://localhost:8085"
+	defaultCSURL        = "http://localhost:8085"
 )
 
 var (
@@ -32,7 +31,7 @@ var (
 	getWorkflowType = workflow.NewTypeIdentifier(GetWorkflowID, getWorkflowName)
 )
 
-type CSFactory func(url string) controlserver.Client
+type CSFactory func(url, tenantID string) controlserver.Client
 
 func RegisterRedTeamGetWorkflow(e workflow.Engine) error {
 	flagset := pflag.NewFlagSet("snyk-cli-extension-ai-redteam-get", pflag.ExitOnError)
@@ -41,6 +40,7 @@ func RegisterRedTeamGetWorkflow(e workflow.Engine) error {
 	flagset.Bool(utils.FlagHTML, false, "Output the red team report in HTML format instead of JSON")
 	flagset.String(utils.FlagHTMLFileOutput, "", "Write the HTML report to the specified file path")
 	flagset.String(utils.FlagControlServer, defaultCSURL, "URL of the minired control server")
+	flagset.String(utils.FlagTenantID, "", "Tenant ID (auto-discovered if not provided)")
 
 	cfg := workflow.ConfigurationOptionsFromFlagset(flagset)
 	if _, err := e.Register(GetWorkflowID, cfg, redTeamGetWorkflow); err != nil {
@@ -51,8 +51,8 @@ func RegisterRedTeamGetWorkflow(e workflow.Engine) error {
 
 func redTeamGetWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
 	logger := invocationCtx.GetEnhancedLogger()
-	factory := func(url string) controlserver.Client {
-		return controlserver.NewClient(logger, &http.Client{}, url)
+	factory := func(url, tenantID string) controlserver.Client {
+		return controlserver.NewClient(logger, &http.Client{}, url, tenantID)
 	}
 	return RunRedTeamGetWorkflow(invocationCtx, factory)
 }
@@ -70,18 +70,18 @@ func RunRedTeamGetWorkflow(
 		return nil, cli_errors.NewCommandIsExperimentalError("")
 	}
 
-	orgID := config.GetString(configuration.ORGANIZATION)
-	if orgID == "" {
-		logger.Debug().Msg("No organization id is found.")
-		return nil, snyk_common_errors.NewUnauthorisedError("")
+	tenantID, err := helpers.GetTenantID(invocationCtx, config.GetString(utils.FlagTenantID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve tenant: %w", err)
 	}
 
-	return handleGetScanResults(invocationCtx, csFactory)
+	return handleGetScanResults(invocationCtx, csFactory, tenantID)
 }
 
 func handleGetScanResults(
 	invocationCtx workflow.InvocationContext,
 	csFactory CSFactory,
+	tenantID string,
 ) ([]workflow.Data, error) {
 	logger := invocationCtx.GetEnhancedLogger()
 	config := invocationCtx.GetConfiguration()
@@ -105,7 +105,7 @@ func handleGetScanResults(
 			csURL = defaultCSURL
 		}
 	}
-	csClient := csFactory(csURL)
+	csClient := csFactory(csURL, tenantID)
 
 	logger.Debug().Str("scanID", scanID).Msg("Fetching scan results")
 

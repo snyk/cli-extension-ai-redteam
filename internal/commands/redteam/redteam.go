@@ -13,13 +13,13 @@ import (
 
 	"github.com/rs/zerolog"
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
-	snyk_common_errors "github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam/htmlreport"
+	"github.com/snyk/cli-extension-ai-redteam/internal/helpers"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/normalizer"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/target"
@@ -29,12 +29,12 @@ import (
 var WorkflowID = workflow.NewWorkflowIdentifier("redteam")
 
 type (
-	ControlServerFactory func(logger *zerolog.Logger, httpClient *http.Client, url string) controlserver.Client
+	ControlServerFactory func(logger *zerolog.Logger, httpClient *http.Client, url, tenantID string) controlserver.Client
 	TargetFactory        func(httpClient *http.Client, url string, headers map[string]string, bodyTemplate, responseSelector string) target.Client
 )
 
-var DefaultControlServerFactory ControlServerFactory = func(logger *zerolog.Logger, httpClient *http.Client, url string) controlserver.Client {
-	return controlserver.NewClient(logger, httpClient, url)
+var DefaultControlServerFactory ControlServerFactory = func(logger *zerolog.Logger, httpClient *http.Client, url, tenantID string) controlserver.Client {
+	return controlserver.NewClient(logger, httpClient, url, tenantID)
 }
 
 var DefaultTargetFactory TargetFactory = func(
@@ -62,6 +62,7 @@ func RegisterRedTeamWorkflow(e workflow.Engine) error {
 	flagset.StringArray(utils.FlagHeaders, nil, `Request headers in "Key: Value" format (repeatable)`)
 	flagset.Bool(utils.FlagListGoals, false, "List all available attack goals and exit")
 	flagset.Bool(utils.FlagListStrategies, false, "List all available attack strategies and exit")
+	flagset.String(utils.FlagTenantID, "", "Tenant ID (auto-discovered if not provided)")
 
 	cfg := workflow.ConfigurationOptionsFromFlagset(flagset)
 	if _, err := e.Register(WorkflowID, cfg, redTeamWorkflow); err != nil {
@@ -96,10 +97,9 @@ func RunRedTeamWorkflow(
 		return handleListFlags(config, controlServerFactory, logger, listGoals, listStrategies)
 	}
 
-	orgID := config.GetString(configuration.ORGANIZATION)
-	if orgID == "" {
-		logger.Debug().Msg("No organization id is found.")
-		return nil, snyk_common_errors.NewUnauthorisedError("")
+	tenantID, err := helpers.GetTenantID(invocationCtx, config.GetString(utils.FlagTenantID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve tenant: %w", err)
 	}
 
 	rtConfig, configData, err := LoadAndValidateConfig(logger, config)
@@ -114,7 +114,7 @@ func RunRedTeamWorkflow(
 	displayMascot(userInterface, rtConfig)
 
 	targetHTTPClient := &http.Client{Timeout: target.DefaultTimeout}
-	controlServerClient := controlServerFactory(logger, &http.Client{Timeout: 15 * time.Second}, rtConfig.ControlServerURL)
+	controlServerClient := controlServerFactory(logger, &http.Client{Timeout: 15 * time.Second}, rtConfig.ControlServerURL, tenantID)
 	targetClient := targetFactory(
 		targetHTTPClient,
 		rtConfig.Target.Settings.URL,
@@ -146,7 +146,7 @@ func handleListFlags(
 	if controlServerURL == "" {
 		controlServerURL = defaultControlServerURL
 	}
-	csClient := controlServerFactory(logger, &http.Client{}, controlServerURL)
+	csClient := controlServerFactory(logger, &http.Client{}, controlServerURL, "")
 
 	var lines []string
 	if listGoals {
