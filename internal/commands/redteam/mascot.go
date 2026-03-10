@@ -39,7 +39,7 @@ func displayMascot(userInterface ui.UserInterface, cfg *Config) {
 		sb.WriteString(fmt.Sprintf("  %s%s%s\n", bred, line, reset))
 	}
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("  %s%sminired%s %s- Red teaming CLI%s\n", bold, bred, reset, dim, reset))
+	sb.WriteString(fmt.Sprintf("  %s%sSnyk Agent Red Teaming%s\n", bold, bred, reset))
 	sb.WriteString("\n")
 	sb.WriteString(fmt.Sprintf("  Target:     %s\n", cfg.Target.Settings.URL))
 	sb.WriteString(fmt.Sprintf("  Goal:       %s\n", cfg.Goal))

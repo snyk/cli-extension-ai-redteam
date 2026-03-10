@@ -2245,7 +2245,7 @@
               <tr class="${groupClass}" onclick="document.getElementById('issue-${r.id}').scrollIntoView({ behavior: 'smooth', block: 'start' })">
                 <td class="col-severity">${severityLabelShort(sev)}</td>
                 <td class="col-name">${escapeHtml(r.definition.name)}</td>
-                <td class="col-response" title="${escapeHtml((r.turns && r.turns[0] ? r.turns[0].response : "").trim())}">${escapeHtml((r.turns && r.turns[0] ? r.turns[0].response : "").trim())}</td>
+                <td class="col-response" title="${escapeHtml((r.turns && r.turns[0] && r.turns[0].response ? r.turns[0].response : "").trim())}">${escapeHtml((r.turns && r.turns[0] && r.turns[0].response ? r.turns[0].response : "").trim())}</td>
               </tr>`;
             })
             .join("");
@@ -2833,15 +2833,20 @@
             <div class="conversation-turns">`;
 
             r.turns.forEach((turn) => {
-              html += `
+              if (turn.request) {
+                html += `
               <div class="conversation-turn">
                 <span class="conversation-label conversation-label--request">Attacker prompt</span>
                 <div class="conversation-bubble">${escapeHtml(turn.request.trim())}</div>
-              </div>
+              </div>`;
+              }
+              if (turn.response) {
+                html += `
               <div class="conversation-turn">
                 <span class="conversation-label conversation-label--response">Model response</span>
                 <div class="conversation-bubble">${escapeHtml(turn.response.trim())}</div>
               </div>`;
+              }
             });
 
             html += `
