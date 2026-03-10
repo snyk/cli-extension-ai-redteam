@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 
 	"github.com/go-playground/validator/v10"
@@ -51,8 +50,9 @@ func RegisterRedTeamGetWorkflow(e workflow.Engine) error {
 
 func redTeamGetWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
 	logger := invocationCtx.GetEnhancedLogger()
+	httpClient := invocationCtx.GetNetworkAccess().GetHttpClient()
 	factory := func(url, tenantID string) controlserver.Client {
-		return controlserver.NewClient(logger, &http.Client{}, url, tenantID)
+		return controlserver.NewClient(logger, httpClient, url, tenantID)
 	}
 	return RunRedTeamGetWorkflow(invocationCtx, factory)
 }
