@@ -18,16 +18,30 @@ const (
 func displayMascot(userInterface ui.UserInterface, cfg *Config) {
 	var sb strings.Builder
 
+	art := []string{
+		`      |         |      `,
+		`     /|         |\     `,
+		`    | |         | |    `,
+		`    | |/-------\| |    `,
+		`    \             /    `,
+		`     |  \    /  |     `,
+		`     |\o/    \o/|      `,
+		`     |   | |   |     `,
+		`     \/  | |  \/      `,
+		`      |  | |  |      `,
+		`      \  ( )  /       `,
+		`       \_/ \_/        `,
+		`         \U/          `,
+	}
+
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("   %s▗%s     %s▖%s\n", red, reset, red, reset))
-	sb.WriteString(fmt.Sprintf("   %s▐▛███▜▌%s%s▜▘%s\n", bred, reset, dim, reset))
-	sb.WriteString(fmt.Sprintf("  %s▝▜█████▛▝%s\n", bred, reset))
-	sb.WriteString(fmt.Sprintf("    %s▘▘ ▝▝%s\n", bred, reset))
+	for _, line := range art {
+		sb.WriteString(fmt.Sprintf("  %s%s%s\n", bred, line, reset))
+	}
 	sb.WriteString("\n")
 	sb.WriteString(fmt.Sprintf("  %s%sminired%s %s- Red teaming CLI%s\n", bold, bred, reset, dim, reset))
 	sb.WriteString("\n")
 	sb.WriteString(fmt.Sprintf("  Target:     %s\n", cfg.Target.Settings.URL))
-	sb.WriteString(fmt.Sprintf("  Server:     %s\n", cfg.ControlServerURL))
 	sb.WriteString(fmt.Sprintf("  Goal:       %s\n", cfg.Goal))
 	sb.WriteString(fmt.Sprintf("  Strategies: %s\n", strings.Join(cfg.Strategies, ", ")))
 	sb.WriteString("\n")
