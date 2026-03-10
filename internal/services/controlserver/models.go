@@ -78,6 +78,7 @@ type ScanResult struct {
 }
 
 type EnumEntry struct {
-	Value       string `json:"value"`
-	Description string `json:"description"`
+	Value        string `json:"value"`
+	Description  string `json:"description"`
+	DisplayOrder int    `json:"display_order"`
 }

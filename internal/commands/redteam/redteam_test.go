@@ -427,6 +427,191 @@ func TestRunRedTeamWorkflow_TargetErrorContinuesScan(t *testing.T) {
 	assert.Len(t, results, 1)
 }
 
+func TestRunRedTeamWorkflow_ListGoals(t *testing.T) {
+	tests := []struct {
+		name        string
+		goals       []controlserver.EnumEntry
+		goalsErr    error
+		wantErr     string
+		wantOutputs []string
+	}{
+		{
+			name: "happy path",
+			goals: []controlserver.EnumEntry{
+				{Value: "system_prompt_extraction", Description: "Extract the system prompt", DisplayOrder: 0},
+				{Value: "harmful_content", Description: "Generate harmful content", DisplayOrder: 1},
+			},
+			wantOutputs: []string{"Available goals:", "NAME", "DESCRIPTION", "system_prompt_extraction", "Extract the system prompt", "harmful_content"},
+		},
+		{
+			name:     "4xx client error",
+			goalsErr: fmt.Errorf("goals returned status 400: bad request"),
+			wantErr:  "failed to list goals",
+		},
+		{
+			name:     "5xx server error",
+			goalsErr: fmt.Errorf("goals returned status 500: internal server error"),
+			wantErr:  "failed to list goals",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ictx := frameworkmock.NewMockInvocationContext(t)
+			ictx.GetConfiguration().Set(experimentalKey, true)
+			ictx.GetConfiguration().Set("list-goals", true)
+
+			mockCS := defaultMockCS()
+			mockCS.Goals = tt.goals
+			mockCS.GoalsErr = tt.goalsErr
+
+			originalArgs := os.Args
+			os.Args = []string{"snyk", "redteam", "--list-goals"}
+			defer func() { os.Args = originalArgs }()
+
+			results, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(mockCS), mockTargetFactory(defaultMockTarget()))
+
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Len(t, results, 1)
+			assert.Equal(t, "text/plain", results[0].GetContentType())
+
+			payload, ok := results[0].GetPayload().([]byte)
+			require.True(t, ok)
+			output := string(payload)
+			for _, want := range tt.wantOutputs {
+				assert.Contains(t, output, want)
+			}
+			assert.NotContains(t, output, "Available strategies:")
+		})
+	}
+}
+
+func TestRunRedTeamWorkflow_ListStrategies(t *testing.T) {
+	tests := []struct {
+		name          string
+		strategies    []controlserver.EnumEntry
+		strategiesErr error
+		wantErr       string
+		wantOutputs   []string
+	}{
+		{
+			name: "happy path",
+			strategies: []controlserver.EnumEntry{
+				{Value: "directly_asking", Description: "Ask directly for the information", DisplayOrder: 0},
+				{Value: "role_play", Description: "Use role play scenarios", DisplayOrder: 1},
+			},
+			wantOutputs: []string{"Available strategies:", "NAME", "DESCRIPTION", "directly_asking", "Ask directly for the information", "role_play"},
+		},
+		{
+			name:          "4xx client error",
+			strategiesErr: fmt.Errorf("strategies returned status 404: not found"),
+			wantErr:       "failed to list strategies",
+		},
+		{
+			name:          "5xx server error",
+			strategiesErr: fmt.Errorf("strategies returned status 502: bad gateway"),
+			wantErr:       "failed to list strategies",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ictx := frameworkmock.NewMockInvocationContext(t)
+			ictx.GetConfiguration().Set(experimentalKey, true)
+			ictx.GetConfiguration().Set("list-strategies", true)
+
+			mockCS := defaultMockCS()
+			mockCS.Strategies = tt.strategies
+			mockCS.StrategiesErr = tt.strategiesErr
+
+			originalArgs := os.Args
+			os.Args = []string{"snyk", "redteam", "--list-strategies"}
+			defer func() { os.Args = originalArgs }()
+
+			results, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(mockCS), mockTargetFactory(defaultMockTarget()))
+
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Len(t, results, 1)
+			assert.Equal(t, "text/plain", results[0].GetContentType())
+
+			payload, ok := results[0].GetPayload().([]byte)
+			require.True(t, ok)
+			output := string(payload)
+			for _, want := range tt.wantOutputs {
+				assert.Contains(t, output, want)
+			}
+			assert.NotContains(t, output, "Available goals:")
+		})
+	}
+}
+
+func TestRunRedTeamWorkflow_ListBothGoalsAndStrategies(t *testing.T) {
+	ictx := frameworkmock.NewMockInvocationContext(t)
+	ictx.GetConfiguration().Set(experimentalKey, true)
+	ictx.GetConfiguration().Set("list-goals", true)
+	ictx.GetConfiguration().Set("list-strategies", true)
+
+	mockCS := defaultMockCS()
+	mockCS.Goals = []controlserver.EnumEntry{
+		{Value: "system_prompt_extraction", Description: "Extract the system prompt", DisplayOrder: 0},
+	}
+	mockCS.Strategies = []controlserver.EnumEntry{
+		{Value: "directly_asking", Description: "Ask directly for the information", DisplayOrder: 0},
+	}
+
+	originalArgs := os.Args
+	os.Args = []string{"snyk", "redteam", "--list-goals", "--list-strategies"}
+	defer func() { os.Args = originalArgs }()
+
+	results, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(mockCS), mockTargetFactory(defaultMockTarget()))
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	payload, ok := results[0].GetPayload().([]byte)
+	require.True(t, ok)
+	output := string(payload)
+	assert.Contains(t, output, "Available goals:")
+	assert.Contains(t, output, "system_prompt_extraction")
+	assert.Contains(t, output, "Available strategies:")
+	assert.Contains(t, output, "directly_asking")
+}
+
+func TestRunRedTeamWorkflow_ListGoalsSkipsOrgCheck(t *testing.T) {
+	ictx := frameworkmock.NewMockInvocationContext(t)
+	ictx.GetConfiguration().Set(experimentalKey, true)
+	ictx.GetConfiguration().Set(configuration.ORGANIZATION, "")
+	ictx.GetConfiguration().Set("list-goals", true)
+
+	mockCS := defaultMockCS()
+	mockCS.Goals = []controlserver.EnumEntry{
+		{Value: "system_prompt_extraction", Description: "Extract the system prompt", DisplayOrder: 0},
+	}
+
+	originalArgs := os.Args
+	os.Args = []string{"snyk", "redteam", "--list-goals"}
+	defer func() { os.Args = originalArgs }()
+
+	results, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(mockCS), mockTargetFactory(defaultMockTarget()))
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	payload, ok := results[0].GetPayload().([]byte)
+	require.True(t, ok)
+	assert.Contains(t, string(payload), "system_prompt_extraction")
+}
+
 func TestRunRedTeamWorkflow_CircuitBreakerAbortsScan(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)

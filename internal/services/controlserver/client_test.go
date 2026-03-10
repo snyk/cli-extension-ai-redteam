@@ -165,6 +165,78 @@ func TestGetResult_Happy(t *testing.T) {
 	assert.True(t, result.Attacks[0].Chats[0].Success)
 }
 
+func TestListGoals_Happy(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "/hidden/goals", r.URL.Path)
+		assert.Contains(t, r.URL.RawQuery, "version="+controlserver.APIVersion)
+
+		json.NewEncoder(w).Encode([]controlserver.EnumEntry{
+			{Value: "system_prompt_extraction", Description: "Extract the system prompt", DisplayOrder: 0},
+			{Value: "harmful_content", Description: "Generate harmful content", DisplayOrder: 1},
+		})
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	goals, err := client.ListGoals(t.Context())
+	require.NoError(t, err)
+	require.Len(t, goals, 2)
+	assert.Equal(t, "system_prompt_extraction", goals[0].Value)
+	assert.Equal(t, "Extract the system prompt", goals[0].Description)
+	assert.Equal(t, 0, goals[0].DisplayOrder)
+	assert.Equal(t, "harmful_content", goals[1].Value)
+}
+
+func TestListGoals_ServerError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"detail": "server error"}`))
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	_, err := client.ListGoals(t.Context())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "500")
+}
+
+func TestListStrategies_Happy(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "/hidden/strategies", r.URL.Path)
+		assert.Contains(t, r.URL.RawQuery, "version="+controlserver.APIVersion)
+
+		json.NewEncoder(w).Encode([]controlserver.EnumEntry{
+			{Value: "directly_asking", Description: "Ask directly for the information", DisplayOrder: 0},
+			{Value: "role_play", Description: "Use role play scenarios", DisplayOrder: 1},
+		})
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	strategies, err := client.ListStrategies(t.Context())
+	require.NoError(t, err)
+	require.Len(t, strategies, 2)
+	assert.Equal(t, "directly_asking", strategies[0].Value)
+	assert.Equal(t, "Ask directly for the information", strategies[0].Description)
+	assert.Equal(t, 0, strategies[0].DisplayOrder)
+	assert.Equal(t, "role_play", strategies[1].Value)
+}
+
+func TestListStrategies_ServerError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		w.Write([]byte(`bad gateway`))
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	_, err := client.ListStrategies(t.Context())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "502")
+}
+
 func TestGetResult_NotFound(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)

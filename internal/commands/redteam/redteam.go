@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -153,10 +154,9 @@ func handleListFlags(
 		if err != nil {
 			return nil, fmt.Errorf("failed to list goals: %w", err)
 		}
-		lines = append(lines, "Available goals:")
-		for _, g := range goals {
-			lines = append(lines, fmt.Sprintf("  %-40s %s", g.Value, g.Description))
-		}
+		sort.Slice(goals, func(i, j int) bool { return goals[i].DisplayOrder < goals[j].DisplayOrder })
+		lines = append(lines, "Available goals:", "")
+		lines = appendEnumTable(lines, goals)
 	}
 	if listStrategies {
 		if len(lines) > 0 {
@@ -166,14 +166,29 @@ func handleListFlags(
 		if err != nil {
 			return nil, fmt.Errorf("failed to list strategies: %w", err)
 		}
-		lines = append(lines, "Available strategies:")
-		for _, s := range strategies {
-			lines = append(lines, fmt.Sprintf("  %-40s %s", s.Value, s.Description))
-		}
+		sort.Slice(strategies, func(i, j int) bool { return strategies[i].DisplayOrder < strategies[j].DisplayOrder })
+		lines = append(lines, "Available strategies:", "")
+		lines = appendEnumTable(lines, strategies)
 	}
 
 	output := strings.Join(lines, "\n") + "\n"
 	return []workflow.Data{newWorkflowData("text/plain", []byte(output))}, nil
+}
+
+func appendEnumTable(lines []string, entries []controlserver.EnumEntry) []string {
+	nameWidth := len("NAME")
+	for _, e := range entries {
+		if len(e.Value) > nameWidth {
+			nameWidth = len(e.Value)
+		}
+	}
+	nameWidth += 2 // padding
+
+	lines = append(lines, fmt.Sprintf("  %-*s  %s", nameWidth, "NAME", "DESCRIPTION"))
+	for _, e := range entries {
+		lines = append(lines, fmt.Sprintf("  %-*s  %s", nameWidth, e.Value, e.Description))
+	}
+	return lines
 }
 
 func runClientDrivenScan(

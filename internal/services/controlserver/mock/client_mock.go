@@ -7,15 +7,19 @@ import (
 )
 
 type MockClient struct {
-	ScanID    string
-	ChatRound int
-	ChatSeqs  [][]controlserver.ChatPrompt
-	Status    *controlserver.ScanStatus
-	Result    *controlserver.ScanResult
-	CreateErr error
-	NextErr   error
-	StatusErr error
-	ResultErr error
+	ScanID        string
+	ChatRound     int
+	ChatSeqs      [][]controlserver.ChatPrompt
+	Status        *controlserver.ScanStatus
+	Result        *controlserver.ScanResult
+	Goals         []controlserver.EnumEntry
+	Strategies    []controlserver.EnumEntry
+	CreateErr     error
+	NextErr       error
+	StatusErr     error
+	ResultErr     error
+	GoalsErr      error
+	StrategiesErr error
 }
 
 var _ controlserver.Client = (*MockClient)(nil)
@@ -54,9 +58,15 @@ func (m *MockClient) GetResult(_ context.Context, _ string) (*controlserver.Scan
 }
 
 func (m *MockClient) ListGoals(_ context.Context) ([]controlserver.EnumEntry, error) {
-	return nil, nil
+	if m.GoalsErr != nil {
+		return nil, m.GoalsErr
+	}
+	return m.Goals, nil
 }
 
 func (m *MockClient) ListStrategies(_ context.Context) ([]controlserver.EnumEntry, error) {
-	return nil, nil
+	if m.StrategiesErr != nil {
+		return nil, m.StrategiesErr
+	}
+	return m.Strategies, nil
 }
