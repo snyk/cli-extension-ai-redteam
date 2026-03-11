@@ -295,6 +295,20 @@ func TestRunRedTeamWorkflow_CustomConfig(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestRunRedTeamWorkflow_WithGroundTruthConfig(t *testing.T) {
+	ictx := frameworkmock.NewMockInvocationContext(t)
+	ictx.GetConfiguration().Set(experimentalKey, true)
+	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(configFlag, redteamTestConfigFile)
+
+	originalArgs := os.Args
+	os.Args = []string{"snyk", "redteam"}
+	defer func() { os.Args = originalArgs }()
+
+	_, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
+	require.NoError(t, err)
+}
+
 func TestRunRedTeamWorkflow_HTMLOutput(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)

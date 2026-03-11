@@ -14,7 +14,7 @@ import (
 const APIVersion = "2026-02-20"
 
 type Client interface {
-	CreateScan(ctx context.Context, goal string, strategies []string) (string, error)
+	CreateScan(ctx context.Context, goal string, strategies []string, groundTruth *GroundTruth) (string, error)
 	NextChats(ctx context.Context, scanID string, responses []ChatResponse) ([]ChatPrompt, error)
 	GetStatus(ctx context.Context, scanID string) (*ScanStatus, error)
 	GetResult(ctx context.Context, scanID string) (*ScanResult, error)
@@ -38,8 +38,13 @@ func NewClient(logger *zerolog.Logger, httpClient *http.Client, baseURL string) 
 	}
 }
 
-func (c *ClientImpl) CreateScan(ctx context.Context, goal string, strategies []string) (string, error) {
+func (c *ClientImpl) CreateScan(ctx context.Context, goal string, strategies []string, groundTruth *GroundTruth) (string, error) {
 	body := CreateScanRequest{Goal: goal, Strategies: strategies}
+	if groundTruth != nil {
+		body.Purpose = groundTruth.Purpose
+		body.SystemPrompt = groundTruth.SystemPrompt
+		body.Tools = groundTruth.Tools
+	}
 	reqBytes, err := json.Marshal(body)
 	if err != nil {
 		return "", fmt.Errorf("marshal CreateScan request: %w", err)
@@ -69,7 +74,11 @@ func (c *ClientImpl) CreateScan(ctx context.Context, goal string, strategies []s
 
 	var result CreateScanResponse
 	if err := json.Unmarshal(respBytes, &result); err != nil {
-		return "", fmt.Errorf("unmarshal CreateScan response: %w", err)
+		msg := "unmarshal CreateScan response: " + err.Error()
+		if len(respBytes) > 0 && respBytes[0] == '<' {
+			msg += " (response looks like HTML — check control_server_url and ensure the Minired API is running)"
+		}
+		return "", fmt.Errorf("%s", msg)
 	}
 
 	c.logger.Debug().Str("scanID", result.ScanID).Msg("scan created")

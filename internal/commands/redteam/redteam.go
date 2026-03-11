@@ -62,6 +62,9 @@ func RegisterRedTeamWorkflow(e workflow.Engine) error {
 	flagset.StringArray(utils.FlagHeaders, nil, `Request headers in "Key: Value" format (repeatable)`)
 	flagset.Bool(utils.FlagListGoals, false, "List all available attack goals and exit")
 	flagset.Bool(utils.FlagListStrategies, false, "List all available attack strategies and exit")
+	flagset.String(utils.FlagPurpose, "", "Intended purpose of the target (ground truth for the judge)")
+	flagset.String(utils.FlagSystemPromptFile, "", "Path to file containing the target system prompt (ground truth)")
+	flagset.StringArray(utils.FlagTools, nil, "Tool names the target is configured with (ground truth, repeatable)")
 
 	cfg := workflow.ConfigurationOptionsFromFlagset(flagset)
 	if _, err := e.Register(WorkflowID, cfg, redTeamWorkflow); err != nil {
@@ -191,6 +194,24 @@ func appendEnumTable(lines []string, entries []controlserver.EnumEntry) []string
 	return lines
 }
 
+func buildGroundTruth(cfg *Config) *controlserver.GroundTruth {
+	ctx := cfg.Target.Context
+	if ctx.Purpose == "" && ctx.SystemPrompt == "" && len(ctx.Tools) == 0 {
+		return nil
+	}
+	gt := &controlserver.GroundTruth{}
+	if ctx.Purpose != "" {
+		gt.Purpose = &ctx.Purpose
+	}
+	if ctx.SystemPrompt != "" {
+		gt.SystemPrompt = &ctx.SystemPrompt
+	}
+	if len(ctx.Tools) > 0 {
+		gt.Tools = &ctx.Tools
+	}
+	return gt
+}
+
 func runClientDrivenScan(
 	invocationCtx workflow.InvocationContext,
 	csClient controlserver.Client,
@@ -201,7 +222,8 @@ func runClientDrivenScan(
 	userInterface := invocationCtx.GetUserInterface()
 	ctx := context.Background()
 
-	scanID, err := csClient.CreateScan(ctx, rtConfig.Goal, rtConfig.Strategies)
+	groundTruth := buildGroundTruth(rtConfig)
+	scanID, err := csClient.CreateScan(ctx, rtConfig.Goal, rtConfig.Strategies, groundTruth)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create scan: %w", err)
 	}
