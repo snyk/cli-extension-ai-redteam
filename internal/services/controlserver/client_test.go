@@ -206,76 +206,90 @@ func TestGetResult_Happy(t *testing.T) {
 	assert.True(t, result.Attacks[0].Chats[0].Success)
 }
 
-func TestListGoals_Happy(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method)
-		assert.Equal(t, "/hidden/goals", r.URL.Path)
-		assert.Contains(t, r.URL.RawQuery, "version="+controlserver.APIVersion)
+func TestListEnums_Happy(t *testing.T) {
+	tests := []struct {
+		name     string
+		path     string
+		entries  []controlserver.EnumEntry
+		listFunc func(controlserver.Client) ([]controlserver.EnumEntry, error)
+	}{
+		{
+			name: "goals",
+			path: "/hidden/goals",
+			entries: []controlserver.EnumEntry{
+				{Value: "system_prompt_extraction", Description: "Extract the system prompt", DisplayOrder: 0},
+				{Value: "harmful_content", Description: "Generate harmful content", DisplayOrder: 1},
+			},
+			listFunc: func(c controlserver.Client) ([]controlserver.EnumEntry, error) { return c.ListGoals(t.Context()) },
+		},
+		{
+			name: "strategies",
+			path: "/hidden/strategies",
+			entries: []controlserver.EnumEntry{
+				{Value: "directly_asking", Description: "Ask directly for the information", DisplayOrder: 0},
+				{Value: "role_play", Description: "Use role play scenarios", DisplayOrder: 1},
+			},
+			listFunc: func(c controlserver.Client) ([]controlserver.EnumEntry, error) { return c.ListStrategies(t.Context()) },
+		},
+	}
 
-		json.NewEncoder(w).Encode([]controlserver.EnumEntry{
-			{Value: "system_prompt_extraction", Description: "Extract the system prompt", DisplayOrder: 0},
-			{Value: "harmful_content", Description: "Generate harmful content", DisplayOrder: 1},
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, http.MethodGet, r.Method)
+				assert.Equal(t, tt.path, r.URL.Path)
+				assert.Contains(t, r.URL.RawQuery, "version="+controlserver.APIVersion)
+				json.NewEncoder(w).Encode(tt.entries)
+			}))
+			defer server.Close()
+
+			client := newTestClient(t, server.URL)
+			results, err := tt.listFunc(client)
+			require.NoError(t, err)
+			require.Len(t, results, 2)
+			assert.Equal(t, tt.entries[0].Value, results[0].Value)
+			assert.Equal(t, tt.entries[0].Description, results[0].Description)
+			assert.Equal(t, tt.entries[0].DisplayOrder, results[0].DisplayOrder)
+			assert.Equal(t, tt.entries[1].Value, results[1].Value)
 		})
-	}))
-	defer server.Close()
-
-	client := newTestClient(t, server.URL)
-	goals, err := client.ListGoals(t.Context())
-	require.NoError(t, err)
-	require.Len(t, goals, 2)
-	assert.Equal(t, "system_prompt_extraction", goals[0].Value)
-	assert.Equal(t, "Extract the system prompt", goals[0].Description)
-	assert.Equal(t, 0, goals[0].DisplayOrder)
-	assert.Equal(t, "harmful_content", goals[1].Value)
+	}
 }
 
-func TestListGoals_ServerError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"detail": "server error"}`))
-	}))
-	defer server.Close()
+func TestListEnums_ServerError(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		listFunc   func(controlserver.Client) ([]controlserver.EnumEntry, error)
+		wantStatus string
+	}{
+		{
+			name:       "goals/500",
+			statusCode: http.StatusInternalServerError,
+			listFunc:   func(c controlserver.Client) ([]controlserver.EnumEntry, error) { return c.ListGoals(t.Context()) },
+			wantStatus: "500",
+		},
+		{
+			name:       "strategies/502",
+			statusCode: http.StatusBadGateway,
+			listFunc:   func(c controlserver.Client) ([]controlserver.EnumEntry, error) { return c.ListStrategies(t.Context()) },
+			wantStatus: "502",
+		},
+	}
 
-	client := newTestClient(t, server.URL)
-	_, err := client.ListGoals(t.Context())
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "500")
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.statusCode)
+				w.Write([]byte(`error`))
+			}))
+			defer server.Close()
 
-func TestListStrategies_Happy(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method)
-		assert.Equal(t, "/hidden/strategies", r.URL.Path)
-		assert.Contains(t, r.URL.RawQuery, "version="+controlserver.APIVersion)
-
-		json.NewEncoder(w).Encode([]controlserver.EnumEntry{
-			{Value: "directly_asking", Description: "Ask directly for the information", DisplayOrder: 0},
-			{Value: "role_play", Description: "Use role play scenarios", DisplayOrder: 1},
+			client := newTestClient(t, server.URL)
+			_, err := tt.listFunc(client)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantStatus)
 		})
-	}))
-	defer server.Close()
-
-	client := newTestClient(t, server.URL)
-	strategies, err := client.ListStrategies(t.Context())
-	require.NoError(t, err)
-	require.Len(t, strategies, 2)
-	assert.Equal(t, "directly_asking", strategies[0].Value)
-	assert.Equal(t, "Ask directly for the information", strategies[0].Description)
-	assert.Equal(t, 0, strategies[0].DisplayOrder)
-	assert.Equal(t, "role_play", strategies[1].Value)
-}
-
-func TestListStrategies_ServerError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusBadGateway)
-		w.Write([]byte(`bad gateway`))
-	}))
-	defer server.Close()
-
-	client := newTestClient(t, server.URL)
-	_, err := client.ListStrategies(t.Context())
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "502")
+	}
 }
 
 func TestGetResult_NotFound(t *testing.T) {

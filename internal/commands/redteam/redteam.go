@@ -177,7 +177,7 @@ func handleListFlags(
 	}
 
 	output := strings.Join(lines, "\n") + "\n"
-	return []workflow.Data{newWorkflowData("text/plain", []byte(output))}, nil
+	return []workflow.Data{newWorkflowData(contentTypePlain, []byte(output))}, nil
 }
 
 func appendEnumTable(lines []string, entries []controlserver.EnumEntry) []string {
