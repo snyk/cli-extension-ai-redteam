@@ -54,22 +54,20 @@ func GetTenantID(ctx workflow.InvocationContext, tenantID string) (string, error
 		return tenants[0].ID, nil
 	}
 
-	names := make([]string, len(tenants))
+	labels := make([]string, len(tenants))
 	for i, t := range tenants {
-		names[i] = t.Name
+		labels[i] = fmt.Sprintf("%s (%s)", t.Name, t.ID)
 	}
-	_, selectedName, selErr := ui.SelectOptions("Select tenant", names)
+	idx, _, selErr := ui.SelectOptions("Select tenant", labels)
 	if selErr != nil {
 		logger.Debug().Err(selErr).Msg("error selecting tenant")
 		return "", fmt.Errorf("error selecting tenant: %w", selErr)
 	}
-	for _, t := range tenants {
-		if t.Name == selectedName {
-			return t.ID, nil
-		}
+	if idx >= 0 && idx < len(tenants) {
+		return tenants[idx].ID, nil
 	}
 
-	return "", fmt.Errorf("selected tenant %q not found", selectedName)
+	return "", fmt.Errorf("invalid tenant selection (index %d)", idx)
 }
 
 func fetchTenants(ctx workflow.InvocationContext) ([]tenant, error) {
