@@ -66,6 +66,9 @@ func RegisterRedTeamWorkflow(e workflow.Engine) error {
 	flagset.String(utils.FlagSystemPromptFile, "", "Path to file containing the target system prompt (ground truth)")
 	flagset.StringArray(utils.FlagTools, nil, "Tool names the target is configured with (ground truth, repeatable)")
 	flagset.String(utils.FlagTenantID, "", "Tenant ID (auto-discovered if not provided)")
+	flagset.String(utils.FlagPurpose, "", "Intended purpose of the target (ground truth for the judge)")
+	flagset.String(utils.FlagSystemPromptFile, "", "Path to file containing the target system prompt (ground truth)")
+	flagset.StringArray(utils.FlagTools, nil, "Tool names the target is configured with (ground truth, repeatable)")
 
 	cfg := workflow.ConfigurationOptionsFromFlagset(flagset)
 	if _, err := e.Register(WorkflowID, cfg, redTeamWorkflow); err != nil {
