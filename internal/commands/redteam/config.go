@@ -22,6 +22,7 @@ const (
 	defaultGoal                = "system_prompt_extraction"
 	defaultResponseSelector    = "response"
 	defaultRequestBodyTemplate = `{"message": "{{prompt}}"}`
+	contentTypePlain           = "text/plain"
 )
 
 var defaultStrategies = []string{"directly_asking"}
@@ -79,25 +80,25 @@ func LoadAndValidateConfig(logger *zerolog.Logger, config configuration.Configur
 	if hasConfigFile {
 		if _, err := os.Stat(configPath); os.IsNotExist(err) {
 			message := fmt.Sprintf("Configuration file not found: %s", configPath)
-			return nil, []workflow.Data{newWorkflowData("text/plain", []byte(message))}, nil
+			return nil, []workflow.Data{newWorkflowData(contentTypePlain, []byte(message))}, nil
 		}
 
 		data, err := os.ReadFile(configPath)
 		if err != nil {
 			logger.Debug().Err(err).Msg("error reading config file")
-			return nil, []workflow.Data{newWorkflowData("text/plain", []byte(getInvalidConfigMessage()))}, nil
+			return nil, []workflow.Data{newWorkflowData(contentTypePlain, []byte(getInvalidConfigMessage()))}, nil
 		}
 
 		if err := yaml.Unmarshal(data, &rtConfig); err != nil {
 			logger.Debug().Err(err).Msg("error unmarshaling config")
-			return nil, []workflow.Data{newWorkflowData("text/plain", []byte(getInvalidConfigMessage()))}, nil
+			return nil, []workflow.Data{newWorkflowData(contentTypePlain, []byte(getInvalidConfigMessage()))}, nil
 		}
 	} else if targetURL == "" {
 		message := `No configuration found. Either:
   - Create a redteam.yaml in the current directory
   - Use --config to specify a config file
   - Use --target-url to scan a target directly`
-		return nil, []workflow.Data{newWorkflowData("text/plain", []byte(message))}, nil
+		return nil, []workflow.Data{newWorkflowData(contentTypePlain, []byte(message))}, nil
 	}
 
 	if targetURL != "" {

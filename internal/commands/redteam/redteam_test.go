@@ -411,96 +411,91 @@ func TestRunRedTeamWorkflow_TargetErrorContinuesScan(t *testing.T) {
 	assert.Len(t, results, 1)
 }
 
-func TestRunRedTeamWorkflow_ListGoals(t *testing.T) {
+func TestRunRedTeamWorkflow_ListEnums(t *testing.T) {
 	tests := []struct {
-		name        string
-		goals       []controlserver.EnumEntry
-		goalsErr    error
-		wantErr     string
-		wantOutputs []string
+		name           string
+		flagKey        string
+		cliFlag        string
+		entries        []controlserver.EnumEntry
+		setMock        func(*controlservermock.MockClient, []controlserver.EnumEntry, error)
+		entryErr       error
+		wantErr        string
+		wantOutputs    []string
+		notWantOutputs []string
 	}{
 		{
-			name: "happy path",
-			goals: []controlserver.EnumEntry{
+			name:    "goals/happy path",
+			flagKey: "list-goals",
+			cliFlag: "--list-goals",
+			entries: []controlserver.EnumEntry{
 				{Value: "system_prompt_extraction", Description: "Extract the system prompt", DisplayOrder: 0},
 				{Value: "harmful_content", Description: "Generate harmful content", DisplayOrder: 1},
 			},
-			wantOutputs: []string{"Available goals:", "NAME", "DESCRIPTION", "system_prompt_extraction", "Extract the system prompt", "harmful_content"},
+			setMock: func(m *controlservermock.MockClient, e []controlserver.EnumEntry, err error) {
+				m.Goals = e
+				m.GoalsErr = err
+			},
+			wantOutputs:    []string{"Available goals:", "NAME", "DESCRIPTION", "system_prompt_extraction", "Extract the system prompt", "harmful_content"},
+			notWantOutputs: []string{"Available strategies:"},
 		},
 		{
-			name:     "4xx client error",
-			goalsErr: fmt.Errorf("goals returned status 400: bad request"),
+			name:    "goals/4xx client error",
+			flagKey: "list-goals",
+			cliFlag: "--list-goals",
+			setMock: func(m *controlservermock.MockClient, e []controlserver.EnumEntry, err error) {
+				m.Goals = e
+				m.GoalsErr = err
+			},
+			entryErr: fmt.Errorf("goals returned status 400: bad request"),
 			wantErr:  "failed to list goals",
 		},
 		{
-			name:     "5xx server error",
-			goalsErr: fmt.Errorf("goals returned status 500: internal server error"),
+			name:    "goals/5xx server error",
+			flagKey: "list-goals",
+			cliFlag: "--list-goals",
+			setMock: func(m *controlservermock.MockClient, e []controlserver.EnumEntry, err error) {
+				m.Goals = e
+				m.GoalsErr = err
+			},
+			entryErr: fmt.Errorf("goals returned status 500: internal server error"),
 			wantErr:  "failed to list goals",
 		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ictx := frameworkmock.NewMockInvocationContext(t)
-			ictx.GetConfiguration().Set(experimentalKey, true)
-			ictx.GetConfiguration().Set("list-goals", true)
-
-			mockCS := defaultMockCS()
-			mockCS.Goals = tt.goals
-			mockCS.GoalsErr = tt.goalsErr
-
-			originalArgs := os.Args
-			os.Args = []string{"snyk", "redteam", "--list-goals"}
-			defer func() { os.Args = originalArgs }()
-
-			results, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(mockCS), mockTargetFactory(defaultMockTarget()))
-
-			if tt.wantErr != "" {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tt.wantErr)
-				return
-			}
-
-			require.NoError(t, err)
-			require.Len(t, results, 1)
-			assert.Equal(t, "text/plain", results[0].GetContentType())
-
-			payload, ok := results[0].GetPayload().([]byte)
-			require.True(t, ok)
-			output := string(payload)
-			for _, want := range tt.wantOutputs {
-				assert.Contains(t, output, want)
-			}
-			assert.NotContains(t, output, "Available strategies:")
-		})
-	}
-}
-
-func TestRunRedTeamWorkflow_ListStrategies(t *testing.T) {
-	tests := []struct {
-		name          string
-		strategies    []controlserver.EnumEntry
-		strategiesErr error
-		wantErr       string
-		wantOutputs   []string
-	}{
 		{
-			name: "happy path",
-			strategies: []controlserver.EnumEntry{
+			name:    "strategies/happy path",
+			flagKey: "list-strategies",
+			cliFlag: "--list-strategies",
+			entries: []controlserver.EnumEntry{
 				{Value: "directly_asking", Description: "Ask directly for the information", DisplayOrder: 0},
 				{Value: "role_play", Description: "Use role play scenarios", DisplayOrder: 1},
 			},
-			wantOutputs: []string{"Available strategies:", "NAME", "DESCRIPTION", "directly_asking", "Ask directly for the information", "role_play"},
+			setMock: func(m *controlservermock.MockClient, e []controlserver.EnumEntry, err error) {
+				m.Strategies = e
+				m.StrategiesErr = err
+			},
+			wantOutputs:    []string{"Available strategies:", "NAME", "DESCRIPTION", "directly_asking", "Ask directly for the information", "role_play"},
+			notWantOutputs: []string{"Available goals:"},
 		},
 		{
-			name:          "4xx client error",
-			strategiesErr: fmt.Errorf("strategies returned status 404: not found"),
-			wantErr:       "failed to list strategies",
+			name:    "strategies/4xx client error",
+			flagKey: "list-strategies",
+			cliFlag: "--list-strategies",
+			setMock: func(m *controlservermock.MockClient, e []controlserver.EnumEntry, err error) {
+				m.Strategies = e
+				m.StrategiesErr = err
+			},
+			entryErr: fmt.Errorf("strategies returned status 404: not found"),
+			wantErr:  "failed to list strategies",
 		},
 		{
-			name:          "5xx server error",
-			strategiesErr: fmt.Errorf("strategies returned status 502: bad gateway"),
-			wantErr:       "failed to list strategies",
+			name:    "strategies/5xx server error",
+			flagKey: "list-strategies",
+			cliFlag: "--list-strategies",
+			setMock: func(m *controlservermock.MockClient, e []controlserver.EnumEntry, err error) {
+				m.Strategies = e
+				m.StrategiesErr = err
+			},
+			entryErr: fmt.Errorf("strategies returned status 502: bad gateway"),
+			wantErr:  "failed to list strategies",
 		},
 	}
 
@@ -508,14 +503,13 @@ func TestRunRedTeamWorkflow_ListStrategies(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ictx := frameworkmock.NewMockInvocationContext(t)
 			ictx.GetConfiguration().Set(experimentalKey, true)
-			ictx.GetConfiguration().Set("list-strategies", true)
+			ictx.GetConfiguration().Set(tt.flagKey, true)
 
 			mockCS := defaultMockCS()
-			mockCS.Strategies = tt.strategies
-			mockCS.StrategiesErr = tt.strategiesErr
+			tt.setMock(mockCS, tt.entries, tt.entryErr)
 
 			originalArgs := os.Args
-			os.Args = []string{"snyk", "redteam", "--list-strategies"}
+			os.Args = []string{"snyk", "redteam", tt.cliFlag}
 			defer func() { os.Args = originalArgs }()
 
 			results, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(mockCS), mockTargetFactory(defaultMockTarget()))
@@ -536,7 +530,9 @@ func TestRunRedTeamWorkflow_ListStrategies(t *testing.T) {
 			for _, want := range tt.wantOutputs {
 				assert.Contains(t, output, want)
 			}
-			assert.NotContains(t, output, "Available goals:")
+			for _, nope := range tt.notWantOutputs {
+				assert.NotContains(t, output, nope)
+			}
 		})
 	}
 }
@@ -572,10 +568,10 @@ func TestRunRedTeamWorkflow_ListBothGoalsAndStrategies(t *testing.T) {
 	assert.Contains(t, output, "directly_asking")
 }
 
-func TestRunRedTeamWorkflow_ListGoalsSkipsOrgCheck(t *testing.T) {
+func TestRunRedTeamWorkflow_ListGoalsSkipsTenantCheck(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(configuration.ORGANIZATION, "")
+	ictx.GetConfiguration().Set(tenantIDKey, "")
 	ictx.GetConfiguration().Set("list-goals", true)
 
 	mockCS := defaultMockCS()
