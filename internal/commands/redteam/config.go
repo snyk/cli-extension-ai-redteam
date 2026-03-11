@@ -42,7 +42,9 @@ type ConfigTarget struct {
 }
 
 type ConfigContext struct {
-	Purpose string `yaml:"purpose"`
+	Purpose      string   `yaml:"purpose"`
+	SystemPrompt string   `yaml:"system_prompt"`
+	Tools        []string `yaml:"tools"`
 }
 
 type ConfigSettings struct {
@@ -119,6 +121,20 @@ func LoadAndValidateConfig(logger *zerolog.Logger, config configuration.Configur
 	}
 	if headers := parseHeaderFlags(config); len(headers) > 0 {
 		rtConfig.Target.Settings.Headers = append(rtConfig.Target.Settings.Headers, headers...)
+	}
+
+	if v := config.GetString(utils.FlagPurpose); v != "" {
+		rtConfig.Target.Context.Purpose = v
+	}
+	if path := config.GetString(utils.FlagSystemPromptFile); path != "" {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, nil, fmt.Errorf("read system prompt file %q: %w", path, err)
+		}
+		rtConfig.Target.Context.SystemPrompt = string(data)
+	}
+	if tools := getToolsFlags(config); len(tools) > 0 {
+		rtConfig.Target.Context.Tools = tools
 	}
 
 	applyDefaults(&rtConfig)
@@ -199,6 +215,15 @@ func (cfg *Config) HeadersMap() map[string]string {
 	return headers
 }
 
+func getToolsFlags(config configuration.Configuration) []string {
+	raw := config.Get(utils.FlagTools)
+	vals, ok := raw.([]string)
+	if !ok || len(vals) == 0 {
+		return nil
+	}
+	return vals
+}
+
 func parseHeaderFlags(config configuration.Configuration) []ConfigHeader {
 	raw := config.Get(utils.FlagHeaders)
 	vals, ok := raw.([]string)
@@ -226,6 +251,10 @@ func getInvalidConfigMessage() string {
 	target:
 		name: <required, name your target>
 		type: <required, e.g., api or socket_io>
+		context:
+			purpose: '<optional, intended purpose of the target>'
+			system_prompt: '<optional, ground truth system prompt>'
+			tools: '<optional, list of tool names>'
 		settings:
 			url: '<required, e.g., https://vulnerable-app.com/chat/completions>'
 			headers:

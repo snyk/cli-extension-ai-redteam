@@ -42,7 +42,45 @@ func TestCreateScan_Happy(t *testing.T) {
 	defer server.Close()
 
 	client := newTestClient(t, server.URL)
-	scanID, err := client.CreateScan(t.Context(), "system_prompt_extraction", []string{"directly_asking"})
+	scanID, err := client.CreateScan(t.Context(), "system_prompt_extraction", []string{"directly_asking"}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, testScanID, scanID)
+}
+
+func TestCreateScan_WithGroundTruth(t *testing.T) {
+	purpose := "Customer support"
+	systemPrompt := "You are a helpful assistant."
+	tools := []string{"get_balance", "transfer"}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/hidden/tenants/"+testTenantID+"/red_team_scans", r.URL.Path)
+		assert.Contains(t, r.URL.RawQuery, "version="+controlserver.APIVersion)
+
+		var req controlserver.CreateScanRequest
+		body, _ := io.ReadAll(r.Body)
+		require.NoError(t, json.Unmarshal(body, &req))
+		assert.Equal(t, "system_prompt_extraction", req.Goal)
+		assert.Equal(t, []string{"directly_asking"}, req.Strategies)
+		require.NotNil(t, req.Purpose)
+		assert.Equal(t, purpose, *req.Purpose)
+		require.NotNil(t, req.SystemPrompt)
+		assert.Equal(t, systemPrompt, *req.SystemPrompt)
+		require.NotNil(t, req.Tools)
+		assert.Equal(t, tools, *req.Tools)
+
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(controlserver.CreateScanResponse{ScanID: testScanID})
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	gt := &controlserver.GroundTruth{
+		Purpose:      &purpose,
+		SystemPrompt: &systemPrompt,
+		Tools:        &tools,
+	}
+	scanID, err := client.CreateScan(t.Context(), "system_prompt_extraction", []string{"directly_asking"}, gt)
 	require.NoError(t, err)
 	assert.Equal(t, testScanID, scanID)
 }
@@ -55,7 +93,7 @@ func TestCreateScan_ServerError(t *testing.T) {
 	defer server.Close()
 
 	client := newTestClient(t, server.URL)
-	_, err := client.CreateScan(t.Context(), "test", nil)
+	_, err := client.CreateScan(t.Context(), "test", nil, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "400")
 }

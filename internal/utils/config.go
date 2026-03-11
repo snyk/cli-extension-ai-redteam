@@ -12,6 +12,9 @@ const (
 	FlagRequestBodyTmpl  = "request-body-template"
 	FlagResponseSelector = "response-selector"
 	FlagHeaders          = "headers"
-	FlagListGoals        = "list-goals"
-	FlagListStrategies   = "list-strategies"
+	FlagListGoals          = "list-goals"
+	FlagListStrategies     = "list-strategies"
+	FlagPurpose            = "purpose"
+	FlagSystemPromptFile   = "system-prompt-file"
+	FlagTools              = "tools"
 )
