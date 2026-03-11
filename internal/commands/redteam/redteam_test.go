@@ -282,7 +282,7 @@ func TestRunRedTeamWorkflow_CustomConfig(t *testing.T) {
 func TestRunRedTeamWorkflow_WithGroundTruthConfig(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set(configFlag, redteamTestConfigFile)
 
 	originalArgs := os.Args
