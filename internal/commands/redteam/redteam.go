@@ -94,7 +94,8 @@ func RunRedTeamWorkflow(
 	listGoals := config.GetBool(utils.FlagListGoals)
 	listStrategies := config.GetBool(utils.FlagListStrategies)
 	if listGoals || listStrategies {
-		return handleListFlags(config, controlServerFactory, logger, listGoals, listStrategies)
+		httpClient := invocationCtx.GetNetworkAccess().GetHttpClient()
+		return handleListFlags(config, controlServerFactory, logger, httpClient, listGoals, listStrategies)
 	}
 
 	tenantID, err := helpers.GetTenantID(invocationCtx, config.GetString(utils.FlagTenantID))
@@ -141,6 +142,7 @@ func handleListFlags(
 	config configuration.Configuration,
 	controlServerFactory ControlServerFactory,
 	logger *zerolog.Logger,
+	httpClient *http.Client,
 	listGoals, listStrategies bool,
 ) ([]workflow.Data, error) {
 	ctx := context.Background()
@@ -148,7 +150,7 @@ func handleListFlags(
 	if controlServerURL == "" {
 		controlServerURL = defaultControlServerURL
 	}
-	csClient := controlServerFactory(logger, &http.Client{}, controlServerURL, "")
+	csClient := controlServerFactory(logger, httpClient, controlServerURL, "")
 
 	var lines []string
 	if listGoals {
