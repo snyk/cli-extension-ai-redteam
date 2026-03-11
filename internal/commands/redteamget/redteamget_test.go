@@ -8,8 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
-
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteamget"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
 	controlservermock "github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver/mock"
@@ -18,13 +16,13 @@ import (
 
 const (
 	experimentalKey = "experimental"
-	organizationKey = "organization"
-	testOrgID       = "test-org"
+	tenantIDKey     = "tenant-id"
+	testTenantID    = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 	validScanID     = "12345678-90ab-cdef-1234-567890abcdef"
 )
 
 func mockCSFactory(mock *controlservermock.MockClient) redteamget.CSFactory {
-	return func(_ string) controlserver.Client {
+	return func(_, _ string) controlserver.Client {
 		return mock
 	}
 }
@@ -75,7 +73,7 @@ func defaultResultMock() *controlservermock.MockClient {
 func TestRunRedTeamGetWorkflow_HappyPath(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set("id", validScanID)
 
 	results, err := redteamget.RunRedTeamGetWorkflow(ictx, mockCSFactory(defaultResultMock()))
@@ -91,7 +89,7 @@ func TestRunRedTeamGetWorkflow_HappyPath(t *testing.T) {
 func TestRunRedTeamGetWorkflow_ScanSummaryPropagated(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set("id", validScanID)
 
 	results, err := redteamget.RunRedTeamGetWorkflow(ictx, mockCSFactory(defaultResultMock()))
@@ -107,7 +105,7 @@ func TestRunRedTeamGetWorkflow_ScanSummaryPropagated(t *testing.T) {
 func TestRunRedTeamGetWorkflow_MissingID(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 
 	_, err := redteamget.RunRedTeamGetWorkflow(ictx, mockCSFactory(defaultResultMock()))
 	require.Error(t, err)
@@ -117,7 +115,7 @@ func TestRunRedTeamGetWorkflow_MissingID(t *testing.T) {
 func TestRunRedTeamGetWorkflow_InvalidUUID(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set("id", "not-a-valid-uuid")
 
 	_, err := redteamget.RunRedTeamGetWorkflow(ictx, mockCSFactory(defaultResultMock()))
@@ -127,7 +125,7 @@ func TestRunRedTeamGetWorkflow_InvalidUUID(t *testing.T) {
 
 func TestRunRedTeamGetWorkflow_MissingExperimentalFlag(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set("id", validScanID)
 
 	_, err := redteamget.RunRedTeamGetWorkflow(ictx, mockCSFactory(defaultResultMock()))
@@ -137,7 +135,7 @@ func TestRunRedTeamGetWorkflow_MissingExperimentalFlag(t *testing.T) {
 func TestRunRedTeamGetWorkflow_ScanNotFound(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set("id", validScanID)
 
 	mock := defaultResultMock()
@@ -148,20 +146,10 @@ func TestRunRedTeamGetWorkflow_ScanNotFound(t *testing.T) {
 	require.Contains(t, err.Error(), "not found")
 }
 
-func TestRunRedTeamGetWorkflow_MissingOrgID(t *testing.T) {
-	ictx := frameworkmock.NewMockInvocationContext(t)
-	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(configuration.ORGANIZATION, "")
-	ictx.GetConfiguration().Set("id", validScanID)
-
-	_, err := redteamget.RunRedTeamGetWorkflow(ictx, mockCSFactory(defaultResultMock()))
-	require.Error(t, err)
-}
-
 func TestRunRedTeamGetWorkflow_HTMLOutput(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set("id", validScanID)
 	ictx.GetConfiguration().Set("html", true)
 
@@ -180,7 +168,7 @@ func TestRunRedTeamGetWorkflow_HTMLOutput(t *testing.T) {
 func TestRunRedTeamGetWorkflow_HTMLFileOutput(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set("id", validScanID)
 
 	tmpFile := t.TempDir() + "/report.html"
@@ -201,7 +189,7 @@ func TestRunRedTeamGetWorkflow_HTMLFileOutput(t *testing.T) {
 func TestRunRedTeamGetWorkflow_HTMLFileOutputWithHTMLFlag(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set("id", validScanID)
 
 	tmpFile := t.TempDir() + "/report.html"
@@ -226,7 +214,7 @@ func TestRunRedTeamGetWorkflow_HTMLFileOutputWithHTMLFlag(t *testing.T) {
 func TestRunRedTeamGetWorkflow_HTMLOutputWithEmptyResults(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set("id", validScanID)
 	ictx.GetConfiguration().Set("html", true)
 
@@ -258,7 +246,7 @@ func TestRunRedTeamGetWorkflow_HTMLOutputWithEmptyResults(t *testing.T) {
 func TestRunRedTeamGetWorkflow_ServerError(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set("id", validScanID)
 
 	mock := defaultResultMock()
@@ -274,12 +262,12 @@ func TestRunRedTeamGetWorkflow_ControlServerURLFromEnvVar(t *testing.T) {
 
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set("id", validScanID)
 
 	mock := defaultResultMock()
 	var capturedURL string
-	factory := func(url string) controlserver.Client {
+	factory := func(url, _ string) controlserver.Client {
 		capturedURL = url
 		return mock
 	}
@@ -294,13 +282,13 @@ func TestRunRedTeamGetWorkflow_ControlServerURLFlagOverridesEnvVar(t *testing.T)
 
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
-	ictx.GetConfiguration().Set(organizationKey, testOrgID)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set("id", validScanID)
 	ictx.GetConfiguration().Set("control-server-url", "http://from-flag:7070")
 
 	mock := defaultResultMock()
 	var capturedURL string
-	factory := func(url string) controlserver.Client {
+	factory := func(url, _ string) controlserver.Client {
 		capturedURL = url
 		return mock
 	}
