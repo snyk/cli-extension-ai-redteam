@@ -112,7 +112,7 @@ func RunRedTeamWorkflow(
 	}
 
 	userInterface := invocationCtx.GetUserInterface()
-	displayMascot(userInterface, rtConfig)
+	displayBanner(userInterface, rtConfig)
 
 	targetHTTPClient := &http.Client{Timeout: target.DefaultTimeout}
 	csHTTPClient := invocationCtx.GetNetworkAccess().GetHttpClient()
