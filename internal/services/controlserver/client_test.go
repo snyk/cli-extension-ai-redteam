@@ -54,7 +54,7 @@ func TestCreateScan_WithGroundTruth(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Equal(t, "/hidden/scan", r.URL.Path)
+		assert.Equal(t, "/hidden/tenants/"+testTenantID+"/red_team_scans", r.URL.Path)
 		assert.Contains(t, r.URL.RawQuery, "version="+controlserver.APIVersion)
 
 		var req controlserver.CreateScanRequest
