@@ -4,7 +4,8 @@ parameters:
   snyk-scan-context:
     description: CircleCI context that provides SNYK_TOKEN to Snyk security scanning.
     type: string
-    default: ai-redteam
+    # TODO(pkey): rename ai-bom context or create a shared one for the team
+    default: ai-bom
 
 orbs:
   go: circleci/go@1.7.1
