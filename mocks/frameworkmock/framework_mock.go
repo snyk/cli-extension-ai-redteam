@@ -25,6 +25,7 @@ func NewMockInvocationContext(
 	libCtrl := libGoMock.NewController(t)
 
 	mockConfig := configuration.New()
+	mockConfig.Set(configuration.API_URL, "https://api.snyk.io")
 	mockConfig.Set(configuration.AUTHENTICATION_TOKEN, "<MOCK_API_TOKEN>")
 	mockConfig.Set(configuration.ORGANIZATION, MockOrgID.String())
 	mockConfig.Set("name", "mock-project")

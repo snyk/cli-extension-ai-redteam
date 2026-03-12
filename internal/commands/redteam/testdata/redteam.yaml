@@ -7,7 +7,6 @@ target:
     url: "https://example.com"
     response_selector: "response"
     request_body_template: '{"message": "{{prompt}}"}'
-control_server_url: "http://localhost:8085"
 goal: "system_prompt_extraction"
 strategies:
   - "directly_asking"
