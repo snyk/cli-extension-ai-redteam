@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	defaultGoal                = "system_prompt_extraction"
+	defaultGoals               = "system_prompt_extraction"
 	defaultResponseSelector    = "response"
 	defaultRequestBodyTemplate = `{"message": "{{prompt}}"}`
 	defaultTargetType          = "api"
@@ -30,7 +30,7 @@ var defaultStrategies = []string{"directly_asking"}
 type Config struct {
 	Target           ConfigTarget `yaml:"target"`
 	ControlServerURL string       `yaml:"control_server_url"`
-	Goal             string       `yaml:"goal"`
+	Goals            []string     `yaml:"goals"`
 	Strategies       []string     `yaml:"strategies"`
 }
 
@@ -162,7 +162,7 @@ func applyFlagOverrides(config configuration.Configuration, rtConfig *Config) {
 // ToCreateScanRequest builds the control server CreateScan request from config.
 func (cfg *Config) ToCreateScanRequest() *controlserver.CreateScanRequest {
 	req := &controlserver.CreateScanRequest{
-		Goal:        cfg.Goal,
+		Goals:       cfg.Goals,
 		Strategies:  cfg.Strategies,
 		Purpose:     cfg.Target.Context.Purpose,
 		GroundTruth: buildGroundTruthFromConfig(&cfg.Target.Context.GroundTruth),
@@ -216,8 +216,8 @@ func validateURL(rawURL, label string) error {
 }
 
 func applyDefaults(cfg *Config) {
-	if cfg.Goal == "" {
-		cfg.Goal = defaultGoal
+	if len(cfg.Goals) == 0 {
+		cfg.Goals = []string{defaultGoals}
 	}
 	if len(cfg.Strategies) == 0 {
 		cfg.Strategies = defaultStrategies
@@ -290,7 +290,8 @@ func getInvalidConfigMessage() string {
 			response_selector: '<optional, default: response>'
 			request_body_template: '<optional, default: {"message": "{{prompt}}"}'
 	control_server_url: '<optional, control server URL>'
-	goal: '<optional, default: system_prompt_extraction>'
+	goals:
+		- '<optional, default: system_prompt_extraction>'
 	strategies:
 		- directly_asking
 	

@@ -38,8 +38,9 @@ func validConfig() *redteam.Config {
 				RequestBodyTemplate: `{"message": "{{prompt}}"}`,
 			},
 		},
-		Goal:       "system_prompt_extraction",
-		Strategies: []string{"directly_asking"},
+		ControlServerURL: "http://localhost:8085",
+		Goals:            []string{"system_prompt_extraction"},
+		Strategies:       []string{"directly_asking"},
 	}
 }
 
@@ -231,7 +232,7 @@ func TestLoadAndValidateConfig_AppliesDefaultGoal(t *testing.T) {
 	rtCfg, data, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
 	require.NoError(t, err)
 	assert.Nil(t, data)
-	assert.Equal(t, "system_prompt_extraction", rtCfg.Goal)
+	assert.Equal(t, []string{"system_prompt_extraction"}, rtCfg.Goals)
 }
 
 func TestLoadAndValidateConfig_AppliesDefaultStrategies(t *testing.T) {
@@ -287,7 +288,8 @@ target:
     url: "https://example.com"
     response_selector: "data.reply"
     request_body_template: '{"text": "{{prompt}}", "stream": false}'
-goal: "harmful_content"
+goals:
+  - "harmful_content"
 strategies:
   - "role_play"
   - "directly_asking"
@@ -297,7 +299,7 @@ strategies:
 
 	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
 	require.NoError(t, err)
-	assert.Equal(t, "harmful_content", rtCfg.Goal)
+	assert.Equal(t, []string{"harmful_content"}, rtCfg.Goals)
 	assert.Equal(t, []string{"role_play", "directly_asking"}, rtCfg.Strategies)
 	assert.Equal(t, "data.reply", rtCfg.Target.Settings.ResponseSelector)
 	assert.Contains(t, rtCfg.Target.Settings.RequestBodyTemplate, `"stream": false`)

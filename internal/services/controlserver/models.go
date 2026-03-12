@@ -1,7 +1,7 @@
 package controlserver
 
 type CreateScanRequest struct {
-	Goal        string       `json:"goal,omitempty"`
+	Goals       []string     `json:"goals,omitempty"`
 	Strategies  []string     `json:"strategies,omitempty"`
 	Purpose     string       `json:"purpose,omitempty"`
 	GroundTruth *GroundTruth `json:"ground_truth,omitempty"`
@@ -49,7 +49,7 @@ type AttackStatus struct {
 
 type ScanStatus struct {
 	ScanID     string         `json:"scan_id"`
-	Goal       string         `json:"goal"`
+	Goals      []string       `json:"goals"`
 	Done       bool           `json:"done"`
 	TotalChats int            `json:"total_chats"`
 	Completed  int            `json:"completed"`
@@ -80,7 +80,7 @@ type AttackResult struct {
 
 type ScanResult struct {
 	ScanID  string         `json:"scan_id"`
-	Goal    string         `json:"goal"`
+	Goals   []string       `json:"goals"`
 	Done    bool           `json:"done"`
 	Attacks []AttackResult `json:"attacks"`
 	Tags    []string       `json:"tags"`
