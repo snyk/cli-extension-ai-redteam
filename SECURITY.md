@@ -1,4 +1,3 @@
-# Reporting Security Issues
+## Reporting Security Issues
 
-Please report security issues to:
-https://docs.snyk.io/snyk-data-and-governance/reporting-security-issues
+To report a security vulnerability to us, please see https://docs.snyk.io/snyk-data-and-governance/reporting-security-issues.
