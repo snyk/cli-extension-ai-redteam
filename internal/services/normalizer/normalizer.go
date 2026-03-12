@@ -20,7 +20,7 @@ func Normalize(result *controlserver.ScanResult, status *controlserver.ScanStatu
 				ID:         vulnID,
 				Definition: definitionFromAttack(attack.AttackType),
 				Tags:       attack.Tags,
-				Severity:   severityFromGoal(result.Goal),
+				Severity:   severityFromGoals(result.Goals),
 				URL:        targetURL,
 				Turns:      turnsFromMessages(chat.Messages),
 				Evidence:   evidenceFromChat(chat),
@@ -58,7 +58,7 @@ func buildSummary(status *controlserver.ScanStatus) *models.AIScanSummary {
 			Slug:        slug,
 			Name:        name,
 			Description: fmt.Sprintf("Attack: %s", name),
-			Severity:    severityFromGoal(status.Goal),
+			Severity:    severityFromGoals(status.Goals),
 			Status:      statusStr,
 			Vulnerable:  attack.Successful > 0,
 		})
@@ -123,7 +123,20 @@ func nameFromAttackType(attackType string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(attackType, "_", " "), "-", " ")
 }
 
-func severityFromGoal(goal string) string {
+var severityRank = map[string]int{"medium": 0, "high": 1, "critical": 2}
+
+func severityFromGoals(goals []string) string {
+	best := "high"
+	for _, g := range goals {
+		s := severityForGoal(g)
+		if severityRank[s] > severityRank[best] {
+			best = s
+		}
+	}
+	return best
+}
+
+func severityForGoal(goal string) string {
 	switch goal {
 	case "system_prompt_extraction", "capability_extraction", "pii_extraction",
 		"tool_extraction", "internal_information_disclosure":

@@ -205,7 +205,7 @@ func runClientDrivenScan(
 	userInterface := invocationCtx.GetUserInterface()
 	ctx := context.Background()
 
-	scanID, err := csClient.CreateScan(ctx, rtConfig.Goal, rtConfig.Strategies)
+	scanID, err := csClient.CreateScan(ctx, rtConfig.Goals, rtConfig.Strategies)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create scan: %w", err)
 	}
