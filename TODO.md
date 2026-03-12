@@ -1,2 +1,0 @@
-- [ ] figure out the mapping to `html` and get rid of legacy stuff
-- [ ] establish proper models for the results
