@@ -13,7 +13,7 @@ import (
 func TestNormalize_SuccessfulAttack(t *testing.T) {
 	result := &controlserver.ScanResult{
 		ScanID: "scan-123",
-		Goal:   "system_prompt_extraction",
+		Goals:  []string{"system_prompt_extraction"},
 		Done:   true,
 		Attacks: []controlserver.AttackResult{
 			{
@@ -36,7 +36,7 @@ func TestNormalize_SuccessfulAttack(t *testing.T) {
 
 	status := &controlserver.ScanStatus{
 		ScanID:     "scan-123",
-		Goal:       "system_prompt_extraction",
+		Goals:      []string{"system_prompt_extraction"},
 		Done:       true,
 		TotalChats: 1,
 		Completed:  1,
@@ -79,7 +79,7 @@ func TestNormalize_SuccessfulAttack(t *testing.T) {
 func TestNormalize_NoSuccessfulAttacks(t *testing.T) {
 	result := &controlserver.ScanResult{
 		ScanID: "scan-456",
-		Goal:   "system_prompt_extraction",
+		Goals:  []string{"system_prompt_extraction"},
 		Done:   true,
 		Attacks: []controlserver.AttackResult{
 			{
@@ -104,7 +104,7 @@ func TestNormalize_NoSuccessfulAttacks(t *testing.T) {
 func TestNormalize_MultiTurnConversation(t *testing.T) {
 	result := &controlserver.ScanResult{
 		ScanID: "scan-789",
-		Goal:   "system_prompt_extraction",
+		Goals:  []string{"system_prompt_extraction"},
 		Done:   true,
 		Attacks: []controlserver.AttackResult{
 			{
@@ -139,7 +139,7 @@ func TestNormalize_MultiTurnConversation(t *testing.T) {
 func TestNormalize_CriticalSeverityGoal(t *testing.T) {
 	result := &controlserver.ScanResult{
 		ScanID: "scan-crit",
-		Goal:   "harmful_content_generation",
+		Goals:  []string{"harmful_content_generation"},
 		Done:   true,
 		Attacks: []controlserver.AttackResult{
 			{

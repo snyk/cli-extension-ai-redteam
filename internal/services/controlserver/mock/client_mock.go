@@ -24,7 +24,7 @@ type MockClient struct {
 
 var _ controlserver.Client = (*MockClient)(nil)
 
-func (m *MockClient) CreateScan(_ context.Context, _ string, _ []string) (string, error) {
+func (m *MockClient) CreateScan(_ context.Context, _ []string, _ []string) (string, error) {
 	if m.CreateErr != nil {
 		return "", m.CreateErr
 	}

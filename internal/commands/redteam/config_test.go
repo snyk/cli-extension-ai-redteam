@@ -24,7 +24,7 @@ func validConfig() *redteam.Config {
 			},
 		},
 		ControlServerURL: "http://localhost:8085",
-		Goal:             "system_prompt_extraction",
+		Goals:            []string{"system_prompt_extraction"},
 		Strategies:       []string{"directly_asking"},
 	}
 }

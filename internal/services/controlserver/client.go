@@ -14,7 +14,7 @@ import (
 const APIVersion = "2026-02-20"
 
 type Client interface {
-	CreateScan(ctx context.Context, goal string, strategies []string) (string, error)
+	CreateScan(ctx context.Context, goals []string, strategies []string) (string, error)
 	NextChats(ctx context.Context, scanID string, responses []ChatResponse) ([]ChatPrompt, error)
 	GetStatus(ctx context.Context, scanID string) (*ScanStatus, error)
 	GetResult(ctx context.Context, scanID string) (*ScanResult, error)
@@ -40,8 +40,8 @@ func NewClient(logger *zerolog.Logger, httpClient *http.Client, baseURL, tenantI
 	}
 }
 
-func (c *ClientImpl) CreateScan(ctx context.Context, goal string, strategies []string) (string, error) {
-	body := CreateScanRequest{Goal: goal, Strategies: strategies}
+func (c *ClientImpl) CreateScan(ctx context.Context, goals []string, strategies []string) (string, error) {
+	body := CreateScanRequest{Goals: goals, Strategies: strategies}
 	reqBytes, err := json.Marshal(body)
 	if err != nil {
 		return "", fmt.Errorf("marshal CreateScan request: %w", err)

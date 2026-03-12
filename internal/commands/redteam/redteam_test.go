@@ -48,7 +48,7 @@ func defaultMockCS() *controlservermock.MockClient {
 		},
 		Status: &controlserver.ScanStatus{
 			ScanID:     testScanID,
-			Goal:       "system_prompt_extraction",
+			Goals:      []string{"system_prompt_extraction"},
 			Done:       true,
 			TotalChats: 1,
 			Completed:  1,
@@ -56,7 +56,7 @@ func defaultMockCS() *controlservermock.MockClient {
 		},
 		Result: &controlserver.ScanResult{
 			ScanID: testScanID,
-			Goal:   "system_prompt_extraction",
+			Goals:  []string{"system_prompt_extraction"},
 			Done:   true,
 			Attacks: []controlserver.AttackResult{
 				{
@@ -114,7 +114,7 @@ func TestRunRedTeamWorkflow_ScanSummaryPropagated(t *testing.T) {
 	mockCS := defaultMockCS()
 	mockCS.Status = &controlserver.ScanStatus{
 		ScanID:     testScanID,
-		Goal:       "system_prompt_extraction",
+		Goals:      []string{"system_prompt_extraction"},
 		Done:       true,
 		TotalChats: 1,
 		Completed:  1,
@@ -312,7 +312,7 @@ func TestRunRedTeamWorkflow_HTMLOutputWithEmptyResults(t *testing.T) {
 	mockCS := defaultMockCS()
 	mockCS.Result = &controlserver.ScanResult{
 		ScanID:  testScanID,
-		Goal:    "system_prompt_extraction",
+		Goals:   []string{"system_prompt_extraction"},
 		Done:    true,
 		Attacks: []controlserver.AttackResult{},
 	}

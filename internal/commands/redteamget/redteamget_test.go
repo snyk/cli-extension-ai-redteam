@@ -31,7 +31,7 @@ func defaultResultMock() *controlservermock.MockClient {
 	return &controlservermock.MockClient{
 		Status: &controlserver.ScanStatus{
 			ScanID:     validScanID,
-			Goal:       "system_prompt_extraction",
+			Goals:      []string{"system_prompt_extraction"},
 			Done:       true,
 			TotalChats: 1,
 			Completed:  1,
@@ -48,7 +48,7 @@ func defaultResultMock() *controlservermock.MockClient {
 		},
 		Result: &controlserver.ScanResult{
 			ScanID: validScanID,
-			Goal:   "system_prompt_extraction",
+			Goals:  []string{"system_prompt_extraction"},
 			Done:   true,
 			Attacks: []controlserver.AttackResult{
 				{
@@ -225,7 +225,7 @@ func TestRunRedTeamGetWorkflow_HTMLOutputWithEmptyResults(t *testing.T) {
 		},
 		Result: &controlserver.ScanResult{
 			ScanID:  validScanID,
-			Goal:    "system_prompt_extraction",
+			Goals:   []string{"system_prompt_extraction"},
 			Done:    true,
 			Attacks: []controlserver.AttackResult{},
 		},
