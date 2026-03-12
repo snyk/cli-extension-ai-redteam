@@ -14,6 +14,20 @@ import (
 	"github.com/snyk/cli-extension-ai-redteam/internal/utils"
 )
 
+const (
+	errTargetURLRequired = "target URL is required"
+
+	baseTargetYAML = `
+target:
+  name: test
+  type: api
+  settings:
+    url: "https://example.com"
+    response_selector: "response"
+    request_body_template: '{"message": "{{prompt}}"}'
+`
+)
+
 func validConfig() *redteam.Config {
 	return &redteam.Config{
 		Target: redteam.ConfigTarget{
@@ -48,7 +62,7 @@ func TestValidateConfig_MissingTargetURL(t *testing.T) {
 	cfg.Target.Settings.URL = ""
 	err := redteam.ValidateConfig(cfg)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "target URL is required")
+	assert.Contains(t, err.Error(), errTargetURLRequired)
 }
 
 func TestValidateConfig_InvalidTargetURLScheme(t *testing.T) {
@@ -131,7 +145,7 @@ func TestValidateConfig_MultipleErrors(t *testing.T) {
 	cfg.Target.Settings.RequestBodyTemplate = `{broken`
 	err := redteam.ValidateConfig(cfg)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "target URL is required")
+	assert.Contains(t, err.Error(), errTargetURLRequired)
 	assert.Contains(t, err.Error(), "{{prompt}}")
 	assert.Contains(t, err.Error(), "not valid JSON")
 }
@@ -148,7 +162,7 @@ func TestValidateConfig_AllFieldsInvalid(t *testing.T) {
 	}
 	err := redteam.ValidateConfig(cfg)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "target URL is required")
+	assert.Contains(t, err.Error(), errTargetURLRequired)
 	assert.Contains(t, err.Error(), "{{prompt}}")
 	assert.Contains(t, err.Error(), "not valid JSON")
 	assert.Contains(t, err.Error(), "JMESPath")
@@ -210,15 +224,7 @@ func writeTestConfig(t *testing.T, content string) string {
 }
 
 func TestLoadAndValidateConfig_AppliesDefaultGoal(t *testing.T) {
-	path := writeTestConfig(t, `
-target:
-  name: test
-  type: api
-  settings:
-    url: "https://example.com"
-    response_selector: "response"
-    request_body_template: '{"message": "{{prompt}}"}'
-`)
+	path := writeTestConfig(t, baseTargetYAML)
 	cfg := configuration.New()
 	cfg.Set(utils.FlagConfig, path)
 
@@ -229,15 +235,7 @@ target:
 }
 
 func TestLoadAndValidateConfig_AppliesDefaultStrategies(t *testing.T) {
-	path := writeTestConfig(t, `
-target:
-  name: test
-  type: api
-  settings:
-    url: "https://example.com"
-    response_selector: "response"
-    request_body_template: '{"message": "{{prompt}}"}'
-`)
+	path := writeTestConfig(t, baseTargetYAML)
 	cfg := configuration.New()
 	cfg.Set(utils.FlagConfig, path)
 
@@ -376,15 +374,7 @@ target:
 }
 
 func TestLoadAndValidateConfig_RequestBodyTemplateFlagOverride(t *testing.T) {
-	path := writeTestConfig(t, `
-target:
-  name: test
-  type: api
-  settings:
-    url: "https://example.com"
-    response_selector: "response"
-    request_body_template: '{"message": "{{prompt}}"}'
-`)
+	path := writeTestConfig(t, baseTargetYAML)
 	cfg := configuration.New()
 	cfg.Set(utils.FlagConfig, path)
 	cfg.Set(utils.FlagRequestBodyTmpl, `{"input": "{{prompt}}", "model": "gpt-4"}`)
@@ -395,15 +385,7 @@ target:
 }
 
 func TestLoadAndValidateConfig_ResponseSelectorFlagOverride(t *testing.T) {
-	path := writeTestConfig(t, `
-target:
-  name: test
-  type: api
-  settings:
-    url: "https://example.com"
-    response_selector: "response"
-    request_body_template: '{"message": "{{prompt}}"}'
-`)
+	path := writeTestConfig(t, baseTargetYAML)
 	cfg := configuration.New()
 	cfg.Set(utils.FlagConfig, path)
 	cfg.Set(utils.FlagResponseSelector, "choices[0].message.content")
@@ -440,15 +422,7 @@ target:
 }
 
 func TestLoadAndValidateConfig_HeaderFlagMalformedIgnored(t *testing.T) {
-	path := writeTestConfig(t, `
-target:
-  name: test
-  type: api
-  settings:
-    url: "https://example.com"
-    response_selector: "response"
-    request_body_template: '{"message": "{{prompt}}"}'
-`)
+	path := writeTestConfig(t, baseTargetYAML)
 	cfg := configuration.New()
 	cfg.Set(utils.FlagConfig, path)
 	cfg.Set(utils.FlagHeaders, []string{"no-colon-here", "Good: header"})
@@ -460,15 +434,7 @@ target:
 }
 
 func TestLoadAndValidateConfig_HeaderFlagValueWithColons(t *testing.T) {
-	path := writeTestConfig(t, `
-target:
-  name: test
-  type: api
-  settings:
-    url: "https://example.com"
-    response_selector: "response"
-    request_body_template: '{"message": "{{prompt}}"}'
-`)
+	path := writeTestConfig(t, baseTargetYAML)
 	cfg := configuration.New()
 	cfg.Set(utils.FlagConfig, path)
 	cfg.Set(utils.FlagHeaders, []string{"Authorization: Bearer eyJ0:abc:def"})
@@ -553,5 +519,5 @@ target:
 
 	_, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "target URL is required")
+	assert.Contains(t, err.Error(), errTargetURLRequired)
 }
