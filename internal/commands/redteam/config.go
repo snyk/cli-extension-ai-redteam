@@ -17,8 +17,6 @@ import (
 )
 
 const (
-	envControlServerURL        = "CONTROL_SERVER_URL"
-	defaultControlServerURL    = "http://localhost:8085"
 	defaultGoal                = "system_prompt_extraction"
 	defaultResponseSelector    = "response"
 	defaultRequestBodyTemplate = `{"message": "{{prompt}}"}`
@@ -28,10 +26,9 @@ const (
 var defaultStrategies = []string{"directly_asking"}
 
 type Config struct {
-	Target           ConfigTarget `yaml:"target"`
-	ControlServerURL string       `yaml:"control_server_url"`
-	Goal             string       `yaml:"goal"`
-	Strategies       []string     `yaml:"strategies"`
+	Target     ConfigTarget `yaml:"target"`
+	Goal       string       `yaml:"goal"`
+	Strategies []string     `yaml:"strategies"`
 }
 
 type ConfigTarget struct {
@@ -139,10 +136,6 @@ func ValidateConfig(cfg *Config) error {
 		errs = append(errs, err.Error())
 	}
 
-	if err := validateURL(cfg.ControlServerURL, "control server URL"); err != nil {
-		errs = append(errs, err.Error())
-	}
-
 	if !strings.Contains(cfg.Target.Settings.RequestBodyTemplate, "{{prompt}}") {
 		errs = append(errs, "request_body_template must contain the {{prompt}} placeholder")
 	}
@@ -170,13 +163,6 @@ func validateURL(rawURL, label string) error {
 }
 
 func applyDefaults(cfg *Config) {
-	if cfg.ControlServerURL == "" {
-		if v := os.Getenv(envControlServerURL); v != "" {
-			cfg.ControlServerURL = v
-		} else {
-			cfg.ControlServerURL = defaultControlServerURL
-		}
-	}
 	if cfg.Goal == "" {
 		cfg.Goal = defaultGoal
 	}
@@ -233,7 +219,6 @@ func getInvalidConfigMessage() string {
 				  value: '<optional, e.g. Bearer TOKEN>'
 			response_selector: '<optional, default: response>'
 			request_body_template: '<optional, default: {"message": "{{prompt}}"}'
-	control_server_url: '<optional, default: http://localhost:8085>'
 	goal: '<optional, default: system_prompt_extraction>'
 	strategies:
 		- directly_asking

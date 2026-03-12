@@ -1,12 +1,8 @@
 package redteam_test
 
 import (
-	"io"
-	"os"
 	"testing"
 
-	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -23,9 +19,8 @@ func validConfig() *redteam.Config {
 				RequestBodyTemplate: `{"message": "{{prompt}}"}`,
 			},
 		},
-		ControlServerURL: "http://localhost:8085",
-		Goal:             "system_prompt_extraction",
-		Strategies:       []string{"directly_asking"},
+		Goal:       "system_prompt_extraction",
+		Strategies: []string{"directly_asking"},
 	}
 }
 
@@ -49,14 +44,6 @@ func TestValidateConfig_InvalidTargetURLScheme(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "target URL")
 	assert.Contains(t, err.Error(), "valid HTTP(S) URL")
-}
-
-func TestValidateConfig_InvalidControlServerURL(t *testing.T) {
-	cfg := validConfig()
-	cfg.ControlServerURL = "not-a-url"
-	err := redteam.ValidateConfig(cfg)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "control server URL")
 }
 
 func TestValidateConfig_TemplateMissingPlaceholder(t *testing.T) {
@@ -107,84 +94,4 @@ func TestValidateConfig_MultipleErrors(t *testing.T) {
 	assert.Contains(t, err.Error(), "target URL is required")
 	assert.Contains(t, err.Error(), "{{prompt}}")
 	assert.Contains(t, err.Error(), "not valid JSON")
-}
-
-func writeConfigFile(t *testing.T, content string) string {
-	t.Helper()
-	f, err := os.CreateTemp(t.TempDir(), "redteam-*.yaml")
-	require.NoError(t, err)
-	_, err = f.WriteString(content)
-	require.NoError(t, err)
-	require.NoError(t, f.Close())
-	return f.Name()
-}
-
-func TestLoadAndValidateConfig_ControlServerURLFromEnvVar(t *testing.T) {
-	configPath := writeConfigFile(t, `
-target:
-  name: "Test"
-  type: api
-  settings:
-    url: "https://example.com"
-    response_selector: "response"
-    request_body_template: '{"message": "{{prompt}}"}'
-`)
-
-	t.Setenv("CONTROL_SERVER_URL", "http://custom-server:9090")
-
-	logger := zerolog.New(io.Discard)
-	cfg := configuration.New()
-	cfg.Set("config", configPath)
-
-	rtConfig, data, err := redteam.LoadAndValidateConfig(&logger, cfg)
-	require.NoError(t, err)
-	require.Nil(t, data)
-	assert.Equal(t, "http://custom-server:9090", rtConfig.ControlServerURL)
-}
-
-func TestLoadAndValidateConfig_ControlServerURLConfigFileOverridesEnvVar(t *testing.T) {
-	configPath := writeConfigFile(t, `
-target:
-  name: "Test"
-  type: api
-  settings:
-    url: "https://example.com"
-    response_selector: "response"
-    request_body_template: '{"message": "{{prompt}}"}'
-control_server_url: "http://from-config:8085"
-`)
-
-	t.Setenv("CONTROL_SERVER_URL", "http://from-env:9090")
-
-	logger := zerolog.New(io.Discard)
-	cfg := configuration.New()
-	cfg.Set("config", configPath)
-
-	rtConfig, data, err := redteam.LoadAndValidateConfig(&logger, cfg)
-	require.NoError(t, err)
-	require.Nil(t, data)
-	assert.Equal(t, "http://from-config:8085", rtConfig.ControlServerURL)
-}
-
-func TestLoadAndValidateConfig_ControlServerURLDefaultWhenNoEnvVar(t *testing.T) {
-	configPath := writeConfigFile(t, `
-target:
-  name: "Test"
-  type: api
-  settings:
-    url: "https://example.com"
-    response_selector: "response"
-    request_body_template: '{"message": "{{prompt}}"}'
-`)
-
-	t.Setenv("CONTROL_SERVER_URL", "")
-
-	logger := zerolog.New(io.Discard)
-	cfg := configuration.New()
-	cfg.Set("config", configPath)
-
-	rtConfig, data, err := redteam.LoadAndValidateConfig(&logger, cfg)
-	require.NoError(t, err)
-	require.Nil(t, data)
-	assert.Equal(t, "http://localhost:8085", rtConfig.ControlServerURL)
 }

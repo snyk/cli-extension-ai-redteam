@@ -2,9 +2,12 @@ package redteamget_test
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"testing"
 
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -21,8 +24,8 @@ const (
 	validScanID     = "12345678-90ab-cdef-1234-567890abcdef"
 )
 
-func mockCSFactory(mock *controlservermock.MockClient) redteamget.CSFactory {
-	return func(_, _ string) controlserver.Client {
+func mockCSFactory(mock *controlservermock.MockClient) redteamget.ControlServerFactory {
+	return func(_ *zerolog.Logger, _ *http.Client, _, _ string) controlserver.Client {
 		return mock
 	}
 }
@@ -257,43 +260,39 @@ func TestRunRedTeamGetWorkflow_ServerError(t *testing.T) {
 	require.Contains(t, err.Error(), "internal server error")
 }
 
-func TestRunRedTeamGetWorkflow_ControlServerURLFromEnvVar(t *testing.T) {
-	t.Setenv("CONTROL_SERVER_URL", "http://custom-server:9090")
-
+func TestRunRedTeamGetWorkflow_SnykAPIURLFromConfig(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
 	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set("id", validScanID)
+	ictx.GetConfiguration().Set(configuration.API_URL, "http://custom:7070")
 
 	mock := defaultResultMock()
 	var capturedURL string
-	factory := func(url, _ string) controlserver.Client {
+	factory := func(_ *zerolog.Logger, _ *http.Client, url, _ string) controlserver.Client {
 		capturedURL = url
 		return mock
 	}
 
 	_, err := redteamget.RunRedTeamGetWorkflow(ictx, factory)
 	require.NoError(t, err)
-	assert.Equal(t, "http://custom-server:9090", capturedURL)
+	assert.Equal(t, "http://custom:7070", capturedURL)
 }
 
-func TestRunRedTeamGetWorkflow_ControlServerURLFlagOverridesEnvVar(t *testing.T) {
-	t.Setenv("CONTROL_SERVER_URL", "http://from-env:9090")
-
+func TestRunRedTeamGetWorkflow_SnykAPIURLDefault(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
 	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set("id", validScanID)
-	ictx.GetConfiguration().Set("control-server-url", "http://from-flag:7070")
 
 	mock := defaultResultMock()
 	var capturedURL string
-	factory := func(url, _ string) controlserver.Client {
+	factory := func(_ *zerolog.Logger, _ *http.Client, url, _ string) controlserver.Client {
 		capturedURL = url
 		return mock
 	}
 
 	_, err := redteamget.RunRedTeamGetWorkflow(ictx, factory)
 	require.NoError(t, err)
-	assert.Equal(t, "http://from-flag:7070", capturedURL)
+	assert.Equal(t, "https://api.snyk.io", capturedURL)
 }

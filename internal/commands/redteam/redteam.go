@@ -33,7 +33,7 @@ type (
 	TargetFactory        func(httpClient *http.Client, url string, headers map[string]string, bodyTemplate, responseSelector string) target.Client
 )
 
-var DefaultControlServerFactory ControlServerFactory = func(logger *zerolog.Logger, httpClient *http.Client, url, tenantID string) controlserver.Client {
+var DefaultSnykAPIFactory ControlServerFactory = func(logger *zerolog.Logger, httpClient *http.Client, url, tenantID string) controlserver.Client {
 	return controlserver.NewClient(logger, httpClient, url, tenantID)
 }
 
@@ -72,7 +72,7 @@ func RegisterRedTeamWorkflow(e workflow.Engine) error {
 }
 
 func redTeamWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
-	return RunRedTeamWorkflow(invocationCtx, DefaultControlServerFactory, DefaultTargetFactory)
+	return RunRedTeamWorkflow(invocationCtx, DefaultSnykAPIFactory, DefaultTargetFactory)
 }
 
 func RunRedTeamWorkflow(
@@ -98,11 +98,6 @@ func RunRedTeamWorkflow(
 		return handleListFlags(config, controlServerFactory, logger, httpClient, listGoals, listStrategies)
 	}
 
-	tenantID, err := helpers.GetTenantID(invocationCtx, config.GetString(utils.FlagTenantID))
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve tenant: %w", err)
-	}
-
 	rtConfig, configData, err := LoadAndValidateConfig(logger, config)
 	if configData != nil {
 		return configData, nil
@@ -111,13 +106,20 @@ func RunRedTeamWorkflow(
 		return nil, err
 	}
 
+	tenantID, err := helpers.GetTenantID(invocationCtx, config.GetString(utils.FlagTenantID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve tenant: %w", err)
+	}
+
 	userInterface := invocationCtx.GetUserInterface()
 	displayMascot(userInterface, rtConfig)
 
 	targetHTTPClient := &http.Client{Timeout: target.DefaultTimeout}
-	csHTTPClient := invocationCtx.GetNetworkAccess().GetHttpClient()
-	csHTTPClient.Timeout = 15 * time.Second
-	controlServerClient := controlServerFactory(logger, csHTTPClient, rtConfig.ControlServerURL, tenantID)
+	controlServerHTTPClient := invocationCtx.GetNetworkAccess().GetHttpClient()
+	controlServerHTTPClient.Timeout = 15 * time.Second
+	controlServerURL := config.GetString(configuration.API_URL)
+
+	controlServerClient := controlServerFactory(logger, controlServerHTTPClient, controlServerURL, tenantID)
 	targetClient := targetFactory(
 		targetHTTPClient,
 		rtConfig.Target.Settings.URL,
@@ -146,15 +148,12 @@ func handleListFlags(
 	listGoals, listStrategies bool,
 ) ([]workflow.Data, error) {
 	ctx := context.Background()
-	controlServerURL := config.GetString(utils.FlagControlServer)
-	if controlServerURL == "" {
-		controlServerURL = defaultControlServerURL
-	}
-	csClient := controlServerFactory(logger, httpClient, controlServerURL, "")
+	snykAPIURL := config.GetString(configuration.API_URL)
+	controlServerClient := controlServerFactory(logger, httpClient, snykAPIURL, "")
 
 	var lines []string
 	if listGoals {
-		goals, err := csClient.ListGoals(ctx)
+		goals, err := controlServerClient.ListGoals(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to list goals: %w", err)
 		}
@@ -166,7 +165,7 @@ func handleListFlags(
 		if len(lines) > 0 {
 			lines = append(lines, "")
 		}
-		strategies, err := csClient.ListStrategies(ctx)
+		strategies, err := controlServerClient.ListStrategies(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to list strategies: %w", err)
 		}
@@ -209,7 +208,7 @@ func runClientDrivenScan(
 	if err != nil {
 		return nil, fmt.Errorf("failed to create scan: %w", err)
 	}
-	logger.Info().Str("scanID", scanID).Msg("scan created on control server")
+	logger.Info().Str("scanID", scanID).Msg("scan created on Snyk API")
 
 	progressBar := userInterface.NewProgressBar()
 	progressBar.SetTitle(fmt.Sprintf("Scanning %s...", rtConfig.Target.Name))
