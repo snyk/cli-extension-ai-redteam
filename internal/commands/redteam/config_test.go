@@ -1,12 +1,17 @@
 package redteam_test
 
 import (
+	"io"
+	"os"
 	"testing"
 
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam"
+	"github.com/snyk/cli-extension-ai-redteam/internal/utils"
 )
 
 func validConfig() *redteam.Config {
@@ -23,6 +28,15 @@ func validConfig() *redteam.Config {
 		Strategies: []string{"directly_asking"},
 	}
 }
+
+func testLogger() *zerolog.Logger {
+	l := zerolog.New(io.Discard)
+	return &l
+}
+
+// ---------------------------------------------------------------------------
+// ValidateConfig
+// ---------------------------------------------------------------------------
 
 func TestValidateConfig_Valid(t *testing.T) {
 	err := redteam.ValidateConfig(validConfig())
@@ -46,6 +60,22 @@ func TestValidateConfig_InvalidTargetURLScheme(t *testing.T) {
 	assert.Contains(t, err.Error(), "valid HTTP(S) URL")
 }
 
+func TestValidateConfig_InvalidTargetURL_NoHost(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.URL = "http://"
+	err := redteam.ValidateConfig(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "valid HTTP(S) URL")
+}
+
+func TestValidateConfig_ValidHTTPSAndHTTP(t *testing.T) {
+	for _, u := range []string{"https://example.com", "http://localhost:8080/chat"} {
+		cfg := validConfig()
+		cfg.Target.Settings.URL = u
+		require.NoError(t, redteam.ValidateConfig(cfg), "URL %q should be valid", u)
+	}
+}
+
 func TestValidateConfig_TemplateMissingPlaceholder(t *testing.T) {
 	cfg := validConfig()
 	cfg.Target.Settings.RequestBodyTemplate = `{"message": "hello"}`
@@ -59,6 +89,15 @@ func TestValidateConfig_TemplateInvalidJSON(t *testing.T) {
 	cfg.Target.Settings.RequestBodyTemplate = `{not json {{prompt}}`
 	err := redteam.ValidateConfig(cfg)
 	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not valid JSON")
+}
+
+func TestValidateConfig_TemplateBothInvalidJSONAndMissingPlaceholder(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.RequestBodyTemplate = `{broken`
+	err := redteam.ValidateConfig(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "{{prompt}}")
 	assert.Contains(t, err.Error(), "not valid JSON")
 }
 
@@ -76,6 +115,7 @@ func TestValidateConfig_ValidJMESPathExpressions(t *testing.T) {
 		"response",
 		"data.reply",
 		"choices[0].message.content",
+		"output.candidates[0].text",
 	}
 	for _, sel := range selectors {
 		cfg := validConfig()
@@ -94,4 +134,424 @@ func TestValidateConfig_MultipleErrors(t *testing.T) {
 	assert.Contains(t, err.Error(), "target URL is required")
 	assert.Contains(t, err.Error(), "{{prompt}}")
 	assert.Contains(t, err.Error(), "not valid JSON")
+}
+
+func TestValidateConfig_AllFieldsInvalid(t *testing.T) {
+	cfg := &redteam.Config{
+		Target: redteam.ConfigTarget{
+			Settings: redteam.ConfigSettings{
+				URL:                 "",
+				ResponseSelector:    "[.bad",
+				RequestBodyTemplate: `no-json-no-placeholder`,
+			},
+		},
+	}
+	err := redteam.ValidateConfig(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "target URL is required")
+	assert.Contains(t, err.Error(), "{{prompt}}")
+	assert.Contains(t, err.Error(), "not valid JSON")
+	assert.Contains(t, err.Error(), "JMESPath")
+}
+
+// ---------------------------------------------------------------------------
+// HeadersMap
+// ---------------------------------------------------------------------------
+
+func TestHeadersMap_Empty(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.Headers = nil
+	assert.Empty(t, cfg.HeadersMap())
+}
+
+func TestHeadersMap_SingleHeader(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.Headers = []redteam.ConfigHeader{
+		{Name: "Authorization", Value: "Bearer tok"},
+	}
+	m := cfg.HeadersMap()
+	assert.Equal(t, map[string]string{"Authorization": "Bearer tok"}, m)
+}
+
+func TestHeadersMap_MultipleHeaders(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.Headers = []redteam.ConfigHeader{
+		{Name: "Authorization", Value: "Bearer tok"},
+		{Name: "X-Custom", Value: "value"},
+	}
+	m := cfg.HeadersMap()
+	assert.Len(t, m, 2)
+	assert.Equal(t, "Bearer tok", m["Authorization"])
+	assert.Equal(t, "value", m["X-Custom"])
+}
+
+func TestHeadersMap_DuplicateKeysLastWins(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.Headers = []redteam.ConfigHeader{
+		{Name: "Authorization", Value: "first"},
+		{Name: "Authorization", Value: "second"},
+	}
+	m := cfg.HeadersMap()
+	assert.Equal(t, "second", m["Authorization"])
+}
+
+// ---------------------------------------------------------------------------
+// LoadAndValidateConfig — YAML loading
+// ---------------------------------------------------------------------------
+
+func writeTestConfig(t *testing.T, content string) string {
+	t.Helper()
+	f, err := os.CreateTemp(t.TempDir(), "redteam-*.yaml")
+	require.NoError(t, err)
+	_, err = f.WriteString(content)
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+	return f.Name()
+}
+
+func TestLoadAndValidateConfig_AppliesDefaultGoal(t *testing.T) {
+	path := writeTestConfig(t, `
+target:
+  name: test
+  type: api
+  settings:
+    url: "https://example.com"
+    response_selector: "response"
+    request_body_template: '{"message": "{{prompt}}"}'
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+
+	rtCfg, data, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	assert.Nil(t, data)
+	assert.Equal(t, "system_prompt_extraction", rtCfg.Goal)
+}
+
+func TestLoadAndValidateConfig_AppliesDefaultStrategies(t *testing.T) {
+	path := writeTestConfig(t, `
+target:
+  name: test
+  type: api
+  settings:
+    url: "https://example.com"
+    response_selector: "response"
+    request_body_template: '{"message": "{{prompt}}"}'
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"directly_asking"}, rtCfg.Strategies)
+}
+
+func TestLoadAndValidateConfig_AppliesDefaultResponseSelector(t *testing.T) {
+	path := writeTestConfig(t, `
+target:
+  name: test
+  type: api
+  settings:
+    url: "https://example.com"
+    request_body_template: '{"message": "{{prompt}}"}'
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	assert.Equal(t, "response", rtCfg.Target.Settings.ResponseSelector)
+}
+
+func TestLoadAndValidateConfig_AppliesDefaultRequestBodyTemplate(t *testing.T) {
+	path := writeTestConfig(t, `
+target:
+  name: test
+  type: api
+  settings:
+    url: "https://example.com"
+    response_selector: "response"
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	assert.Equal(t, `{"message": "{{prompt}}"}`, rtCfg.Target.Settings.RequestBodyTemplate)
+}
+
+func TestLoadAndValidateConfig_ExplicitValuesNotOverriddenByDefaults(t *testing.T) {
+	path := writeTestConfig(t, `
+target:
+  name: test
+  type: api
+  settings:
+    url: "https://example.com"
+    response_selector: "data.reply"
+    request_body_template: '{"text": "{{prompt}}", "stream": false}'
+goal: "harmful_content"
+strategies:
+  - "role_play"
+  - "directly_asking"
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	assert.Equal(t, "harmful_content", rtCfg.Goal)
+	assert.Equal(t, []string{"role_play", "directly_asking"}, rtCfg.Strategies)
+	assert.Equal(t, "data.reply", rtCfg.Target.Settings.ResponseSelector)
+	assert.Contains(t, rtCfg.Target.Settings.RequestBodyTemplate, `"stream": false`)
+}
+
+// ---------------------------------------------------------------------------
+// LoadAndValidateConfig — flag overrides
+// ---------------------------------------------------------------------------
+
+func TestLoadAndValidateConfig_TargetURLFlagOverridesConfig(t *testing.T) {
+	path := writeTestConfig(t, `
+target:
+  name: test
+  type: api
+  settings:
+    url: "https://original.com"
+    response_selector: "response"
+    request_body_template: '{"message": "{{prompt}}"}'
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+	cfg.Set(utils.FlagTargetURL, "https://overridden.com/api")
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	assert.Equal(t, "https://overridden.com/api", rtCfg.Target.Settings.URL)
+}
+
+func TestLoadAndValidateConfig_TargetURLFlagWithoutConfigFile(t *testing.T) {
+	cfg := configuration.New()
+	cfg.Set(utils.FlagTargetURL, "https://example.com/chat")
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	assert.Equal(t, "https://example.com/chat", rtCfg.Target.Settings.URL)
+	assert.Equal(t, "https://example.com/chat", rtCfg.Target.Name)
+	assert.Equal(t, "api", rtCfg.Target.Type)
+}
+
+func TestLoadAndValidateConfig_TargetURLFlagSetsNameAndTypeIfEmpty(t *testing.T) {
+	path := writeTestConfig(t, `
+target:
+  settings:
+    response_selector: "response"
+    request_body_template: '{"message": "{{prompt}}"}'
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+	cfg.Set(utils.FlagTargetURL, "https://example.com")
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	assert.Equal(t, "https://example.com", rtCfg.Target.Name)
+	assert.Equal(t, "api", rtCfg.Target.Type)
+}
+
+func TestLoadAndValidateConfig_TargetURLFlagDoesNotOverrideExistingNameAndType(t *testing.T) {
+	path := writeTestConfig(t, `
+target:
+  name: "My Chatbot"
+  type: socket_io
+  settings:
+    response_selector: "response"
+    request_body_template: '{"message": "{{prompt}}"}'
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+	cfg.Set(utils.FlagTargetURL, "https://example.com")
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	assert.Equal(t, "My Chatbot", rtCfg.Target.Name)
+	assert.Equal(t, "socket_io", rtCfg.Target.Type)
+}
+
+func TestLoadAndValidateConfig_RequestBodyTemplateFlagOverride(t *testing.T) {
+	path := writeTestConfig(t, `
+target:
+  name: test
+  type: api
+  settings:
+    url: "https://example.com"
+    response_selector: "response"
+    request_body_template: '{"message": "{{prompt}}"}'
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+	cfg.Set(utils.FlagRequestBodyTmpl, `{"input": "{{prompt}}", "model": "gpt-4"}`)
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	assert.Contains(t, rtCfg.Target.Settings.RequestBodyTemplate, `"model": "gpt-4"`)
+}
+
+func TestLoadAndValidateConfig_ResponseSelectorFlagOverride(t *testing.T) {
+	path := writeTestConfig(t, `
+target:
+  name: test
+  type: api
+  settings:
+    url: "https://example.com"
+    response_selector: "response"
+    request_body_template: '{"message": "{{prompt}}"}'
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+	cfg.Set(utils.FlagResponseSelector, "choices[0].message.content")
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	assert.Equal(t, "choices[0].message.content", rtCfg.Target.Settings.ResponseSelector)
+}
+
+func TestLoadAndValidateConfig_HeaderFlagsAppended(t *testing.T) {
+	path := writeTestConfig(t, `
+target:
+  name: test
+  type: api
+  settings:
+    url: "https://example.com"
+    response_selector: "response"
+    request_body_template: '{"message": "{{prompt}}"}'
+    headers:
+      - name: "Existing"
+        value: "value"
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+	cfg.Set(utils.FlagHeaders, []string{"Authorization: Bearer tok123", "X-Custom: hello"})
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+
+	m := rtCfg.HeadersMap()
+	assert.Equal(t, "value", m["Existing"])
+	assert.Equal(t, "Bearer tok123", m["Authorization"])
+	assert.Equal(t, "hello", m["X-Custom"])
+}
+
+func TestLoadAndValidateConfig_HeaderFlagMalformedIgnored(t *testing.T) {
+	path := writeTestConfig(t, `
+target:
+  name: test
+  type: api
+  settings:
+    url: "https://example.com"
+    response_selector: "response"
+    request_body_template: '{"message": "{{prompt}}"}'
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+	cfg.Set(utils.FlagHeaders, []string{"no-colon-here", "Good: header"})
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	assert.Len(t, rtCfg.Target.Settings.Headers, 1)
+	assert.Equal(t, "Good", rtCfg.Target.Settings.Headers[0].Name)
+}
+
+func TestLoadAndValidateConfig_HeaderFlagValueWithColons(t *testing.T) {
+	path := writeTestConfig(t, `
+target:
+  name: test
+  type: api
+  settings:
+    url: "https://example.com"
+    response_selector: "response"
+    request_body_template: '{"message": "{{prompt}}"}'
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+	cfg.Set(utils.FlagHeaders, []string{"Authorization: Bearer eyJ0:abc:def"})
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	assert.Len(t, rtCfg.Target.Settings.Headers, 1)
+	assert.Equal(t, "Authorization", rtCfg.Target.Settings.Headers[0].Name)
+	assert.Equal(t, "Bearer eyJ0:abc:def", rtCfg.Target.Settings.Headers[0].Value)
+}
+
+func TestLoadAndValidateConfig_YAMLHeadersWithColonsInValue(t *testing.T) {
+	path := writeTestConfig(t, `
+target:
+  name: test
+  type: api
+  settings:
+    url: "https://example.com"
+    response_selector: "response"
+    request_body_template: '{"message": "{{prompt}}"}'
+    headers:
+      - name: "Authorization"
+        value: "Bearer eyJ0:abc:def"
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	assert.Len(t, rtCfg.Target.Settings.Headers, 1)
+	assert.Equal(t, "Authorization", rtCfg.Target.Settings.Headers[0].Name)
+	assert.Equal(t, "Bearer eyJ0:abc:def", rtCfg.Target.Settings.Headers[0].Value)
+}
+
+// ---------------------------------------------------------------------------
+// LoadAndValidateConfig — error paths
+// ---------------------------------------------------------------------------
+
+func TestLoadAndValidateConfig_NoConfigAndNoTargetURL(t *testing.T) {
+	cfg := configuration.New()
+
+	_, data, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	require.Len(t, data, 1)
+	payload, _ := data[0].GetPayload().([]byte)
+	assert.Contains(t, string(payload), "No configuration found")
+}
+
+func TestLoadAndValidateConfig_ConfigFileNotFound(t *testing.T) {
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, "/nonexistent/path/redteam.yaml")
+
+	_, data, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	require.Len(t, data, 1)
+	payload, _ := data[0].GetPayload().([]byte)
+	assert.Contains(t, string(payload), "Configuration file not found")
+}
+
+func TestLoadAndValidateConfig_InvalidYAML(t *testing.T) {
+	path := writeTestConfig(t, "{{{{ not yaml")
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+
+	_, data, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	require.Len(t, data, 1)
+	payload, _ := data[0].GetPayload().([]byte)
+	assert.Contains(t, string(payload), "Configuration file is invalid")
+}
+
+func TestLoadAndValidateConfig_ValidationError(t *testing.T) {
+	path := writeTestConfig(t, `
+target:
+  name: test
+  type: api
+  settings:
+    url: ""
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+
+	_, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "target URL is required")
 }
