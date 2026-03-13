@@ -6,7 +6,6 @@ const (
 	FlagConfig           = "config"
 	FlagHTMLFileOutput   = "html-file-output"
 	FlagScanID           = "id"
-	FlagControlServer    = "control-server-url"
 	FlagTenantID         = "tenant-id"
 	FlagTargetURL        = "target-url"
 	FlagRequestBodyTmpl  = "request-body-template"

@@ -32,10 +32,3 @@ test: ## Run unit tests
 .PHONY: generate
 generate: ## Run commands described by //go:generate directives within source code
 	go generate ./...
-
-.PHONY: redteam
-redteam: ## Run redteam workflow (use: make redteam -- --help)
-	go run cmd/develop/main.go redteam --experimental $(filter-out $@,$(MAKECMDGOALS))
-
-%:
-	@:

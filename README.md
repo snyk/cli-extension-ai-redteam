@@ -6,7 +6,9 @@
 
 ## Overview
 
-Implements running red teaming scans against LLM-based applications via `snyk redteam`.
+This is a [Snyk CLI](https://github.com/snyk/cli) extension that implements red teaming scans against LLM-based applications via `snyk redteam`.
+
+It probes AI-powered applications for security vulnerabilities, prompt injection risks, and other adversarial weaknesses.
 
 ## Configuration
 
@@ -71,3 +73,17 @@ Flags override values from the config file when set.
 | `--list-strategies` | List available strategies and exit. |
 
 For `snyk redteam get` (fetch results by scan ID): `--id`, `--experimental`, `--html`, `--html-file-output`.
+
+## Contributing
+
+This repository is closed to public contributions.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
+## Security
+
+To report a security vulnerability, please see [SECURITY.md](SECURITY.md).
+
+## License
+
+[Apache License 2.0](LICENSE)

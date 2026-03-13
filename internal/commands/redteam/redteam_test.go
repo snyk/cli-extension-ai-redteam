@@ -228,7 +228,7 @@ target:
 
 	_, err = redteam.RunRedTeamWorkflow(ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "target URL is required")
+	assert.Contains(t, err.Error(), errTargetURLRequired)
 }
 
 func TestRunRedTeamWorkflow_CreateScanError(t *testing.T) {

@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
+	"net/http"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/rs/zerolog"
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 
@@ -20,9 +22,7 @@ import (
 )
 
 const (
-	getWorkflowName     = "redteam.get"
-	envControlServerURL = "CONTROL_SERVER_URL"
-	defaultCSURL        = "http://localhost:8085"
+	getWorkflowName = "redteam.get"
 )
 
 var (
@@ -30,7 +30,7 @@ var (
 	getWorkflowType = workflow.NewTypeIdentifier(GetWorkflowID, getWorkflowName)
 )
 
-type CSFactory func(url, tenantID string) controlserver.Client
+type ControlServerFactory func(logger *zerolog.Logger, httpClient *http.Client, url, tenantID string) controlserver.Client
 
 func RegisterRedTeamGetWorkflow(e workflow.Engine) error {
 	flagset := pflag.NewFlagSet("snyk-cli-extension-ai-redteam-get", pflag.ExitOnError)
@@ -38,7 +38,6 @@ func RegisterRedTeamGetWorkflow(e workflow.Engine) error {
 	flagset.String(utils.FlagScanID, "", "Scan ID to retrieve results for")
 	flagset.Bool(utils.FlagHTML, false, "Output the red team report in HTML format instead of JSON")
 	flagset.String(utils.FlagHTMLFileOutput, "", "Write the HTML report to the specified file path")
-	flagset.String(utils.FlagControlServer, defaultCSURL, "URL of the minired control server")
 	flagset.String(utils.FlagTenantID, "", "Tenant ID (auto-discovered if not provided)")
 
 	cfg := workflow.ConfigurationOptionsFromFlagset(flagset)
@@ -49,17 +48,15 @@ func RegisterRedTeamGetWorkflow(e workflow.Engine) error {
 }
 
 func redTeamGetWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
-	logger := invocationCtx.GetEnhancedLogger()
-	httpClient := invocationCtx.GetNetworkAccess().GetHttpClient()
-	factory := func(url, tenantID string) controlserver.Client {
+	factory := ControlServerFactory(func(logger *zerolog.Logger, httpClient *http.Client, url, tenantID string) controlserver.Client {
 		return controlserver.NewClient(logger, httpClient, url, tenantID)
-	}
+	})
 	return RunRedTeamGetWorkflow(invocationCtx, factory)
 }
 
 func RunRedTeamGetWorkflow(
 	invocationCtx workflow.InvocationContext,
-	csFactory CSFactory,
+	controlServerFactory ControlServerFactory,
 ) ([]workflow.Data, error) {
 	logger := invocationCtx.GetEnhancedLogger()
 	config := invocationCtx.GetConfiguration()
@@ -70,21 +67,25 @@ func RunRedTeamGetWorkflow(
 		return nil, cli_errors.NewCommandIsExperimentalError("")
 	}
 
+	snykAPIURL := config.GetString(configuration.API_URL)
+
 	tenantID, err := helpers.GetTenantID(invocationCtx, config.GetString(utils.FlagTenantID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve tenant: %w", err)
 	}
 
-	return handleGetScanResults(invocationCtx, csFactory, tenantID)
+	return handleGetScanResults(invocationCtx, controlServerFactory, tenantID, snykAPIURL)
 }
 
 func handleGetScanResults(
 	invocationCtx workflow.InvocationContext,
-	csFactory CSFactory,
+	controlServerFactory ControlServerFactory,
 	tenantID string,
+	snykAPIURL string,
 ) ([]workflow.Data, error) {
 	logger := invocationCtx.GetEnhancedLogger()
 	config := invocationCtx.GetConfiguration()
+	httpClient := invocationCtx.GetNetworkAccess().GetHttpClient()
 	ctx := context.Background()
 
 	scanID := config.GetString(utils.FlagScanID)
@@ -97,24 +98,16 @@ func handleGetScanResults(
 		return nil, redteam_errors.NewBadRequestError(fmt.Sprintf("Scan ID is not a valid UUID: %q", scanID))
 	}
 
-	csURL := config.GetString(utils.FlagControlServer)
-	if csURL == "" {
-		if v := os.Getenv(envControlServerURL); v != "" {
-			csURL = v
-		} else {
-			csURL = defaultCSURL
-		}
-	}
-	csClient := csFactory(csURL, tenantID)
+	snykAPIClient := controlServerFactory(logger, httpClient, snykAPIURL, tenantID)
 
 	logger.Debug().Str("scanID", scanID).Msg("Fetching scan results")
 
-	status, statusErr := csClient.GetStatus(ctx, scanID)
+	status, statusErr := snykAPIClient.GetStatus(ctx, scanID)
 	if statusErr != nil {
 		logger.Debug().Err(statusErr).Msg("failed to get status, continuing without summary")
 	}
 
-	result, resultErr := csClient.GetResult(ctx, scanID)
+	result, resultErr := snykAPIClient.GetResult(ctx, scanID)
 	if resultErr != nil {
 		logger.Debug().Err(resultErr).Msg("Error fetching scan result")
 		return nil, redteam_errors.NewGenericRedTeamError(resultErr.Error(), resultErr)
