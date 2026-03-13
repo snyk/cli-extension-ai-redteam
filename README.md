@@ -25,7 +25,6 @@ By default the CLI looks for `redteam.yaml` in the current directory. Use `--con
 | **target.settings.headers** | No | List of `name`/`value` request headers. |
 | **target.settings.response_selector** | No | JMESPath to extract the response from target JSON (default: `response`). |
 | **target.settings.request_body_template** | No | JSON template with `{{prompt}}` placeholder (default: `{"message": "{{prompt}}"}`). |
-| **control_server_url** | No | Minired API base URL (default: `http://localhost:8085`). |
 | **goal** | No | Attack goal (default: `system_prompt_extraction`). |
 | **strategies** | No | List of attack strategies (default: `["directly_asking"]`). |
 
@@ -46,7 +45,6 @@ target:
     url: "https://example.com/chat"
     response_selector: "response"
     request_body_template: '{"message": "{{prompt}}"}'
-control_server_url: "http://localhost:8085"
 goal: "system_prompt_extraction"
 strategies:
   - "directly_asking"
@@ -65,11 +63,11 @@ Flags override values from the config file when set.
 | `--response-selector` | JMESPath for response (e.g. `response`). |
 | `--headers` | Request headers as `"Key: Value"` (repeatable). |
 | `--purpose` | Intended purpose of the target (ground truth). |
-| `--system-prompt-file` | Path to file containing system prompt (ground truth). |
+| `--system-prompt` | Target system prompt (ground truth). |
 | `--tools` | Tool names (ground truth, repeatable). |
 | `--html` | Output report as HTML instead of JSON. |
 | `--html-file-output` | Write HTML report to this path. |
 | `--list-goals` | List available goals and exit. |
 | `--list-strategies` | List available strategies and exit. |
 
-For `snyk redteam get` (fetch results by scan ID): `--id`, `--control-server-url`, `--experimental`, `--html`, `--html-file-output`.
+For `snyk redteam get` (fetch results by scan ID): `--id`, `--experimental`, `--html`, `--html-file-output`.

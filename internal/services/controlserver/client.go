@@ -14,7 +14,7 @@ import (
 const APIVersion = "2026-02-20"
 
 type Client interface {
-	CreateScan(ctx context.Context, goal string, strategies []string, groundTruth *GroundTruth) (string, error)
+	CreateScan(ctx context.Context, req *CreateScanRequest) (string, error)
 	NextChats(ctx context.Context, scanID string, responses []ChatResponse) ([]ChatPrompt, error)
 	GetStatus(ctx context.Context, scanID string) (*ScanStatus, error)
 	GetResult(ctx context.Context, scanID string) (*ScanResult, error)
@@ -40,26 +40,24 @@ func NewClient(logger *zerolog.Logger, httpClient *http.Client, baseURL, tenantI
 	}
 }
 
-func (c *ClientImpl) CreateScan(ctx context.Context, goal string, strategies []string, groundTruth *GroundTruth) (string, error) {
-	body := CreateScanRequest{Goal: goal, Strategies: strategies}
-	if groundTruth != nil {
-		body.Purpose = groundTruth.Purpose
-		body.SystemPrompt = groundTruth.SystemPrompt
-		body.Tools = groundTruth.Tools
+func (c *ClientImpl) CreateScan(ctx context.Context, req *CreateScanRequest) (string, error) {
+	if req == nil {
+		req = &CreateScanRequest{}
 	}
+	body := *req
 	reqBytes, err := json.Marshal(body)
 	if err != nil {
 		return "", fmt.Errorf("marshal CreateScan request: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/hidden/tenants/%s/red_team_scans?version=%s", c.baseURL, c.tenantID, APIVersion)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(reqBytes))
+	urlStr := fmt.Sprintf("%s/hidden/tenants/%s/red_team_scans?version=%s", c.baseURL, c.tenantID, APIVersion)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, urlStr, bytes.NewReader(reqBytes))
 	if err != nil {
 		return "", fmt.Errorf("build CreateScan request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return "", fmt.Errorf("CreateScan request failed: %w", err)
 	}
@@ -78,7 +76,7 @@ func (c *ClientImpl) CreateScan(ctx context.Context, goal string, strategies []s
 	if err := json.Unmarshal(respBytes, &result); err != nil {
 		msg := "unmarshal CreateScan response: " + err.Error()
 		if len(respBytes) > 0 && respBytes[0] == '<' {
-			msg += " (response looks like HTML — check control_server_url and ensure the Minired API is running)"
+			msg += " (server returned an unexpected response; verify configuration and that the service is available)"
 		}
 		return "", fmt.Errorf("%s", msg)
 	}

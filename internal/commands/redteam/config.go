@@ -13,6 +13,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"gopkg.in/yaml.v3"
 
+	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
 	"github.com/snyk/cli-extension-ai-redteam/internal/utils"
 )
 
@@ -126,12 +127,8 @@ func LoadAndValidateConfig(logger *zerolog.Logger, config configuration.Configur
 	if v := config.GetString(utils.FlagPurpose); v != "" {
 		rtConfig.Target.Context.Purpose = v
 	}
-	if path := config.GetString(utils.FlagSystemPromptFile); path != "" {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return nil, nil, fmt.Errorf("read system prompt file %q: %w", path, err)
-		}
-		rtConfig.Target.Context.SystemPrompt = string(data)
+	if v := config.GetString(utils.FlagSystemPrompt); v != "" {
+		rtConfig.Target.Context.SystemPrompt = v
 	}
 	if tools := getToolsFlags(config); len(tools) > 0 {
 		rtConfig.Target.Context.Tools = tools
@@ -144,6 +141,29 @@ func LoadAndValidateConfig(logger *zerolog.Logger, config configuration.Configur
 	}
 
 	return &rtConfig, nil, nil
+}
+
+// ToCreateScanRequest builds the control server StartScan request from config.
+// Purpose is sent at top level; ground_truth contains only system_prompt and tools (tools as comma-separated string).
+func (cfg *Config) ToCreateScanRequest() *controlserver.CreateScanRequest {
+	req := &controlserver.CreateScanRequest{
+		Goal:        cfg.Goal,
+		Strategies:  cfg.Strategies,
+		Purpose:     cfg.Target.Context.Purpose,
+		GroundTruth: buildGroundTruthFromContext(&cfg.Target.Context),
+	}
+	return req
+}
+
+func buildGroundTruthFromContext(targetCtx *ConfigContext) *controlserver.GroundTruth {
+	if targetCtx.SystemPrompt == "" && len(targetCtx.Tools) == 0 {
+		return nil
+	}
+	gt := &controlserver.GroundTruth{
+		SystemPrompt: targetCtx.SystemPrompt,
+		Tools:        strings.Join(targetCtx.Tools, ", "),
+	}
+	return gt
 }
 
 func ValidateConfig(cfg *Config) error {

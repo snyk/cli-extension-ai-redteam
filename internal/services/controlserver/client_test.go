@@ -42,7 +42,8 @@ func TestCreateScan_Happy(t *testing.T) {
 	defer server.Close()
 
 	client := newTestClient(t, server.URL)
-	scanID, err := client.CreateScan(t.Context(), "system_prompt_extraction", []string{"directly_asking"}, nil)
+	req := &controlserver.CreateScanRequest{Goal: "system_prompt_extraction", Strategies: []string{"directly_asking"}}
+	scanID, err := client.CreateScan(t.Context(), req)
 	require.NoError(t, err)
 	assert.Equal(t, testScanID, scanID)
 }
@@ -50,7 +51,7 @@ func TestCreateScan_Happy(t *testing.T) {
 func TestCreateScan_WithGroundTruth(t *testing.T) {
 	purpose := "Customer support"
 	systemPrompt := "You are a helpful assistant."
-	tools := []string{"get_balance", "transfer"}
+	toolsStr := "get_balance, transfer"
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)
@@ -62,12 +63,10 @@ func TestCreateScan_WithGroundTruth(t *testing.T) {
 		require.NoError(t, json.Unmarshal(body, &req))
 		assert.Equal(t, "system_prompt_extraction", req.Goal)
 		assert.Equal(t, []string{"directly_asking"}, req.Strategies)
-		require.NotNil(t, req.Purpose)
-		assert.Equal(t, purpose, *req.Purpose)
-		require.NotNil(t, req.SystemPrompt)
-		assert.Equal(t, systemPrompt, *req.SystemPrompt)
-		require.NotNil(t, req.Tools)
-		assert.Equal(t, tools, *req.Tools)
+		assert.Equal(t, purpose, req.Purpose)
+		require.NotNil(t, req.GroundTruth)
+		assert.Equal(t, systemPrompt, req.GroundTruth.SystemPrompt)
+		assert.Equal(t, toolsStr, req.GroundTruth.Tools)
 
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(controlserver.CreateScanResponse{ScanID: testScanID})
@@ -75,12 +74,16 @@ func TestCreateScan_WithGroundTruth(t *testing.T) {
 	defer server.Close()
 
 	client := newTestClient(t, server.URL)
-	gt := &controlserver.GroundTruth{
-		Purpose:      &purpose,
-		SystemPrompt: &systemPrompt,
-		Tools:        &tools,
+	req := &controlserver.CreateScanRequest{
+		Goal:       "system_prompt_extraction",
+		Strategies: []string{"directly_asking"},
+		Purpose:    purpose,
+		GroundTruth: &controlserver.GroundTruth{
+			SystemPrompt: systemPrompt,
+			Tools:        toolsStr,
+		},
 	}
-	scanID, err := client.CreateScan(t.Context(), "system_prompt_extraction", []string{"directly_asking"}, gt)
+	scanID, err := client.CreateScan(t.Context(), req)
 	require.NoError(t, err)
 	assert.Equal(t, testScanID, scanID)
 }
@@ -93,7 +96,7 @@ func TestCreateScan_ServerError(t *testing.T) {
 	defer server.Close()
 
 	client := newTestClient(t, server.URL)
-	_, err := client.CreateScan(t.Context(), "test", nil, nil)
+	_, err := client.CreateScan(t.Context(), &controlserver.CreateScanRequest{Goal: "test"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "400")
 }

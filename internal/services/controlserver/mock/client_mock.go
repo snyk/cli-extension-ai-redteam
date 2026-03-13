@@ -20,11 +20,15 @@ type MockClient struct {
 	ResultErr     error
 	GoalsErr      error
 	StrategiesErr error
+
+	// Capture CreateScan arguments for tests (set when CreateScan is called).
+	CreateScanRequest *controlserver.CreateScanRequest
 }
 
 var _ controlserver.Client = (*MockClient)(nil)
 
-func (m *MockClient) CreateScan(_ context.Context, _ string, _ []string, _ *controlserver.GroundTruth) (string, error) {
+func (m *MockClient) CreateScan(_ context.Context, req *controlserver.CreateScanRequest) (string, error) {
+	m.CreateScanRequest = req
 	if m.CreateErr != nil {
 		return "", m.CreateErr
 	}

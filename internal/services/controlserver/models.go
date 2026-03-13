@@ -1,18 +1,17 @@
 package controlserver
 
 type CreateScanRequest struct {
-	Goal         string    `json:"goal,omitempty"`
-	Strategies   []string  `json:"strategies,omitempty"`
-	Purpose      *string   `json:"purpose,omitempty"`
-	SystemPrompt *string   `json:"system_prompt,omitempty"`
-	Tools        *[]string `json:"tools,omitempty"`
+	Goal        string       `json:"goal,omitempty"`
+	Strategies  []string     `json:"strategies,omitempty"`
+	Purpose     string       `json:"purpose,omitempty"`
+	GroundTruth *GroundTruth `json:"ground_truth,omitempty"`
 }
 
-// GroundTruth is optional context sent when creating a scan. Only non-nil fields are included in the request.
+// GroundTruth is optional context for judging: system prompt and tools of the target.
+// Tools is a single string (e.g. comma-separated tool names).
 type GroundTruth struct {
-	Purpose      *string
-	SystemPrompt *string
-	Tools        *[]string
+	SystemPrompt string `json:"system_prompt,omitempty"`
+	Tools        string `json:"tools,omitempty"`
 }
 
 type CreateScanResponse struct {
