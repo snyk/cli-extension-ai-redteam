@@ -33,9 +33,14 @@ test: ## Run unit tests
 generate: ## Run commands described by //go:generate directives within source code
 	go generate ./...
 
-.PHONY: redteam
-redteam: ## Run redteam workflow (use: make redteam -- --help)
-	go run cmd/develop/main.go redteam --experimental $(filter-out $@,$(MAKECMDGOALS))
+.PHONY: run
+run: ## Run CLI locally (use: make run -- <subcommand> --help)
+	go run cmd/develop/main.go $(filter-out $@,$(MAKECMDGOALS))
+
+.PHONY: run-pre-prod
+run-pre-prod: export SNYK_API=https://api.dev.snyk.io
+run-pre-prod: ## Run CLI locally against pre-prod (use: make run-pre-prod -- <subcommand> --help)
+	go run cmd/develop/main.go $(filter-out $@,$(MAKECMDGOALS))
 
 %:
 	@:
