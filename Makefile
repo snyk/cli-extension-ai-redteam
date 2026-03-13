@@ -34,13 +34,10 @@ generate: ## Run commands described by //go:generate directives within source co
 	go generate ./...
 
 .PHONY: run
-run: ## Run CLI locally (use: make run -- <subcommand> --help)
-	go run cmd/develop/main.go $(filter-out $@,$(MAKECMDGOALS))
+run: ## Run CLI locally (use: make run ARGS="redteam --experimental --config=targets/minimal.yaml")
+	go run cmd/develop/main.go $(ARGS)
 
 .PHONY: run-pre-prod
 run-pre-prod: export SNYK_API=https://api.dev.snyk.io
-run-pre-prod: ## Run CLI locally against pre-prod (use: make run-pre-prod -- <subcommand> --help)
-	go run cmd/develop/main.go $(filter-out $@,$(MAKECMDGOALS))
-
-%:
-	@:
+run-pre-prod: ## Run CLI locally against pre-prod (use: make run-pre-prod ARGS="redteam --experimental")
+	go run cmd/develop/main.go $(ARGS)
