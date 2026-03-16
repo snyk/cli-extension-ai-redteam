@@ -3,13 +3,9 @@ package ping
 import (
 	"context"
 	"fmt"
-	"os"
-	"strings"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
-	"gopkg.in/yaml.v3"
 
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/target"
@@ -36,13 +32,26 @@ func pingWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) (
 		return nil, fmt.Errorf("set the `--experimental` flag to acknowledge that this feature may contain breaking changes")
 	}
 
-	settings, err := resolveTargetSettings(config)
+	logger := invocationCtx.GetEnhancedLogger()
+	rtConfig, earlyReturn, err := redteam.LoadAndValidateConfig(logger, config)
 	if err != nil {
 		return nil, err
 	}
+	if earlyReturn != nil {
+		return earlyReturn, nil
+	}
+
+	headers := rtConfig.HeadersMap()
+	client := target.NewHTTPClient(
+		nil,
+		rtConfig.Target.Settings.URL,
+		headers,
+		rtConfig.Target.Settings.RequestBodyTemplate,
+		rtConfig.Target.Settings.ResponseSelector,
+	)
 
 	ctx := context.Background()
-	result := target.Ping(ctx, settings.URL, settings.headersMap(), settings.RequestBodyTemplate, settings.ResponseSelector)
+	result := client.Ping(ctx)
 
 	var output string
 	if result.Success {
@@ -61,82 +70,4 @@ func pingWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) (
 			[]byte(output),
 		),
 	}, nil
-}
-
-type pingTargetSettings struct {
-	URL                 string
-	Headers             []redteam.ConfigHeader
-	RequestBodyTemplate string
-	ResponseSelector    string
-}
-
-func (s *pingTargetSettings) headersMap() map[string]string {
-	headers := make(map[string]string)
-	for _, h := range s.Headers {
-		headers[h.Name] = h.Value
-	}
-	return headers
-}
-
-func resolveTargetSettings(config configuration.Configuration) (*pingTargetSettings, error) {
-	settings := &pingTargetSettings{}
-
-	configPath := config.GetString(utils.FlagConfig)
-	if configPath == "" {
-		if _, err := os.Stat("redteam.yaml"); err == nil {
-			configPath = "redteam.yaml"
-		}
-	}
-
-	if configPath != "" {
-		data, err := os.ReadFile(configPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read config file: %w", err)
-		}
-		var rtConfig redteam.Config
-		if err := yaml.Unmarshal(data, &rtConfig); err != nil {
-			return nil, fmt.Errorf("failed to parse config file: %w", err)
-		}
-		settings.URL = rtConfig.Target.Settings.URL
-		settings.Headers = rtConfig.Target.Settings.Headers
-		settings.RequestBodyTemplate = rtConfig.Target.Settings.RequestBodyTemplate
-		settings.ResponseSelector = rtConfig.Target.Settings.ResponseSelector
-	}
-
-	if v := config.GetString(utils.FlagTargetURL); v != "" {
-		settings.URL = v
-	}
-	if v := config.GetString(utils.FlagRequestBodyTmpl); v != "" {
-		settings.RequestBodyTemplate = v
-	}
-	if v := config.GetString(utils.FlagResponseSelector); v != "" {
-		settings.ResponseSelector = v
-	}
-	if raw := config.Get(utils.FlagHeaders); raw != nil {
-		if vals, ok := raw.([]string); ok && len(vals) > 0 {
-			for _, h := range vals {
-				name, value, found := strings.Cut(h, ":")
-				if !found {
-					continue
-				}
-				settings.Headers = append(settings.Headers, redteam.ConfigHeader{
-					Name:  strings.TrimSpace(name),
-					Value: strings.TrimSpace(value),
-				})
-			}
-		}
-	}
-
-	if settings.ResponseSelector == "" {
-		settings.ResponseSelector = "response"
-	}
-	if settings.RequestBodyTemplate == "" {
-		settings.RequestBodyTemplate = `{"message": "{{prompt}}"}`
-	}
-
-	if settings.URL == "" {
-		return nil, fmt.Errorf("target URL is required (set in config file or pass --target-url)")
-	}
-
-	return settings, nil
 }

@@ -12,9 +12,20 @@ type MockClient struct {
 	Calls                     []string
 	FailuresBeforeCircuitOpen int
 	failureCount              int
+	PingResponse              *target.PingResult
 }
 
 var _ target.Client = (*MockClient)(nil)
+
+func (m *MockClient) Ping(_ context.Context) target.PingResult {
+	if m.PingResponse != nil {
+		return *m.PingResponse
+	}
+	return target.PingResult{
+		Success:    true,
+		Suggestion: "Target is reachable and responding correctly.",
+	}
+}
 
 func (m *MockClient) SendPrompt(_ context.Context, prompt string) (string, error) {
 	m.Calls = append(m.Calls, prompt)

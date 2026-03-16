@@ -28,6 +28,7 @@ var ErrCircuitOpen = errors.New("target appears unreachable, aborting after too 
 
 type Client interface {
 	SendPrompt(ctx context.Context, prompt string) (string, error)
+	Ping(ctx context.Context) PingResult
 }
 
 type HTTPClient struct {

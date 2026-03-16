@@ -89,7 +89,8 @@ func handlePing() http.HandlerFunc {
 			}
 		}
 
-		result := target.Ping(r.Context(), req.URL, headers, req.RequestBodyTemplate, req.ResponseSelector)
+		client := target.NewHTTPClient(nil, req.URL, headers, req.RequestBodyTemplate, req.ResponseSelector)
+		result := client.Ping(r.Context())
 		writeJSON(w, http.StatusOK, result)
 	}
 }

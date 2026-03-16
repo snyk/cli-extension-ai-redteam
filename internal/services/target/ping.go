@@ -28,8 +28,8 @@ type PingResult struct {
 	AvailableKeys []string `json:"available_keys,omitempty"`
 }
 
-func Ping(ctx context.Context, url string, headers map[string]string, requestBodyTemplate, responseSelector string) PingResult {
-	body, err := buildRequestBody(requestBodyTemplate, PingMessage)
+func (c *HTTPClient) Ping(ctx context.Context) PingResult {
+	body, err := buildRequestBody(c.requestBodyTemplate, PingMessage)
 	if err != nil {
 		return PingResult{
 			Error:      err.Error(),
@@ -37,9 +37,10 @@ func Ping(ctx context.Context, url string, headers map[string]string, requestBod
 		}
 	}
 
-	client := &http.Client{Timeout: PingTimeout}
+	ctx, cancel := context.WithTimeout(ctx, PingTimeout)
+	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url, bytes.NewReader(body))
 	if err != nil {
 		return PingResult{
 			Error:      err.Error(),
@@ -47,11 +48,11 @@ func Ping(ctx context.Context, url string, headers map[string]string, requestBod
 		}
 	}
 	req.Header.Set("Content-Type", "application/json")
-	for k, v := range headers {
+	for k, v := range c.headers {
 		req.Header.Set(k, v)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return classifyConnectionError(err)
 	}
@@ -96,7 +97,7 @@ func Ping(ctx context.Context, url string, headers map[string]string, requestBod
 		}
 	}
 
-	if responseSelector == "" {
+	if c.responseSelector == "" {
 		return PingResult{
 			Success:    true,
 			Response:   truncate(rawBody, 500),
@@ -112,14 +113,14 @@ func Ping(ctx context.Context, url string, headers map[string]string, requestBod
 		}
 	}
 
-	extracted, err := extractResponse(respBytes, responseSelector)
+	extracted, err := extractResponse(respBytes, c.responseSelector)
 	if err != nil {
 		prettyBody := prettyJSON(respBytes, rawBody)
 		if strings.Contains(err.Error(), "no match found") {
 			var parsed any
 			_ = json.Unmarshal(respBytes, &parsed)
 			paths := extractJMESPaths(parsed, "", 3)
-			suggestion := fmt.Sprintf("Response selector %q didn't match.", responseSelector)
+			suggestion := fmt.Sprintf("Response selector %q didn't match.", c.responseSelector)
 			if len(paths) > 0 {
 				suggestion += fmt.Sprintf(" Available selectors: %s", strings.Join(paths, ", "))
 			}
@@ -132,7 +133,7 @@ func Ping(ctx context.Context, url string, headers map[string]string, requestBod
 		}
 		return PingResult{
 			Error:      err.Error(),
-			Suggestion: fmt.Sprintf("Response selector %q failed: %s", responseSelector, err.Error()),
+			Suggestion: fmt.Sprintf("Response selector %q failed: %s", c.responseSelector, err.Error()),
 			RawBody:    prettyBody,
 		}
 	}

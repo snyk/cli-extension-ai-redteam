@@ -94,13 +94,18 @@ func Test_extractJMESPaths(t *testing.T) {
 
 // --- Ping integration tests ---
 
+func newPingClient(url string, headers map[string]string, bodyTemplate, selector string) *HTTPClient {
+	return NewHTTPClient(nil, url, headers, bodyTemplate, selector)
+}
+
 func TestPing_Success_WithSelector(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"response": "hello"})
 	}))
 	defer srv.Close()
 
-	result := Ping(context.Background(), srv.URL, nil, `{"message":"{{prompt}}"}`, "response")
+	client := newPingClient(srv.URL, nil, `{"message":"{{prompt}}"}`, "response")
+	result := client.Ping(context.Background())
 	assert.True(t, result.Success)
 	assert.Equal(t, "hello", result.Response)
 }
@@ -111,7 +116,8 @@ func TestPing_Success_EmptySelector(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	result := Ping(context.Background(), srv.URL, nil, `{"message":"{{prompt}}"}`, "")
+	client := newPingClient(srv.URL, nil, `{"message":"{{prompt}}"}`, "")
+	result := client.Ping(context.Background())
 	assert.True(t, result.Success)
 	assert.Equal(t, "plain text response", result.Response)
 }
@@ -122,13 +128,15 @@ func TestPing_Success_NestedSelector(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	result := Ping(context.Background(), srv.URL, nil, `{"message":"{{prompt}}"}`, "data.reply")
+	client := newPingClient(srv.URL, nil, `{"message":"{{prompt}}"}`, "data.reply")
+	result := client.Ping(context.Background())
 	assert.True(t, result.Success)
 	assert.Equal(t, "ok", result.Response)
 }
 
 func TestPing_InvalidRequestBodyTemplate(t *testing.T) {
-	result := Ping(context.Background(), "http://unused", nil, `{invalid`, "response")
+	client := newPingClient("http://unused", nil, `{invalid`, "response")
+	result := client.Ping(context.Background())
 	assert.False(t, result.Success)
 	assert.NotEmpty(t, result.Error)
 	assert.Contains(t, result.Suggestion, "template")
@@ -141,7 +149,8 @@ func TestPing_HTTP401(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	result := Ping(context.Background(), srv.URL, nil, `{"message":"{{prompt}}"}`, "response")
+	client := newPingClient(srv.URL, nil, `{"message":"{{prompt}}"}`, "response")
+	result := client.Ping(context.Background())
 	assert.False(t, result.Success)
 	assert.Contains(t, strings.ToLower(result.Suggestion), "authentication")
 }
@@ -152,7 +161,8 @@ func TestPing_HTTP403(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	result := Ping(context.Background(), srv.URL, nil, `{"message":"{{prompt}}"}`, "response")
+	client := newPingClient(srv.URL, nil, `{"message":"{{prompt}}"}`, "response")
+	result := client.Ping(context.Background())
 	assert.False(t, result.Success)
 	assert.Contains(t, strings.ToLower(result.Suggestion), "authentication")
 }
@@ -163,7 +173,8 @@ func TestPing_HTTP404(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	result := Ping(context.Background(), srv.URL, nil, `{"message":"{{prompt}}"}`, "response")
+	client := newPingClient(srv.URL, nil, `{"message":"{{prompt}}"}`, "response")
+	result := client.Ping(context.Background())
 	assert.False(t, result.Success)
 	assert.Contains(t, strings.ToLower(result.Suggestion), "not found")
 }
@@ -175,14 +186,13 @@ func TestPing_HTTP500(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	result := Ping(context.Background(), srv.URL, nil, `{"message":"{{prompt}}"}`, "response")
+	client := newPingClient(srv.URL, nil, `{"message":"{{prompt}}"}`, "response")
+	result := client.Ping(context.Background())
 	assert.False(t, result.Success)
 	assert.Contains(t, strings.ToLower(result.Suggestion), "server error")
 }
 
 func TestPing_HTTP302_UnexpectedStatus(t *testing.T) {
-	// Return 302 pointing at the same server but to a path that returns 302 again,
-	// creating a redirect loop. Go's http.Client will eventually fail with a redirect error.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/final" {
 			w.WriteHeader(http.StatusFound)
@@ -192,8 +202,8 @@ func TestPing_HTTP302_UnexpectedStatus(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	// Go's default client follows redirects, so a redirect loop triggers a connection-level error.
-	result := Ping(context.Background(), srv.URL, nil, `{"message":"{{prompt}}"}`, "response")
+	client := newPingClient(srv.URL, nil, `{"message":"{{prompt}}"}`, "response")
+	result := client.Ping(context.Background())
 	assert.False(t, result.Success)
 	assert.NotEmpty(t, result.Error)
 }
@@ -204,7 +214,8 @@ func TestPing_NonJSONResponse_WithSelector(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	result := Ping(context.Background(), srv.URL, nil, `{"message":"{{prompt}}"}`, "response")
+	client := newPingClient(srv.URL, nil, `{"message":"{{prompt}}"}`, "response")
+	result := client.Ping(context.Background())
 	assert.False(t, result.Success)
 	assert.Contains(t, strings.ToLower(result.Error), "non-json")
 }
@@ -215,7 +226,8 @@ func TestPing_SelectorNoMatch(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	result := Ping(context.Background(), srv.URL, nil, `{"message":"{{prompt}}"}`, "response")
+	client := newPingClient(srv.URL, nil, `{"message":"{{prompt}}"}`, "response")
+	result := client.Ping(context.Background())
 	assert.False(t, result.Success)
 	assert.Contains(t, result.Suggestion, "response")
 	assert.Contains(t, result.AvailableKeys, "other")
@@ -229,18 +241,19 @@ func TestPing_SelectorNoMatch_ShowsNestedKeys(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	result := Ping(context.Background(), srv.URL, nil, `{"message":"{{prompt}}"}`, "nonexistent")
+	client := newPingClient(srv.URL, nil, `{"message":"{{prompt}}"}`, "nonexistent")
+	result := client.Ping(context.Background())
 	assert.False(t, result.Success)
 	assert.Contains(t, result.AvailableKeys, "data.reply")
 }
 
 func TestPing_ConnectionRefused(t *testing.T) {
-	// Use a closed server to simulate connection refused.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	url := srv.URL
 	srv.Close()
 
-	result := Ping(context.Background(), url, nil, `{"message":"{{prompt}}"}`, "response")
+	client := newPingClient(url, nil, `{"message":"{{prompt}}"}`, "response")
+	result := client.Ping(context.Background())
 	assert.False(t, result.Success)
 	assert.Contains(t, strings.ToLower(result.Suggestion), "unreachable")
 }
@@ -257,7 +270,8 @@ func TestPing_CustomHeaders(t *testing.T) {
 		"Authorization": "Bearer token123",
 		"X-Custom":      "custom-value",
 	}
-	result := Ping(context.Background(), srv.URL, headers, `{"message":"{{prompt}}"}`, "response")
+	client := newPingClient(srv.URL, headers, `{"message":"{{prompt}}"}`, "response")
+	result := client.Ping(context.Background())
 	assert.True(t, result.Success)
 }
 
@@ -271,7 +285,8 @@ func TestPing_RequestBodyContainsPingMessage(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	result := Ping(context.Background(), srv.URL, nil, `{"message":"{{prompt}}"}`, "response")
+	client := newPingClient(srv.URL, nil, `{"message":"{{prompt}}"}`, "response")
+	result := client.Ping(context.Background())
 	assert.True(t, result.Success)
 }
 
@@ -283,7 +298,8 @@ func TestPing_RawBodyTruncatedOnError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	result := Ping(context.Background(), srv.URL, nil, `{"message":"{{prompt}}"}`, "response")
+	client := newPingClient(srv.URL, nil, `{"message":"{{prompt}}"}`, "response")
+	result := client.Ping(context.Background())
 	assert.False(t, result.Success)
 	assert.LessOrEqual(t, len(result.RawBody), 503) // 500 + "..."
 }
@@ -294,7 +310,8 @@ func TestPing_EmptyBody_WithSelector(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	result := Ping(context.Background(), srv.URL, nil, `{"message":"{{prompt}}"}`, "response")
+	client := newPingClient(srv.URL, nil, `{"message":"{{prompt}}"}`, "response")
+	result := client.Ping(context.Background())
 	assert.False(t, result.Success)
 	assert.Contains(t, strings.ToLower(result.Error), "non-json")
 }
