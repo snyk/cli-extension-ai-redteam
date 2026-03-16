@@ -7,6 +7,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam"
+	"github.com/snyk/cli-extension-ai-redteam/internal/services/target"
 )
 
 type validationResponse struct {
@@ -69,6 +70,40 @@ func handleGenerateConfig() http.HandlerFunc {
 			Yaml:     string(data),
 			Filename: "redteam.yaml",
 		})
+	}
+}
+
+type pingRequest struct {
+	URL                 string              `json:"url"`
+	Headers             []redteam.ConfigHeader `json:"headers"`
+	RequestBodyTemplate string              `json:"request_body_template"`
+	ResponseSelector    string              `json:"response_selector"`
+}
+
+func handlePing() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req pingRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON: " + err.Error()})
+			return
+		}
+
+		if req.RequestBodyTemplate == "" {
+			req.RequestBodyTemplate = `{"message": "{{prompt}}"}`
+		}
+		if req.ResponseSelector == "" {
+			req.ResponseSelector = "response"
+		}
+
+		headers := make(map[string]string)
+		for _, h := range req.Headers {
+			if h.Name != "" {
+				headers[h.Name] = h.Value
+			}
+		}
+
+		result := target.Ping(r.Context(), req.URL, headers, req.RequestBodyTemplate, req.ResponseSelector)
+		writeJSON(w, http.StatusOK, result)
 	}
 }
 

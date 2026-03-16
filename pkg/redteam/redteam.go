@@ -5,6 +5,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/cli-extension-ai-redteam/internal/commands/ping"
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteamget"
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/setup"
@@ -22,6 +23,9 @@ func Init(e workflow.Engine) error {
 	}
 	if err := setup.RegisterSetupWorkflow(e); err != nil {
 		return fmt.Errorf("error registering setup workflow: %w", err)
+	}
+	if err := ping.RegisterPingWorkflow(e); err != nil {
+		return fmt.Errorf("error registering ping workflow: %w", err)
 	}
 	return nil
 }

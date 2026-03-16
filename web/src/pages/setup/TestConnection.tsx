@@ -1,0 +1,124 @@
+import { useState } from "react";
+import { Form, Button, Alert } from "antd";
+
+interface PingResult {
+  success: boolean;
+  response?: string;
+  error?: string;
+  suggestion: string;
+  raw_body?: string;
+}
+
+function isValidHttpUrl(value: string | undefined): boolean {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return (url.protocol === "http:" || url.protocol === "https:") && !!url.host;
+  } catch {
+    return false;
+  }
+}
+
+export default function TestConnection() {
+  const form = Form.useFormInstance();
+  const urlValue = Form.useWatch(["target", "settings", "url"], form);
+  const [pinging, setPinging] = useState(false);
+  const [pingResult, setPingResult] = useState<PingResult | null>(null);
+  const hasValidUrl = isValidHttpUrl(urlValue);
+
+  const handleTestConnection = async () => {
+    setPinging(true);
+    setPingResult(null);
+    try {
+      const settings = form.getFieldValue(["target", "settings"]) ?? {};
+      const res = await fetch("/api/ping", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: settings.url || "",
+          headers:
+            settings.headers?.filter(
+              (h: { name: string; value: string }) => h?.name && h?.value,
+            ) || [],
+          request_body_template: settings.request_body_template || "",
+          response_selector: settings.response_selector || "",
+        }),
+      });
+      const data: PingResult = await res.json();
+      setPingResult(data);
+    } catch (err) {
+      setPingResult({
+        success: false,
+        error: err instanceof Error ? err.message : "Unknown error",
+        suggestion: "Failed to reach the ping endpoint.",
+      });
+    } finally {
+      setPinging(false);
+    }
+  };
+
+  return (
+    <>
+      <Button onClick={handleTestConnection} loading={pinging} disabled={!hasValidUrl}>
+        Test Connection
+      </Button>
+
+      {pingResult && pingResult.success && (
+        <Alert
+          type="success"
+          message="Connection Successful"
+          description={
+            <>
+              <div>{pingResult.suggestion}</div>
+              <div style={{ marginTop: 8, fontFamily: "var(--pcl-font-family-mono)" }}>
+                Response: {pingResult.response}
+              </div>
+            </>
+          }
+          showIcon
+          style={{ marginTop: 16 }}
+        />
+      )}
+
+      {pingResult && !pingResult.success && (
+        <Alert
+          type="error"
+          message="Connection Failed"
+          description={
+            <>
+              <div>{pingResult.suggestion}</div>
+              {pingResult.error && (
+                <div
+                  style={{
+                    marginTop: 8,
+                    fontFamily: "var(--pcl-font-family-mono)",
+                    fontSize: 12,
+                  }}
+                >
+                  Error: {pingResult.error}
+                </div>
+              )}
+              {pingResult.raw_body && (
+                <details style={{ marginTop: 8 }}>
+                  <summary style={{ cursor: "pointer" }}>Raw response</summary>
+                  <pre
+                    style={{
+                      fontSize: 12,
+                      maxHeight: 120,
+                      overflow: "auto",
+                      marginTop: 4,
+                    }}
+                  >
+                    {pingResult.raw_body}
+                  </pre>
+                </details>
+              )}
+            </>
+          }
+          showIcon
+          style={{ marginTop: 16 }}
+        />
+      )}
+    </>
+  );
+}

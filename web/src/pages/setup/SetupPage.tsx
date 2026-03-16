@@ -8,6 +8,7 @@ import TargetConfigStep from "./TargetConfigStep";
 import AppContextStep from "./AppContextStep";
 import GoalStep from "./GoalStep";
 import StrategiesStep from "./StrategiesStep";
+import TestConnection from "./TestConnection";
 import { configToYaml } from "../../yaml";
 import type { Config } from "../../types";
 
@@ -185,9 +186,9 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
       const values = form.getFieldsValue(true);
       const config = buildConfig(values);
       setYamlContent(configToYaml(config));
-      setError(null);
-    } catch {
+    } catch (err) {
       setYamlContent(null);
+      setError(err instanceof Error ? err.message : "Failed to generate YAML preview");
     }
   };
 
@@ -287,6 +288,9 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
             />
           )}
           {yamlContent && <YamlHighlight content={yamlContent} />}
+          <div style={{ marginTop: 16, marginBottom: 16 }}>
+            <TestConnection />
+          </div>
         </>
       )}
 

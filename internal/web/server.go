@@ -42,6 +42,7 @@ func (s *Server) Start() error {
 
 	mux.HandleFunc("GET /api/config", handleGetInitialConfig(s.initialConfig, s.configPath))
 	mux.HandleFunc("POST /api/config", handleGenerateConfig())
+	mux.HandleFunc("POST /api/ping", handlePing())
 
 	if s.devMode {
 		viteURL, _ := url.Parse("http://localhost:5173")
