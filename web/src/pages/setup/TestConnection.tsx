@@ -7,6 +7,7 @@ interface PingResult {
   error?: string;
   suggestion: string;
   raw_body?: string;
+  available_keys?: string[];
 }
 
 function isValidHttpUrl(value: string | undefined): boolean {
@@ -98,6 +99,26 @@ export default function TestConnection() {
                   Error: {pingResult.error}
                 </div>
               )}
+              {pingResult.available_keys && pingResult.available_keys.length > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  Available selectors:{" "}
+                  {pingResult.available_keys.map((key, i) => (
+                    <span key={key}>
+                      {i > 0 && ", "}
+                      <code
+                        style={{
+                          background: "rgba(0,0,0,0.06)",
+                          padding: "1px 4px",
+                          borderRadius: 3,
+                          fontSize: 12,
+                        }}
+                      >
+                        {key}
+                      </code>
+                    </span>
+                  ))}
+                </div>
+              )}
               {pingResult.raw_body && (
                 <details style={{ marginTop: 8 }}>
                   <summary style={{ cursor: "pointer" }}>Raw response</summary>
@@ -109,7 +130,13 @@ export default function TestConnection() {
                       marginTop: 4,
                     }}
                   >
-                    {pingResult.raw_body}
+                    {(() => {
+                      try {
+                        return JSON.stringify(JSON.parse(pingResult.raw_body), null, 2);
+                      } catch {
+                        return pingResult.raw_body;
+                      }
+                    })()}
                   </pre>
                 </details>
               )}

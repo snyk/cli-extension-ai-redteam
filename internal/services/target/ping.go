@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 )
@@ -19,11 +20,12 @@ const (
 )
 
 type PingResult struct {
-	Success    bool   `json:"success"`
-	Response   string `json:"response,omitempty"`
-	Error      string `json:"error,omitempty"`
-	Suggestion string `json:"suggestion"`
-	RawBody    string `json:"raw_body,omitempty"`
+	Success       bool     `json:"success"`
+	Response      string   `json:"response,omitempty"`
+	Error         string   `json:"error,omitempty"`
+	Suggestion    string   `json:"suggestion"`
+	RawBody       string   `json:"raw_body,omitempty"`
+	AvailableKeys []string `json:"available_keys,omitempty"`
 }
 
 func Ping(ctx context.Context, url string, headers map[string]string, requestBodyTemplate, responseSelector string) PingResult {
@@ -104,17 +106,26 @@ func Ping(ctx context.Context, url string, headers map[string]string, requestBod
 
 	extracted, err := extractResponse(respBytes, responseSelector)
 	if err != nil {
+		prettyBody := prettyJSON(respBytes, rawBody)
 		if strings.Contains(err.Error(), "no match found") {
+			var parsed any
+			_ = json.Unmarshal(respBytes, &parsed)
+			paths := extractJMESPaths(parsed, "", 3)
+			suggestion := fmt.Sprintf("Response selector %q didn't match.", responseSelector)
+			if len(paths) > 0 {
+				suggestion += fmt.Sprintf(" Available selectors: %s", strings.Join(paths, ", "))
+			}
 			return PingResult{
-				Error:      err.Error(),
-				Suggestion: fmt.Sprintf("Response selector %q didn't match. The actual response structure is: %s", responseSelector, truncate(rawBody, 500)),
-				RawBody:    truncate(rawBody, 500),
+				Error:         err.Error(),
+				Suggestion:    suggestion,
+				RawBody:       prettyBody,
+				AvailableKeys: paths,
 			}
 		}
 		return PingResult{
 			Error:      err.Error(),
 			Suggestion: fmt.Sprintf("Response selector %q failed: %s", responseSelector, err.Error()),
-			RawBody:    truncate(rawBody, 500),
+			RawBody:    prettyBody,
 		}
 	}
 
@@ -156,4 +167,50 @@ func truncate(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+func prettyJSON(raw []byte, fallback string) string {
+	var buf bytes.Buffer
+	if err := json.Indent(&buf, raw, "", "  "); err != nil {
+		return truncate(fallback, 500)
+	}
+	return truncate(buf.String(), 2000)
+}
+
+func extractJMESPaths(data any, prefix string, depth int) []string {
+	if depth <= 0 {
+		return nil
+	}
+	var paths []string
+	switch v := data.(type) {
+	case map[string]any:
+		for key, val := range v {
+			fullKey := key
+			if prefix != "" {
+				fullKey = prefix + "." + key
+			}
+			sub := extractJMESPaths(val, fullKey, depth-1)
+			if len(sub) > 0 {
+				paths = append(paths, sub...)
+			} else {
+				paths = append(paths, fullKey)
+			}
+		}
+	case []any:
+		if len(v) > 0 {
+			arrayPath := prefix + "[0]"
+			sub := extractJMESPaths(v[0], arrayPath, depth-1)
+			if len(sub) > 0 {
+				paths = append(paths, sub...)
+			} else {
+				paths = append(paths, arrayPath)
+			}
+		}
+	default:
+		if prefix != "" {
+			return []string{prefix}
+		}
+	}
+	sort.Strings(paths)
+	return paths
 }
