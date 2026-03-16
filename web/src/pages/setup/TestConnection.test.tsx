@@ -143,7 +143,7 @@ describe("TestConnection", () => {
       }));
     });
 
-    const body = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string);
+    const body = JSON.parse(fetchSpy.mock.calls[0]?.[1]?.body as string);
     expect(body.url).toBe("https://target.com/chat");
     expect(body.request_body_template).toBe('{"msg":"{{prompt}}"}');
   });
