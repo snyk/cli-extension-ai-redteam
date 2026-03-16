@@ -1,2 +1,9 @@
 ### Tooling ###
 /.bin/
+
+### Web ###
+web/node_modules/
+web/dist/
+web/tsconfig.tsbuildinfo
+internal/web/dist/*
+!internal/web/dist/.gitkeep

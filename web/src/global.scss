@@ -1,0 +1,80 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@100..900&family=Geist:wght@100..900&display=swap');
+
+*,
+*:before,
+*:after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  line-height: 1;
+  color-scheme: dark;
+  font-family: var(--pcl-font-family-sans);
+  font-weight: 400;
+  letter-spacing: var(--pcl-font-tracking-normal);
+  font-size: var(--pcl-font-size-xs);
+  color: var(--pcl-color-fg);
+  background-color: var(--pcl-color-bg-surface);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 100%;
+  font: inherit;
+  vertical-align: baseline;
+}
+
+ul {
+  list-style: none;
+  padding: 0;
+}
+
+form {
+  margin: 0;
+}
+
+table {
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+code {
+  font-family: var(--pcl-font-family-mono);
+  font-weight: 400;
+  font-size: 13px;
+}
+
+::selection {
+  color: var(--pcl-color-bg);
+  background: var(--pcl-color-fg);
+}
+
+.yaml-highlight {
+  background: var(--pcl-color-bg);
+  border: 1px solid var(--pcl-color-border);
+  border-radius: 4px;
+  padding: 16px;
+  font-family: var(--pcl-font-family-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow: auto;
+  max-height: 400px;
+  margin: 0;
+}
+
+.yaml-key { color: var(--pcl-color-fg-info); }
+.yaml-string { color: var(--pcl-color-fg-success); }
+.yaml-bool,
+.yaml-null { color: var(--pcl-color-fg-warning); }
+.yaml-number { color: var(--pcl-color-fg-caution); }
+.yaml-comment { color: var(--pcl-color-fg-tertiary); font-style: italic; }
+.yaml-colon { color: var(--pcl-color-fg-secondary); }
+.yaml-dash { color: var(--pcl-color-fg-secondary); }

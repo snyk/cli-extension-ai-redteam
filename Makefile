@@ -32,3 +32,18 @@ test: ## Run unit tests
 .PHONY: generate
 generate: ## Run commands described by //go:generate directives within source code
 	go generate ./...
+
+.PHONY: build-web
+build-web: ## Build React frontend
+	cd web && npm install && npm run build
+	rm -rf internal/web/dist && cp -r web/dist internal/web/dist
+
+.PHONY: dev-web
+dev-web: ## Run frontend (HMR) + Go API server for development
+	REDTEAM_DEV=1 go run ./cmd/develop redteam setup --experimental & \
+	cd web && npm install && npx vite dev --open; \
+	kill %1 2>/dev/null
+
+.PHONY: web
+web: build-web ## Run full production-like setup for testing
+	go run ./cmd/develop redteam setup --experimental
