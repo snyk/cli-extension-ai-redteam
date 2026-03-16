@@ -33,6 +33,10 @@ test: ## Run unit tests
 generate: ## Run commands described by //go:generate directives within source code
 	go generate ./...
 
+.PHONY: test-web
+test-web: ## Run frontend unit tests
+	cd web && npm install && npx vitest run
+
 .PHONY: build-web
 build-web: ## Build React frontend
 	cd web && npm install && npm run build

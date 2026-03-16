@@ -32,6 +32,18 @@ jobs:
       - checkout
       - run: golangci-lint run -v ./...
 
+  web-test:
+    docker:
+      - image: cimg/node:22.16
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: cd web && npm ci
+      - run:
+          name: Run frontend tests
+          command: cd web && npx vitest run
+
   security-scans:
     executor:
       name: go/default
@@ -63,3 +75,5 @@ workflows:
           name: Unit Test
       - lint:
           name: Linting
+      - web-test:
+          name: Frontend Tests
