@@ -10,7 +10,7 @@ interface PingResult {
   available_keys?: string[];
 }
 
-function isValidHttpUrl(value: string | undefined): boolean {
+export function isValidHttpUrl(value: string | undefined): boolean {
   if (!value) return false;
   try {
     const url = new URL(value);

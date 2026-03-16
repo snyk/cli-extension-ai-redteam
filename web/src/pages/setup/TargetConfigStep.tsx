@@ -4,7 +4,7 @@ import TestConnection from "./TestConnection";
 
 const { TextArea } = Input;
 
-function validateHttpUrl(_: unknown, value: string) {
+export function validateHttpUrl(_: unknown, value: string) {
   if (!value) return Promise.reject(new Error("URL is required"));
   try {
     const url = new URL(value);
@@ -20,7 +20,7 @@ function validateHttpUrl(_: unknown, value: string) {
   }
 }
 
-function validateRequestBodyTemplate(_: unknown, value: string | undefined) {
+export function validateRequestBodyTemplate(_: unknown, value: string | undefined) {
   if (!value) return Promise.reject(new Error("Request body template is required"));
   if (!value.includes("{{prompt}}")) {
     return Promise.reject(new Error("Must contain the {{prompt}} placeholder"));

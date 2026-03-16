@@ -27,7 +27,7 @@ const stepFields: Record<string, string[][]> = {
   "review": [],
 };
 
-function buildGroundTruth(gt: any) {
+export function buildGroundTruth(gt: any) {
   const systemPrompt = gt?.system_prompt?.trim() || "";
   const toolsRaw = gt?.tools?.trim() || "";
   const tools = toolsRaw ? toolsRaw.split(",").map((t: string) => t.trim()).filter(Boolean) : [];
@@ -35,7 +35,7 @@ function buildGroundTruth(gt: any) {
   return { system_prompt: systemPrompt || undefined, tools: tools.length ? tools : undefined };
 }
 
-function buildConfig(values: Record<string, any>): Config {
+export function buildConfig(values: Record<string, any>): Config {
   const target = values?.target ?? {};
   const settings = target?.settings ?? {};
   return {
