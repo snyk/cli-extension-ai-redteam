@@ -20,7 +20,7 @@ func Normalize(result *controlserver.ScanResult, status *controlserver.ScanStatu
 				ID:         vulnID,
 				Definition: definitionFromAttack(attack.AttackType),
 				Tags:       attack.Tags,
-				Severity:   severityFromGoals(result.Goals),
+				Severity:   "high", // TODO(pkey): use /report endpoint for per-goal severity
 				URL:        targetURL,
 				Turns:      turnsFromMessages(chat.Messages),
 				Evidence:   evidenceFromChat(chat),
@@ -58,7 +58,7 @@ func buildSummary(status *controlserver.ScanStatus) *models.AIScanSummary {
 			Slug:        slug,
 			Name:        name,
 			Description: fmt.Sprintf("Attack: %s", name),
-			Severity:    severityFromGoals(status.Goals),
+			Severity:    "high", // TODO(pkey): use /report endpoint for per-goal severity
 			Status:      statusStr,
 			Vulnerable:  attack.Successful > 0,
 		})
@@ -121,33 +121,6 @@ func nameFromAttackType(attackType string) string {
 		return strings.ReplaceAll(strings.ReplaceAll(parts[1], "_", " "), "-", " ")
 	}
 	return strings.ReplaceAll(strings.ReplaceAll(attackType, "_", " "), "-", " ")
-}
-
-var severityRank = map[string]int{"medium": 0, "high": 1, "critical": 2}
-
-func severityFromGoals(goals []string) string {
-	best := "high"
-	for _, g := range goals {
-		s := severityForGoal(g)
-		if severityRank[s] > severityRank[best] {
-			best = s
-		}
-	}
-	return best
-}
-
-func severityForGoal(goal string) string {
-	switch goal {
-	case "system_prompt_extraction", "capability_extraction", "pii_extraction",
-		"tool_extraction", "internal_information_disclosure":
-		return "high"
-	case "harmful_content_generation", "purpose_hijacking", "harmful_by_category":
-		return "critical"
-	case "bias_detection", "malformed_structured_output":
-		return "medium"
-	default:
-		return "high"
-	}
 }
 
 func definitionFromAttack(attackType string) models.AIVulnerabilityDefinition {

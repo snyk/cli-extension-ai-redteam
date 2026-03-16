@@ -136,7 +136,7 @@ func TestNormalize_MultiTurnConversation(t *testing.T) {
 	assert.Equal(t, "Sure, I am configured to...", *data.Results[0].Turns[1].Response)
 }
 
-func TestNormalize_CriticalSeverityGoal(t *testing.T) {
+func TestNormalize_DefaultSeverity(t *testing.T) {
 	result := &controlserver.ScanResult{
 		ScanID: "scan-crit",
 		Goals:  []string{"harmful_content_generation"},
@@ -154,7 +154,8 @@ func TestNormalize_CriticalSeverityGoal(t *testing.T) {
 		},
 	}
 
+	// TODO(pkey): severity will come from /report endpoint; hardcoded to "high" for now
 	data := normalizer.Normalize(result, nil, "https://example.com")
 	require.Len(t, data.Results, 1)
-	assert.Equal(t, "critical", data.Results[0].Severity)
+	assert.Equal(t, "high", data.Results[0].Severity)
 }
