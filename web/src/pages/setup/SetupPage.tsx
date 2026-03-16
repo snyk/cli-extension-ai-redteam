@@ -26,6 +26,14 @@ const stepFields: Record<string, string[][]> = {
   "review": [],
 };
 
+function buildGroundTruth(gt: any) {
+  const systemPrompt = gt?.system_prompt?.trim() || "";
+  const toolsRaw = gt?.tools?.trim() || "";
+  const tools = toolsRaw ? toolsRaw.split(",").map((t: string) => t.trim()).filter(Boolean) : [];
+  if (!systemPrompt && tools.length === 0) return undefined;
+  return { system_prompt: systemPrompt || undefined, tools: tools.length ? tools : undefined };
+}
+
 function buildConfig(values: Record<string, any>): Config {
   const target = values?.target ?? {};
   const settings = target?.settings ?? {};
@@ -35,6 +43,7 @@ function buildConfig(values: Record<string, any>): Config {
       type: target.type || "http",
       context: {
         purpose: target.context?.purpose || "",
+        ground_truth: buildGroundTruth(target.context?.ground_truth),
       },
       settings: {
         url: settings.url || "",
@@ -95,7 +104,13 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
           target: {
             name: cfg.target?.name,
             type: cfg.target?.type || "http",
-            context: { purpose: cfg.target?.context?.purpose },
+            context: {
+              purpose: cfg.target?.context?.purpose,
+              ground_truth: {
+                system_prompt: cfg.target?.context?.ground_truth?.system_prompt,
+                tools: cfg.target?.context?.ground_truth?.tools?.join(", "),
+              },
+            },
             settings: {
               url: cfg.target?.settings?.url,
               headers: cfg.target?.settings?.headers,

@@ -7,9 +7,26 @@ export function configToYaml(config: Config): string {
   lines.push(`  name: ${quote(config.target.name)}`);
   lines.push(`  type: ${config.target.type}`);
 
-  if (config.target.context.purpose) {
+  const ctx = config.target.context;
+  const gt = ctx.ground_truth;
+  const hasContext = ctx.purpose || gt?.system_prompt || (gt?.tools && gt.tools.length > 0);
+  if (hasContext) {
     lines.push("  context:");
-    lines.push(`    purpose: ${quote(config.target.context.purpose)}`);
+    if (ctx.purpose) {
+      lines.push(`    purpose: ${quote(ctx.purpose)}`);
+    }
+    if (gt?.system_prompt || (gt?.tools && gt.tools.length > 0)) {
+      lines.push("    ground_truth:");
+      if (gt.system_prompt) {
+        lines.push(`      system_prompt: ${quote(gt.system_prompt)}`);
+      }
+      if (gt.tools && gt.tools.length > 0) {
+        lines.push("      tools:");
+        for (const t of gt.tools) {
+          lines.push(`        - ${quote(t)}`);
+        }
+      }
+    }
   }
 
   lines.push("  settings:");

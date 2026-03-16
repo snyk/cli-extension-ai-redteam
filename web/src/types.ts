@@ -14,8 +14,14 @@ export interface ConfigSettings {
   socketio_response_event_name?: string;
 }
 
+export interface ConfigGroundTruth {
+  system_prompt?: string;
+  tools?: string[];
+}
+
 export interface ConfigContext {
   purpose: string;
+  ground_truth?: ConfigGroundTruth;
 }
 
 export interface ConfigTarget {
