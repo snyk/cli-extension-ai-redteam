@@ -61,6 +61,9 @@ func buildSummary(status *controlserver.ScanStatus) *models.AIScanSummary {
 			Severity:    severityFromGoal(status.Goal),
 			Status:      statusStr,
 			Vulnerable:  attack.Successful > 0,
+			TotalChats:  attack.TotalChats,
+			Successful:  attack.Successful,
+			Failed:      attack.TotalChats - attack.Successful,
 		})
 	}
 	return &models.AIScanSummary{Vulnerabilities: vulnSummaries}

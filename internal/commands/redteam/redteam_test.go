@@ -99,6 +99,26 @@ func TestRunRedTeamWorkflow_HappyPath(t *testing.T) {
 	results, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
 	require.NoError(t, err)
 	assert.Len(t, results, 1)
+	assert.Equal(t, "text/plain", results[0].GetContentType())
+	payload, _ := results[0].GetPayload().([]byte)
+	assert.Contains(t, string(payload), "directly asking")
+	assert.Contains(t, string(payload), "Findings")
+}
+
+func TestRunRedTeamWorkflow_JSONOutput(t *testing.T) {
+	ictx := frameworkmock.NewMockInvocationContext(t)
+	ictx.GetConfiguration().Set(experimentalKey, true)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
+	ictx.GetConfiguration().Set(configFlag, redteamTestConfigFile)
+	ictx.GetConfiguration().Set("json", true)
+
+	originalArgs := os.Args
+	os.Args = []string{"snyk", "redteam", "--json"}
+	defer func() { os.Args = originalArgs }()
+
+	results, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
+	require.NoError(t, err)
+	assert.Len(t, results, 1)
 	assert.Equal(t, "application/json", results[0].GetContentType())
 	payload, _ := results[0].GetPayload().([]byte)
 	assert.Contains(t, string(payload), testScanID)
@@ -137,13 +157,13 @@ func TestRunRedTeamWorkflow_ScanSummaryPropagated(t *testing.T) {
 	results, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(mockCS), mockTargetFactory(defaultMockTarget()))
 	require.NoError(t, err)
 	require.Len(t, results, 1)
-	assert.Equal(t, "application/json", results[0].GetContentType())
+	assert.Equal(t, "text/plain", results[0].GetContentType())
 
 	payload, ok := results[0].GetPayload().([]byte)
 	require.True(t, ok)
-	jsonStr := string(payload)
-	assert.Contains(t, jsonStr, "summary")
-	assert.Contains(t, jsonStr, "directly asking")
+	cliReport := string(payload)
+	assert.Contains(t, cliReport, "Strategy Breakdown")
+	assert.Contains(t, cliReport, "directly asking")
 }
 
 func TestRunRedTeamWorkflow_ExperimentalFlagRequired(t *testing.T) {
@@ -377,7 +397,7 @@ func TestRunRedTeamWorkflow_HTMLFileOutput(t *testing.T) {
 	results, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
 	require.NoError(t, err)
 	assert.Len(t, results, 1)
-	assert.Equal(t, "application/json", results[0].GetContentType())
+	assert.Equal(t, "text/plain", results[0].GetContentType())
 
 	fileContent, readErr := os.ReadFile(tmpFile)
 	require.NoError(t, readErr)

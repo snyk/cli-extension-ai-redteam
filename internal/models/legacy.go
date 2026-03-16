@@ -48,4 +48,7 @@ type AIScanSummaryVulnerability struct {
 	Severity    string `json:"severity"`
 	Status      string `json:"status"`
 	Vulnerable  bool   `json:"vulnerable"`
+	TotalChats  int    `json:"total_chats"`
+	Successful  int    `json:"successful"`
+	Failed      int    `json:"failed"`
 }

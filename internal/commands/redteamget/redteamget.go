@@ -13,6 +13,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 
+	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam/clireport"
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam/htmlreport"
 	redteam_errors "github.com/snyk/cli-extension-ai-redteam/internal/errors/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/helpers"
@@ -36,6 +37,7 @@ func RegisterRedTeamGetWorkflow(e workflow.Engine) error {
 	flagset := pflag.NewFlagSet("snyk-cli-extension-ai-redteam-get", pflag.ExitOnError)
 	flagset.Bool(utils.FlagExperimental, false, "This is an experimental feature that will contain breaking changes in future revisions")
 	flagset.String(utils.FlagScanID, "", "Scan ID to retrieve results for")
+	flagset.Bool(utils.FlagJSON, false, "Output raw JSON instead of the styled CLI report")
 	flagset.Bool(utils.FlagHTML, false, "Output the red team report in HTML format instead of JSON")
 	flagset.String(utils.FlagHTMLFileOutput, "", "Write the HTML report to the specified file path")
 	flagset.String(utils.FlagTenantID, "", "Tenant ID (auto-discovered if not provided)")
@@ -127,5 +129,17 @@ func handleGetScanResults(
 	if htmlErr != nil {
 		return nil, redteam_errors.NewGenericRedTeamError("HTML report error", htmlErr)
 	}
+
+	returnJSON := config.GetBool(utils.FlagJSON)
+	returnHTML := config.GetBool(utils.FlagHTML)
+	if !returnJSON && !returnHTML {
+		report := clireport.Render(normalized, clireport.ScanMeta{
+			TargetURL:  "",
+			Goal:       status.Goal,
+			Strategies: []string{},
+		})
+		return []workflow.Data{workflow.NewData(getWorkflowType, "text/plain", []byte(report))}, nil
+	}
+
 	return output, nil
 }

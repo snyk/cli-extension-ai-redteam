@@ -13,6 +13,8 @@ const (
 	FlagHeaders          = "headers"
 	FlagListGoals        = "list-goals"
 	FlagListStrategies   = "list-strategies"
+	FlagFullConversation = "full-conversation"
+	FlagJSON             = "json"
 	FlagPurpose          = "purpose"
 	FlagSystemPrompt     = "system-prompt"
 	FlagTools            = "tools"
