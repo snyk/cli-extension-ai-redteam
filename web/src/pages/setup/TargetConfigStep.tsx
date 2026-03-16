@@ -61,7 +61,7 @@ export default function TargetConfigStep() {
       <Form.Item
         label="Response Selector"
         name={["target", "settings", "response_selector"]}
-        tooltip="JMESPath expression to extract the response. Leave empty for default: response"
+        tooltip="JMESPath expression to extract the response from the JSON body (e.g. data.choices[0].message.content). Must follow JMESPath syntax. Leave empty for default: response"
       >
         <Input placeholder="response" style={{ fontFamily: "var(--pcl-font-family-mono)" }} />
       </Form.Item>

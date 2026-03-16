@@ -4,16 +4,17 @@ import styles from "./Sidebar.module.scss";
 export interface Step {
   key: string;
   label: string;
+  description: string;
   icon: React.ReactNode;
 }
 
 export const steps: Step[] = [
-  { key: "target-type", label: "Target Type", icon: <AimOutlined /> },
-  { key: "target-config", label: "Target Configuration", icon: <SettingOutlined /> },
-  { key: "app-context", label: "Application Context", icon: <FileTextOutlined /> },
-  { key: "goal", label: "Goals", icon: <FlagOutlined /> },
-  { key: "strategies", label: "Strategies", icon: <ThunderboltOutlined /> },
-  { key: "review", label: "Review and Download", icon: <EyeOutlined /> },
+  { key: "target-type", label: "Target Type", description: "Name your target and choose how it communicates.", icon: <AimOutlined /> },
+  { key: "target-config", label: "Target Configuration", description: "Configure the endpoint URL, headers, and request/response format.", icon: <SettingOutlined /> },
+  { key: "app-context", label: "Application Context", description: "Describe the application's purpose and provide ground truth for scoring.", icon: <FileTextOutlined /> },
+  { key: "goal", label: "Goals", description: "Select what the red team should try to achieve.", icon: <FlagOutlined /> },
+  { key: "strategies", label: "Strategies", description: "Choose the attack strategies to use during the scan.", icon: <ThunderboltOutlined /> },
+  { key: "review", label: "Review and Download", description: "Review the generated configuration and download it.", icon: <EyeOutlined /> },
 ];
 
 interface SidebarProps {

@@ -250,9 +250,12 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
         />
       )}
 
-      <Typography.Title level={4} style={{ marginBottom: 24 }}>
+      <Typography.Title level={4} style={{ marginBottom: 4 }}>
         {steps[currentIndex]?.label}
       </Typography.Title>
+      <Typography.Text type="secondary" style={{ display: "block", marginBottom: 24 }}>
+        {steps[currentIndex]?.description}
+      </Typography.Text>
 
       <div style={{ display: activeStep === "target-type" ? "block" : "none" }}>
         <TargetTypeStep />
