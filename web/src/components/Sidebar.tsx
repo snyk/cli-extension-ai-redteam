@@ -19,13 +19,17 @@ export const steps: Step[] = [
 interface SidebarProps {
   activeStep: string;
   onStepClick: (key: string) => void;
+  configPath: string | null;
 }
 
-export default function Sidebar({ activeStep, onStepClick }: SidebarProps) {
+export default function Sidebar({ activeStep, onStepClick, configPath }: SidebarProps) {
   return (
     <aside className={styles.sidebar}>
       <div className={styles.header}>
-        <span className={styles.logo}>Snyk Red Team</span>
+        <span className={styles.logo}>Agent Red Teaming</span>
+        <span className={styles.subtitle}>
+          {configPath ? `Configuring ${configPath}` : "New Configuration"}
+        </span>
       </div>
       <nav className={styles.nav}>
         {steps.map((step) => (

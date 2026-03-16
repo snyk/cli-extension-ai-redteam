@@ -57,7 +57,7 @@ func setupWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) 
 		return nil, fmt.Errorf("failed to read config file %s: %w", configPath, err)
 	}
 
-	server := web.NewServer(port, outputPath, initialConfig)
+	server := web.NewServer(port, outputPath, configPath, initialConfig)
 	if err := server.Start(); err != nil {
 		return nil, fmt.Errorf("setup wizard error: %w", err)
 	}

@@ -20,15 +20,17 @@ import (
 type Server struct {
 	port          int
 	outputPath    string
+	configPath    string
 	initialConfig *redteam.Config
 	devMode       bool
 	shutdown      chan struct{}
 }
 
-func NewServer(port int, outputPath string, initialConfig *redteam.Config) *Server {
+func NewServer(port int, outputPath string, configPath string, initialConfig *redteam.Config) *Server {
 	return &Server{
 		port:          port,
 		outputPath:    outputPath,
+		configPath:    configPath,
 		initialConfig: initialConfig,
 		devMode:       os.Getenv("REDTEAM_DEV") == "1",
 		shutdown:      make(chan struct{}),
@@ -38,7 +40,7 @@ func NewServer(port int, outputPath string, initialConfig *redteam.Config) *Serv
 func (s *Server) Start() error {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("GET /api/config", handleGetInitialConfig(s.initialConfig))
+	mux.HandleFunc("GET /api/config", handleGetInitialConfig(s.initialConfig, s.configPath))
 	mux.HandleFunc("POST /api/config", handleGenerateConfig())
 
 	if s.devMode {

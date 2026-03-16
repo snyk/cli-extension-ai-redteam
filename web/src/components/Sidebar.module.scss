@@ -10,6 +10,17 @@
 
 .header {
   padding: 1rem 1rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.subtitle {
+  font-size: 12px;
+  color: var(--pcl-color-fg-tertiary);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .logo {

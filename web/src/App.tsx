@@ -4,10 +4,11 @@ import SetupPage from "./pages/setup/SetupPage";
 
 export default function App() {
   const [activeStep, setActiveStep] = useState("target-type");
+  const [configPath, setConfigPath] = useState<string | null>(null);
 
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
-      <Sidebar activeStep={activeStep} onStepClick={setActiveStep} />
+      <Sidebar activeStep={activeStep} onStepClick={setActiveStep} configPath={configPath} />
       <main
         style={{
           flex: 1,
@@ -16,7 +17,7 @@ export default function App() {
           overflow: "auto",
         }}
       >
-        <SetupPage activeStep={activeStep} onStepChange={setActiveStep} />
+        <SetupPage activeStep={activeStep} onStepChange={setActiveStep} onConfigPathLoaded={setConfigPath} />
       </main>
     </div>
   );

@@ -19,13 +19,21 @@ type generateResponse struct {
 	Filename string `json:"filename"`
 }
 
-func handleGetInitialConfig(cfg *redteam.Config) http.HandlerFunc {
+type initialConfigResponse struct {
+	ConfigPath string        `json:"config_path,omitempty"`
+	Config     *redteam.Config `json:"config,omitempty"`
+}
+
+func handleGetInitialConfig(cfg *redteam.Config, configPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if cfg == nil {
-			writeJSON(w, http.StatusNoContent, nil)
+			writeJSON(w, http.StatusOK, initialConfigResponse{})
 			return
 		}
-		writeJSON(w, http.StatusOK, cfg)
+		writeJSON(w, http.StatusOK, initialConfigResponse{
+			ConfigPath: configPath,
+			Config:     cfg,
+		})
 	}
 }
 

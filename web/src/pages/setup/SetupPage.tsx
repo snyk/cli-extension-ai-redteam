@@ -14,6 +14,7 @@ import type { Config } from "../../types";
 interface SetupPageProps {
   activeStep: string;
   onStepChange: (key: string) => void;
+  onConfigPathLoaded: (path: string | null) => void;
 }
 
 const stepFields: Record<string, string[][]> = {
@@ -68,7 +69,7 @@ const defaultValues = {
   strategies: ["directly_asking"],
 };
 
-export default function SetupPage({ activeStep, onStepChange }: SetupPageProps) {
+export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded }: SetupPageProps) {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,11 +83,14 @@ export default function SetupPage({ activeStep, onStepChange }: SetupPageProps) 
 
     fetch("/api/config")
       .then((res) => {
-        if (res.status === 204 || !res.ok) return null;
+        if (!res.ok) return null;
         return res.json();
       })
-      .then((cfg) => {
-        if (cancelled || !cfg) return;
+      .then((data) => {
+        if (cancelled || !data) return;
+        const cfg = data.config;
+        onConfigPathLoaded(data.config_path || null);
+        if (!cfg) return;
         form.setFieldsValue({
           target: {
             name: cfg.target?.name,
