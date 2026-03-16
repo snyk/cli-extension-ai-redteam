@@ -5,6 +5,7 @@ type CreateScanRequest struct {
 	Strategies  []string     `json:"strategies,omitempty"`
 	Purpose     string       `json:"purpose,omitempty"`
 	GroundTruth *GroundTruth `json:"ground_truth,omitempty"`
+	TargetURL   string       `json:"target_url,omitempty"`
 }
 
 // GroundTruth is optional context for judging: system prompt and tools of the target.
