@@ -20,7 +20,7 @@ import (
 const (
 	defaultResponseSelector    = "response"
 	defaultRequestBodyTemplate = `{"message": "{{prompt}}"}`
-	defaultTargetType          = "api"
+	defaultTargetType          = "http"
 	contentTypePlain           = "text/plain"
 )
 
