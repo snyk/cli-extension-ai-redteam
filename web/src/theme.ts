@@ -39,7 +39,7 @@ export const getThemeConfig = (currentTheme: Theme): ThemeConfig => ({
     colorError: getCssVariable("--pcl-color-fg-critical", currentTheme),
     colorTextSecondary: getCssVariable("--pcl-color-fg-secondary", currentTheme),
     colorTextTertiary: getCssVariable("--pcl-color-fg-tertiary", currentTheme),
-    colorTextQuaternary: getCssVariable("--pcl-color-fg-disabled", currentTheme),
+    colorTextQuaternary: getCssVariable("--pcl-color-fg-tertiary", currentTheme),
     colorFillQuaternary: getCssVariable("--pcl-color-bg-fill-disabled", currentTheme),
     colorFillTertiary: getCssVariable("--pcl-color-bg-fill-tertiary", currentTheme),
     colorFillSecondary: getCssVariable("--pcl-color-bg-fill-secondary", currentTheme),
@@ -92,6 +92,7 @@ export const getThemeConfig = (currentTheme: Theme): ThemeConfig => ({
     },
     Tooltip: {
       colorBgSpotlight: getCssVariable("--pcl-color-bg-fill-inverse", currentTheme),
+      colorTextLightSolid: getCssVariable("--pcl-color-fg-inverse", currentTheme),
     },
     Tag: {
       colorBgContainer: getCssVariable("--pcl-color-bg-surface", currentTheme),
