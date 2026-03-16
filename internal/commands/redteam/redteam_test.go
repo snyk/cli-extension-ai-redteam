@@ -48,7 +48,7 @@ func defaultMockCS() *controlservermock.MockClient {
 		},
 		Status: &controlserver.ScanStatus{
 			ScanID:     testScanID,
-			Goal:       "system_prompt_extraction",
+			Goals:      []string{"system_prompt_extraction"},
 			Done:       true,
 			TotalChats: 1,
 			Completed:  1,
@@ -56,7 +56,7 @@ func defaultMockCS() *controlservermock.MockClient {
 		},
 		Result: &controlserver.ScanResult{
 			ScanID: testScanID,
-			Goal:   "system_prompt_extraction",
+			Goals:  []string{"system_prompt_extraction"},
 			Done:   true,
 			Attacks: []controlserver.AttackResult{
 				{
@@ -114,7 +114,7 @@ func TestRunRedTeamWorkflow_ScanSummaryPropagated(t *testing.T) {
 	mockCS := defaultMockCS()
 	mockCS.Status = &controlserver.ScanStatus{
 		ScanID:     testScanID,
-		Goal:       "system_prompt_extraction",
+		Goals:      []string{"system_prompt_extraction"},
 		Done:       true,
 		TotalChats: 1,
 		Completed:  1,
@@ -295,7 +295,7 @@ func TestRunRedTeamWorkflow_WithGroundTruthConfig(t *testing.T) {
 
 	// Assert config values (including ground truth from testdata/redteam.yaml) reach the control server client
 	require.NotNil(t, mockCS.CreateScanRequest, "CreateScan should be called with a request")
-	assert.Equal(t, "system_prompt_extraction", mockCS.CreateScanRequest.Goal)
+	assert.Equal(t, []string{"system_prompt_extraction"}, mockCS.CreateScanRequest.Goals)
 	assert.Equal(t, []string{"directly_asking"}, mockCS.CreateScanRequest.Strategies)
 	assert.Equal(t, "Testing chatbot", mockCS.CreateScanRequest.Purpose)
 	require.NotNil(t, mockCS.CreateScanRequest.GroundTruth, "ground truth should be passed")
@@ -336,7 +336,7 @@ func TestRunRedTeamWorkflow_HTMLOutputWithEmptyResults(t *testing.T) {
 	mockCS := defaultMockCS()
 	mockCS.Result = &controlserver.ScanResult{
 		ScanID:  testScanID,
-		Goal:    "system_prompt_extraction",
+		Goals:   []string{"system_prompt_extraction"},
 		Done:    true,
 		Attacks: []controlserver.AttackResult{},
 	}

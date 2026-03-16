@@ -33,7 +33,7 @@ func TestCreateScan_Happy(t *testing.T) {
 		var req controlserver.CreateScanRequest
 		body, _ := io.ReadAll(r.Body)
 		require.NoError(t, json.Unmarshal(body, &req))
-		assert.Equal(t, "system_prompt_extraction", req.Goal)
+		assert.Equal(t, []string{"system_prompt_extraction"}, req.Goals)
 		assert.Equal(t, []string{"directly_asking"}, req.Strategies)
 
 		w.WriteHeader(http.StatusOK)
@@ -42,7 +42,7 @@ func TestCreateScan_Happy(t *testing.T) {
 	defer server.Close()
 
 	client := newTestClient(t, server.URL)
-	req := &controlserver.CreateScanRequest{Goal: "system_prompt_extraction", Strategies: []string{"directly_asking"}}
+	req := &controlserver.CreateScanRequest{Goals: []string{"system_prompt_extraction"}, Strategies: []string{"directly_asking"}}
 	scanID, err := client.CreateScan(t.Context(), req)
 	require.NoError(t, err)
 	assert.Equal(t, testScanID, scanID)
@@ -61,7 +61,7 @@ func TestCreateScan_WithGroundTruth(t *testing.T) {
 		var req controlserver.CreateScanRequest
 		body, _ := io.ReadAll(r.Body)
 		require.NoError(t, json.Unmarshal(body, &req))
-		assert.Equal(t, "system_prompt_extraction", req.Goal)
+		assert.Equal(t, []string{"system_prompt_extraction"}, req.Goals)
 		assert.Equal(t, []string{"directly_asking"}, req.Strategies)
 		assert.Equal(t, purpose, req.Purpose)
 		require.NotNil(t, req.GroundTruth)
@@ -75,7 +75,7 @@ func TestCreateScan_WithGroundTruth(t *testing.T) {
 
 	client := newTestClient(t, server.URL)
 	req := &controlserver.CreateScanRequest{
-		Goal:       "system_prompt_extraction",
+		Goals:      []string{"system_prompt_extraction"},
 		Strategies: []string{"directly_asking"},
 		Purpose:    purpose,
 		GroundTruth: &controlserver.GroundTruth{
@@ -96,7 +96,7 @@ func TestCreateScan_ServerError(t *testing.T) {
 	defer server.Close()
 
 	client := newTestClient(t, server.URL)
-	_, err := client.CreateScan(t.Context(), &controlserver.CreateScanRequest{Goal: "test"})
+	_, err := client.CreateScan(t.Context(), &controlserver.CreateScanRequest{Goals: []string{"test"}})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "400")
 }
@@ -150,7 +150,7 @@ func TestGetStatus_Happy(t *testing.T) {
 
 		json.NewEncoder(w).Encode(controlserver.ScanStatus{
 			ScanID:     testScanID,
-			Goal:       "system_prompt_extraction",
+			Goals:      []string{"system_prompt_extraction"},
 			Done:       false,
 			TotalChats: 5,
 			Completed:  2,
@@ -177,7 +177,7 @@ func TestGetResult_Happy(t *testing.T) {
 
 		json.NewEncoder(w).Encode(controlserver.ScanResult{
 			ScanID: testScanID,
-			Goal:   "system_prompt_extraction",
+			Goals:  []string{"system_prompt_extraction"},
 			Done:   true,
 			Attacks: []controlserver.AttackResult{
 				{

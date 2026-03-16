@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	red   = "\033[31m"
+	bred  = "\033[91m"
 	bold  = "\033[1m"
 	reset = "\033[0m"
 )
@@ -17,10 +17,10 @@ func displayBanner(userInterface ui.UserInterface, cfg *Config) {
 	var sb strings.Builder
 
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("  %s%sSNYK AGENT RED TEAMING%s\n", bold, red, reset))
+	sb.WriteString(fmt.Sprintf("  %s%sSnyk Agent Red Teaming%s\n", bold, bred, reset))
 	sb.WriteString("\n")
 	sb.WriteString(fmt.Sprintf("  Target:     %s\n", cfg.Target.Settings.URL))
-	sb.WriteString(fmt.Sprintf("  Goal:       %s\n", cfg.Goal))
+	sb.WriteString(fmt.Sprintf("  Goals:      %s\n", strings.Join(cfg.Goals, ", ")))
 	sb.WriteString(fmt.Sprintf("  Strategies: %s\n", strings.Join(cfg.Strategies, ", ")))
 	sb.WriteString("\n")
 
