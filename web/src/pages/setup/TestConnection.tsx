@@ -23,9 +23,10 @@ function isValidHttpUrl(value: string | undefined): boolean {
 export default function TestConnection() {
   const form = Form.useFormInstance();
   const urlValue = Form.useWatch(["target", "settings", "url"], form);
+  const requestBodyTemplate = Form.useWatch(["target", "settings", "request_body_template"], form);
   const [pinging, setPinging] = useState(false);
   const [pingResult, setPingResult] = useState<PingResult | null>(null);
-  const hasValidUrl = isValidHttpUrl(urlValue);
+  const canTest = isValidHttpUrl(urlValue) && !!requestBodyTemplate?.trim();
 
   const handleTestConnection = async () => {
     setPinging(true);
@@ -60,7 +61,7 @@ export default function TestConnection() {
 
   return (
     <>
-      <Button onClick={handleTestConnection} loading={pinging} disabled={!hasValidUrl}>
+      <Button onClick={handleTestConnection} loading={pinging} disabled={!canTest}>
         Test Connection
       </Button>
 

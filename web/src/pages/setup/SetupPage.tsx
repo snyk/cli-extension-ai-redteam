@@ -195,7 +195,7 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
     setLoading(true);
     setError(null);
     try {
-      const values = await form.validateFields();
+      const values = form.getFieldsValue(true);
       const config = buildConfig(values);
       const res = await fetch("/api/config", {
         method: "POST",
@@ -305,7 +305,6 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
             type="primary"
             icon={<DownloadOutlined />}
             onClick={handleDownload}
-            disabled={missingFields.length > 0}
             loading={loading}
           >
             Download Configuration
@@ -324,6 +323,14 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
         onCancel={() => setFilenameModalOpen(false)}
         okText="Download"
       >
+        {missingFields.length > 0 && (
+          <Alert
+            type="warning"
+            showIcon
+            message="Some required fields have not been filled in. The configuration may not work correctly."
+            style={{ marginBottom: 16 }}
+          />
+        )}
         <Input
           value={filename}
           onChange={(e) => setFilename(e.target.value)}
