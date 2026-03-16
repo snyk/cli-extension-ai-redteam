@@ -51,14 +51,6 @@ func handleGenerateConfig() http.HandlerFunc {
 			return
 		}
 
-		if err := redteam.ValidateConfig(&cfg); err != nil {
-			writeJSON(w, http.StatusBadRequest, validationResponse{
-				Valid:  false,
-				Errors: []string{err.Error()},
-			})
-			return
-		}
-
 		data, err := yaml.Marshal(&cfg)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, validationResponse{
