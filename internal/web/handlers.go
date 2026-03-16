@@ -3,10 +3,12 @@ package web
 import (
 	"encoding/json"
 	"net/http"
+	"sort"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam"
+	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/target"
 )
 
@@ -104,6 +106,30 @@ func handlePing() http.HandlerFunc {
 
 		result := target.Ping(r.Context(), req.URL, headers, req.RequestBodyTemplate, req.ResponseSelector)
 		writeJSON(w, http.StatusOK, result)
+	}
+}
+
+func handleListGoals(client controlserver.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		entries, err := client.ListGoals(r.Context())
+		if err != nil {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+			return
+		}
+		sort.Slice(entries, func(i, j int) bool { return entries[i].DisplayOrder < entries[j].DisplayOrder })
+		writeJSON(w, http.StatusOK, entries)
+	}
+}
+
+func handleListStrategies(client controlserver.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		entries, err := client.ListStrategies(r.Context())
+		if err != nil {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+			return
+		}
+		sort.Slice(entries, func(i, j int) bool { return entries[i].DisplayOrder < entries[j].DisplayOrder })
+		writeJSON(w, http.StatusOK, entries)
 	}
 }
 

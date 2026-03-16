@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/rs/zerolog"
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v3"
 
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam"
+	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
 	"github.com/snyk/cli-extension-ai-redteam/internal/utils"
 	"github.com/snyk/cli-extension-ai-redteam/internal/web"
 )
@@ -57,7 +60,12 @@ func setupWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) 
 		return nil, fmt.Errorf("failed to read config file %s: %w", configPath, err)
 	}
 
-	server := web.NewServer(port, outputPath, configPath, initialConfig)
+	httpClient := invocationCtx.GetNetworkAccess().GetHttpClient()
+	apiURL := config.GetString(configuration.API_URL)
+	logger := zerolog.Nop()
+	csClient := controlserver.NewClient(&logger, httpClient, apiURL, "")
+
+	server := web.NewServer(port, outputPath, configPath, initialConfig, csClient)
 	if err := server.Start(); err != nil {
 		return nil, fmt.Errorf("setup wizard error: %w", err)
 	}

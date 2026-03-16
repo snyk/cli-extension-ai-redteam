@@ -14,6 +14,7 @@ import (
 	"github.com/pkg/browser"
 
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam"
+	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
 )
 
 // Server serves the setup wizard UI and exposes API endpoints for config validation and saving.
@@ -22,16 +23,18 @@ type Server struct {
 	outputPath    string
 	configPath    string
 	initialConfig *redteam.Config
+	csClient      controlserver.Client
 	devMode       bool
 	shutdown      chan struct{}
 }
 
-func NewServer(port int, outputPath string, configPath string, initialConfig *redteam.Config) *Server {
+func NewServer(port int, outputPath string, configPath string, initialConfig *redteam.Config, csClient controlserver.Client) *Server {
 	return &Server{
 		port:          port,
 		outputPath:    outputPath,
 		configPath:    configPath,
 		initialConfig: initialConfig,
+		csClient:      csClient,
 		devMode:       os.Getenv("REDTEAM_DEV") == "1",
 		shutdown:      make(chan struct{}),
 	}
@@ -43,6 +46,8 @@ func (s *Server) Start() error {
 	mux.HandleFunc("GET /api/config", handleGetInitialConfig(s.initialConfig, s.configPath))
 	mux.HandleFunc("POST /api/config", handleGenerateConfig())
 	mux.HandleFunc("POST /api/ping", handlePing())
+	mux.HandleFunc("GET /api/goals", handleListGoals(s.csClient))
+	mux.HandleFunc("GET /api/strategies", handleListStrategies(s.csClient))
 
 	if s.devMode {
 		viteURL, _ := url.Parse("http://localhost:5173")
