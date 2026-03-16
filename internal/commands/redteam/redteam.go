@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/rs/zerolog"
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -18,8 +19,10 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 
+	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam/clireport"
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam/htmlreport"
 	"github.com/snyk/cli-extension-ai-redteam/internal/helpers"
+	"github.com/snyk/cli-extension-ai-redteam/internal/models"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/normalizer"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/target"
@@ -55,6 +58,13 @@ func RegisterRedTeamWorkflow(e workflow.Engine) error {
 	utils.AddTargetFlags(flagset)
 	flagset.Bool(utils.FlagHTML, false, "Output the red team report in HTML format instead of JSON")
 	flagset.String(utils.FlagHTMLFileOutput, "", "Write the HTML report to the specified file path")
+	flagset.Bool(utils.FlagFullConversation, false, "Show all conversation turns in findings (default: first and last only)")
+	flagset.Bool(utils.FlagJSON, false, "Output raw JSON instead of the styled CLI report")
+	flagset.String(utils.FlagConfig, "", "Path to the red team configuration file (default: redteam.yaml)")
+	flagset.String(utils.FlagTargetURL, "", "URL of the target to scan (overrides config file)")
+	flagset.String(utils.FlagRequestBodyTmpl, "", `Request body template with {{prompt}} placeholder (e.g. '{"message": "{{prompt}}"}')`)
+	flagset.String(utils.FlagResponseSelector, "", "Dot-notation path to extract response from target JSON (e.g. response)")
+	flagset.StringArray(utils.FlagHeaders, nil, `Request headers in "Key: Value" format (repeatable)`)
 	flagset.Bool(utils.FlagListGoals, false, "List all available attack goals and exit")
 	flagset.Bool(utils.FlagListStrategies, false, "List all available attack strategies and exit")
 	flagset.String(utils.FlagTenantID, "", "Tenant ID (auto-discovered if not provided)")
@@ -126,7 +136,7 @@ func RunRedTeamWorkflow(
 		rtConfig.Target.Settings.ResponseSelector,
 	)
 
-	results, scanErr := runClientDrivenScan(invocationCtx, controlServerClient, targetClient, rtConfig)
+	results, normalized, scanErr := runClientDrivenScan(invocationCtx, controlServerClient, targetClient, rtConfig)
 	if scanErr != nil {
 		return nil, scanErr
 	}
@@ -135,6 +145,23 @@ func RunRedTeamWorkflow(
 	if htmlErr != nil {
 		return nil, fmt.Errorf("HTML report error: %w", htmlErr)
 	}
+
+	returnJSON := config.GetBool(utils.FlagJSON)
+	returnHTML := config.GetBool(utils.FlagHTML)
+	if !returnJSON && !returnHTML && normalized != nil {
+		meta := clireport.ScanMeta{
+			TargetURL:  rtConfig.Target.Settings.URL,
+			Goal:       rtConfig.Goal,
+			Strategies: rtConfig.Strategies,
+		}
+		if err := clireport.RunInteractive(normalized, meta); err != nil {
+			// Fallback to static report if TUI fails (e.g. piped output).
+			report := clireport.Render(normalized, meta)
+			return []workflow.Data{newWorkflowData(contentTypePlain, []byte(report))}, nil
+		}
+		return []workflow.Data{newWorkflowData(contentTypePlain, []byte(""))}, nil
+	}
+
 	return output, nil
 }
 
@@ -197,14 +224,14 @@ func runClientDrivenScan(
 	csClient controlserver.Client,
 	targetClient target.Client,
 	rtConfig *Config,
-) ([]workflow.Data, error) {
+) ([]workflow.Data, *models.GetAIVulnerabilitiesResponseData, error) {
 	logger := invocationCtx.GetEnhancedLogger()
 	userInterface := invocationCtx.GetUserInterface()
 	ctx := context.Background()
 
 	scanID, err := csClient.CreateScan(ctx, rtConfig.ToCreateScanRequest())
 	if err != nil {
-		return nil, fmt.Errorf("failed to create scan: %w", err)
+		return nil, nil, fmt.Errorf("failed to create scan: %w", err)
 	}
 	logger.Info().Str("scanID", scanID).Msg("scan created on Snyk API")
 
@@ -217,7 +244,7 @@ func runClientDrivenScan(
 	for {
 		chats, nextErr := csClient.NextChats(ctx, scanID, responses)
 		if nextErr != nil {
-			return nil, fmt.Errorf("failed to get next chats: %w", nextErr)
+			return nil, nil, fmt.Errorf("failed to get next chats: %w", nextErr)
 		}
 		if len(chats) == 0 {
 			break
@@ -228,7 +255,7 @@ func runClientDrivenScan(
 			resp, tgtErr := targetClient.SendPrompt(ctx, chat.Prompt)
 			if tgtErr != nil {
 				if errors.Is(tgtErr, target.ErrCircuitOpen) {
-					return nil, fmt.Errorf("aborting scan: %w", tgtErr)
+					return nil, nil, fmt.Errorf("aborting scan: %w", tgtErr)
 				}
 				logger.Warn().Err(tgtErr).Str("chatID", chat.ChatID).Msg("target error, using error as response")
 				resp = fmt.Sprintf("[error: %s]", tgtErr.Error())
@@ -252,7 +279,7 @@ func runClientDrivenScan(
 
 	result, resultErr := csClient.GetResult(ctx, scanID)
 	if resultErr != nil {
-		return nil, fmt.Errorf("failed to get scan result: %w", resultErr)
+		return nil, nil, fmt.Errorf("failed to get scan result: %w", resultErr)
 	}
 
 	outputStatus(userInterface, logger, status)
@@ -261,10 +288,10 @@ func runClientDrivenScan(
 
 	resultsBytes, marshalErr := json.Marshal(normalized)
 	if marshalErr != nil {
-		return nil, fmt.Errorf("failed to marshal results: %w", marshalErr)
+		return nil, nil, fmt.Errorf("failed to marshal results: %w", marshalErr)
 	}
 
-	return []workflow.Data{newWorkflowData("application/json", resultsBytes)}, nil
+	return []workflow.Data{newWorkflowData("application/json", resultsBytes)}, normalized, nil
 }
 
 func updateProgress(
@@ -290,8 +317,12 @@ func outputStatus(userInterface ui.UserInterface, logger *zerolog.Logger, status
 	if status == nil {
 		return
 	}
-	msg := fmt.Sprintf("\nScan complete: %d/%d chats | %d successful | %d failed",
-		status.Completed, status.TotalChats, status.Successful, status.Failed)
+	green := lipgloss.NewStyle().Foreground(lipgloss.Color("#7BF1A8"))
+	red := lipgloss.NewStyle().Foreground(lipgloss.Color("#E44A50"))
+	msg := fmt.Sprintf("\nScan complete: %d/%d chats | %s | %s",
+		status.Completed, status.TotalChats,
+		green.Render(fmt.Sprintf("%d successful", status.Successful)),
+		red.Render(fmt.Sprintf("%d failed", status.Failed)))
 	if err := userInterface.Output(msg); err != nil {
 		logger.Debug().Err(err).Msg("failed to output status")
 	}

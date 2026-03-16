@@ -61,6 +61,9 @@ func buildSummary(status *controlserver.ScanStatus) *models.AIScanSummary {
 			Severity:    "high", // TODO(pkey): use /report endpoint for per-goal severity
 			Status:      statusStr,
 			Vulnerable:  attack.Successful > 0,
+			TotalChats:  attack.TotalChats,
+			Successful:  attack.Successful,
+			Failed:      attack.TotalChats - attack.Successful,
 		})
 	}
 	return &models.AIScanSummary{Vulnerabilities: vulnSummaries}
