@@ -13,4 +13,7 @@ const (
 	FlagHeaders          = "headers"
 	FlagListGoals        = "list-goals"
 	FlagListStrategies   = "list-strategies"
+	FlagPurpose          = "purpose"
+	FlagSystemPrompt     = "system-prompt"
+	FlagTools            = "tools"
 )

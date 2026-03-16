@@ -42,7 +42,48 @@ func TestCreateScan_Happy(t *testing.T) {
 	defer server.Close()
 
 	client := newTestClient(t, server.URL)
-	scanID, err := client.CreateScan(t.Context(), "system_prompt_extraction", []string{"directly_asking"})
+	req := &controlserver.CreateScanRequest{Goal: "system_prompt_extraction", Strategies: []string{"directly_asking"}}
+	scanID, err := client.CreateScan(t.Context(), req)
+	require.NoError(t, err)
+	assert.Equal(t, testScanID, scanID)
+}
+
+func TestCreateScan_WithGroundTruth(t *testing.T) {
+	purpose := "Customer support"
+	systemPrompt := "You are a helpful assistant."
+	toolsStr := "get_balance, transfer"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/hidden/tenants/"+testTenantID+"/red_team_scans", r.URL.Path)
+		assert.Contains(t, r.URL.RawQuery, "version="+controlserver.APIVersion)
+
+		var req controlserver.CreateScanRequest
+		body, _ := io.ReadAll(r.Body)
+		require.NoError(t, json.Unmarshal(body, &req))
+		assert.Equal(t, "system_prompt_extraction", req.Goal)
+		assert.Equal(t, []string{"directly_asking"}, req.Strategies)
+		assert.Equal(t, purpose, req.Purpose)
+		require.NotNil(t, req.GroundTruth)
+		assert.Equal(t, systemPrompt, req.GroundTruth.SystemPrompt)
+		assert.Equal(t, toolsStr, req.GroundTruth.Tools)
+
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(controlserver.CreateScanResponse{ScanID: testScanID})
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	req := &controlserver.CreateScanRequest{
+		Goal:       "system_prompt_extraction",
+		Strategies: []string{"directly_asking"},
+		Purpose:    purpose,
+		GroundTruth: &controlserver.GroundTruth{
+			SystemPrompt: systemPrompt,
+			Tools:        toolsStr,
+		},
+	}
+	scanID, err := client.CreateScan(t.Context(), req)
 	require.NoError(t, err)
 	assert.Equal(t, testScanID, scanID)
 }
@@ -55,7 +96,7 @@ func TestCreateScan_ServerError(t *testing.T) {
 	defer server.Close()
 
 	client := newTestClient(t, server.URL)
-	_, err := client.CreateScan(t.Context(), "test", nil)
+	_, err := client.CreateScan(t.Context(), &controlserver.CreateScanRequest{Goal: "test"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "400")
 }
