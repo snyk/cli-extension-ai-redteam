@@ -20,12 +20,7 @@ var PingWorkflowID = workflow.NewWorkflowIdentifier("redteam.ping")
 
 func RegisterPingWorkflow(e workflow.Engine) error {
 	flagset := pflag.NewFlagSet("snyk-cli-extension-ai-redteam-ping", pflag.ExitOnError)
-	flagset.Bool(utils.FlagExperimental, false, "This is an experimental feature that will contain breaking changes in future revisions")
-	flagset.String(utils.FlagConfig, "", "Path to the red team configuration file (default: redteam.yaml)")
-	flagset.String(utils.FlagTargetURL, "", "URL of the target to ping")
-	flagset.String(utils.FlagRequestBodyTmpl, "", `Request body template with {{prompt}} placeholder`)
-	flagset.String(utils.FlagResponseSelector, "", "JMESPath expression to extract response from target JSON")
-	flagset.StringArray(utils.FlagHeaders, nil, `Request headers in "Key: Value" format (repeatable)`)
+	utils.AddTargetFlags(flagset)
 
 	cfg := workflow.ConfigurationOptionsFromFlagset(flagset)
 	if _, err := e.Register(PingWorkflowID, cfg, pingWorkflow); err != nil {

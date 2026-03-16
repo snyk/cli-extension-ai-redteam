@@ -52,14 +52,9 @@ func RegisterWorkflows(e workflow.Engine) error {
 
 func RegisterRedTeamWorkflow(e workflow.Engine) error {
 	flagset := pflag.NewFlagSet("snyk-cli-extension-ai-redteam", pflag.ExitOnError)
-	flagset.Bool(utils.FlagExperimental, false, "This is an experimental feature that will contain breaking changes in future revisions")
+	utils.AddTargetFlags(flagset)
 	flagset.Bool(utils.FlagHTML, false, "Output the red team report in HTML format instead of JSON")
 	flagset.String(utils.FlagHTMLFileOutput, "", "Write the HTML report to the specified file path")
-	flagset.String(utils.FlagConfig, "", "Path to the red team configuration file (default: redteam.yaml)")
-	flagset.String(utils.FlagTargetURL, "", "URL of the target to scan (overrides config file)")
-	flagset.String(utils.FlagRequestBodyTmpl, "", `Request body template with {{prompt}} placeholder (e.g. '{"message": "{{prompt}}"}')`)
-	flagset.String(utils.FlagResponseSelector, "", "Dot-notation path to extract response from target JSON (e.g. response)")
-	flagset.StringArray(utils.FlagHeaders, nil, `Request headers in "Key: Value" format (repeatable)`)
 	flagset.Bool(utils.FlagListGoals, false, "List all available attack goals and exit")
 	flagset.Bool(utils.FlagListStrategies, false, "List all available attack strategies and exit")
 	flagset.String(utils.FlagTenantID, "", "Tenant ID (auto-discovered if not provided)")
