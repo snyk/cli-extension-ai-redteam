@@ -96,6 +96,14 @@ func Ping(ctx context.Context, url string, headers map[string]string, requestBod
 		}
 	}
 
+	if responseSelector == "" {
+		return PingResult{
+			Success:    true,
+			Response:   truncate(rawBody, 500),
+			Suggestion: "Target is reachable and responding correctly.",
+		}
+	}
+
 	if !json.Valid(respBytes) {
 		return PingResult{
 			Error:      "non-JSON response",

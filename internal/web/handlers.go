@@ -90,13 +90,6 @@ func handlePing() http.HandlerFunc {
 			return
 		}
 
-		if req.RequestBodyTemplate == "" {
-			req.RequestBodyTemplate = `{"message": "{{prompt}}"}`
-		}
-		if req.ResponseSelector == "" {
-			req.ResponseSelector = "response"
-		}
-
 		headers := make(map[string]string)
 		for _, h := range req.Headers {
 			if h.Name != "" {

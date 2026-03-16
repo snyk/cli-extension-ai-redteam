@@ -20,7 +20,7 @@ interface SetupPageProps {
 
 const stepFields: Record<string, string[][]> = {
   "target-type": [["target", "name"], ["target", "type"]],
-  "target-config": [["target", "settings", "url"]],
+  "target-config": [["target", "settings", "url"], ["target", "settings", "request_body_template"]],
   "app-context": [],
   "goal": [["goals"]],
   "strategies": [["strategies"]],
@@ -51,9 +51,8 @@ function buildConfig(values: Record<string, any>): Config {
         headers: settings.headers?.filter(
           (h: { name: string; value: string }) => h.name && h.value,
         ),
-        response_selector: settings.response_selector || "response",
-        request_body_template:
-          settings.request_body_template || '{"message": "{{prompt}}"}',
+        response_selector: settings.response_selector || "",
+        request_body_template: settings.request_body_template || "",
       },
     },
     goals: values?.goals?.length ? values.goals : ["system_prompt_extraction"],

@@ -1,4 +1,4 @@
-import { Form, Input } from "antd";
+import { Form, Input, Typography } from "antd";
 import HeadersEditor from "./HeadersEditor";
 import TestConnection from "./TestConnection";
 
@@ -21,7 +21,7 @@ function validateHttpUrl(_: unknown, value: string) {
 }
 
 function validateRequestBodyTemplate(_: unknown, value: string | undefined) {
-  if (!value) return Promise.resolve();
+  if (!value) return Promise.reject(new Error("Request body template is required"));
   if (!value.includes("{{prompt}}")) {
     return Promise.reject(new Error("Must contain the {{prompt}} placeholder"));
   }
@@ -48,12 +48,16 @@ export default function TargetConfigStep() {
       <Form.Item
         label="Request Body Template"
         name={["target", "settings", "request_body_template"]}
-        rules={[{ validator: validateRequestBodyTemplate }]}
-        tooltip='JSON template with {{prompt}} placeholder. Leave empty for default: {"message": "{{prompt}}"}'
+        rules={[{ required: true, validator: validateRequestBodyTemplate }]}
+        tooltip="JSON template with {{prompt}} placeholder that will be sent to the target endpoint"
+        extra={
+          <Typography.Text type="secondary" style={{ fontFamily: "var(--pcl-font-family-mono)", fontSize: 12 }}>
+            Example: {`{"message": "{{prompt}}"}`}
+          </Typography.Text>
+        }
       >
         <TextArea
           rows={3}
-          placeholder='{"message": "{{prompt}}"}'
           style={{ fontFamily: "var(--pcl-font-family-mono)" }}
         />
       </Form.Item>
@@ -61,9 +65,9 @@ export default function TargetConfigStep() {
       <Form.Item
         label="Response Selector"
         name={["target", "settings", "response_selector"]}
-        tooltip="JMESPath expression to extract the response from the JSON body (e.g. data.choices[0].message.content). Must follow JMESPath syntax. Leave empty for default: response"
+        tooltip="JMESPath expression to extract the response from a JSON body (e.g. data.choices[0].message.content). Must follow JMESPath syntax. Leave empty to capture the plain text response."
       >
-        <Input placeholder="response" style={{ fontFamily: "var(--pcl-font-family-mono)" }} />
+        <Input style={{ fontFamily: "var(--pcl-font-family-mono)" }} />
       </Form.Item>
 
       <Form.Item label="Headers">
