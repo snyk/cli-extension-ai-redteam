@@ -2,6 +2,7 @@ package redteam
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/rs/zerolog"
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -17,9 +19,11 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 
+	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam/clireport"
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam/htmlreport"
 	redteam_errors "github.com/snyk/cli-extension-ai-redteam/internal/errors/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/helpers"
+	"github.com/snyk/cli-extension-ai-redteam/internal/models"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/target"
 	"github.com/snyk/cli-extension-ai-redteam/internal/utils"
@@ -62,6 +66,8 @@ func RegisterRedTeamWorkflow(e workflow.Engine) error {
 	flagset.Bool(utils.FlagHTML, false, "Output the red team report in HTML format instead of JSON")
 	flagset.String(utils.FlagHTMLFileOutput, "", "Write the HTML report to the specified file path")
 	flagset.String(utils.FlagJSONFileOutput, "", "Write the JSON report to the specified file path")
+	flagset.Bool(utils.FlagFullConversation, false, "Show all conversation turns in findings (default: first and last only)")
+	flagset.Bool(utils.FlagJSON, false, "Output raw JSON instead of the styled CLI report")
 	flagset.Bool(utils.FlagListGoals, false, "List all available attack goals and exit")
 	flagset.Bool(utils.FlagListStrategies, false, "List all available attack strategies and exit")
 	flagset.Bool(utils.FlagListProfiles, false, "List all available attack profiles and exit")
@@ -156,7 +162,43 @@ func RunRedTeamWorkflow(
 	if htmlErr != nil {
 		return nil, htmlErr //nolint:wrapcheck // RedTeamError from htmlreport
 	}
+
+	returnJSON := config.GetBool(utils.FlagJSON)
+	returnHTML := config.GetBool(utils.FlagHTML)
+	if !returnJSON && !returnHTML && len(results) > 0 {
+		reportData, parseErr := parseReportForTUI(results, config)
+		if parseErr == nil && reportData != nil {
+			meta := clireport.ScanMeta{
+				TargetURL:        rtConfig.Target.Settings.URL,
+				Goal:             strings.Join(rtConfig.UniqueGoals(), ", "),
+				FullConversation: config.GetBool(utils.FlagFullConversation),
+			}
+			if err := clireport.RunInteractive(reportData, meta); err != nil {
+				// Fallback to static report if TUI fails (e.g. piped output).
+				report := clireport.Render(reportData, meta)
+				return []workflow.Data{newWorkflowData(contentTypePlain, []byte(report))}, nil
+			}
+			return []workflow.Data{newWorkflowData(contentTypePlain, []byte(""))}, nil
+		}
+	}
+
 	return output, nil
+}
+
+func parseReportForTUI(results []workflow.Data, config configuration.Configuration) (*models.GetAIVulnerabilitiesResponseData, error) {
+	if len(results) == 0 {
+		return nil, fmt.Errorf("no results")
+	}
+	payload, ok := results[0].GetPayload().([]byte)
+	if !ok {
+		return nil, fmt.Errorf("unexpected payload type")
+	}
+	var data models.GetAIVulnerabilitiesResponseData
+	if err := json.Unmarshal(payload, &data); err != nil {
+		return nil, fmt.Errorf("failed to parse report JSON: %w", err)
+	}
+	_ = config // reserved for future use (e.g. building summary from status)
+	return &data, nil
 }
 
 func handleListFlags(
@@ -351,8 +393,12 @@ func outputStatus(userInterface ui.UserInterface, logger *zerolog.Logger, status
 	if status == nil {
 		return
 	}
-	msg := fmt.Sprintf("\nScan complete: %d/%d chats | %d successful | %d failed",
-		status.Completed, status.TotalChats, status.Successful, status.Failed)
+	green := lipgloss.NewStyle().Foreground(lipgloss.Color("#7BF1A8"))
+	red := lipgloss.NewStyle().Foreground(lipgloss.Color("#E44A50"))
+	msg := fmt.Sprintf("\nScan complete: %d/%d chats | %s | %s",
+		status.Completed, status.TotalChats,
+		green.Render(fmt.Sprintf("%d successful", status.Successful)),
+		red.Render(fmt.Sprintf("%d failed", status.Failed)))
 	if err := userInterface.Output(msg); err != nil {
 		logger.Debug().Err(err).Msg("failed to output status")
 	}

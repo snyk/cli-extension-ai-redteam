@@ -56,6 +56,24 @@ func TestRunRedTeamGetWorkflow_HappyPath(t *testing.T) {
 
 	payload, ok := results[0].GetPayload().([]byte)
 	require.True(t, ok)
+	assert.Contains(t, string(payload), "directly asking")
+	assert.Contains(t, string(payload), "Findings")
+}
+
+func TestRunRedTeamGetWorkflow_JSONOutput(t *testing.T) {
+	ictx := frameworkmock.NewMockInvocationContext(t)
+	ictx.GetConfiguration().Set(experimentalKey, true)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
+	ictx.GetConfiguration().Set("id", validScanID)
+	ictx.GetConfiguration().Set("json", true)
+
+	results, err := redteamget.RunRedTeamGetWorkflow(ictx, mockCSFactory(defaultResultMock()))
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, "application/json", results[0].GetContentType())
+
+	payload, ok := results[0].GetPayload().([]byte)
+	require.True(t, ok)
 	assert.Contains(t, string(payload), validScanID)
 	assert.Contains(t, string(payload), "directly_asking")
 }
@@ -158,7 +176,7 @@ func TestRunRedTeamGetWorkflow_HTMLFileOutput(t *testing.T) {
 	results, err := redteamget.RunRedTeamGetWorkflow(ictx, mockCSFactory(defaultResultMock()))
 	require.NoError(t, err)
 	assert.Len(t, results, 1)
-	assert.Equal(t, "application/json", results[0].GetContentType())
+	assert.Equal(t, "text/plain", results[0].GetContentType())
 
 	fileContent, readErr := os.ReadFile(tmpFile)
 	require.NoError(t, readErr)
