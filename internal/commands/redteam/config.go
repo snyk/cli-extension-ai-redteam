@@ -18,14 +18,16 @@ import (
 )
 
 const (
-	defaultGoals               = "system_prompt_extraction"
 	defaultResponseSelector    = "response"
 	defaultRequestBodyTemplate = `{"message": "{{prompt}}"}`
 	defaultTargetType          = "api"
 	contentTypePlain           = "text/plain"
 )
 
-var defaultStrategies = []string{"directly_asking"}
+var (
+	defaultGoals      = []string{"system_prompt_extraction"}
+	defaultStrategies = []string{"directly_asking"}
+)
 
 type Config struct {
 	Target           ConfigTarget `yaml:"target"`
@@ -217,7 +219,7 @@ func validateURL(rawURL, label string) error {
 
 func applyDefaults(cfg *Config) {
 	if len(cfg.Goals) == 0 {
-		cfg.Goals = []string{defaultGoals}
+		cfg.Goals = defaultGoals
 	}
 	if len(cfg.Strategies) == 0 {
 		cfg.Strategies = defaultStrategies
