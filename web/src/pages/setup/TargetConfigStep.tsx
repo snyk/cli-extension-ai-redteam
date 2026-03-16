@@ -1,5 +1,6 @@
 import { Form, Input } from "antd";
 import HeadersEditor from "./HeadersEditor";
+import TestConnection from "./TestConnection";
 
 const { TextArea } = Input;
 
@@ -68,6 +69,8 @@ export default function TargetConfigStep() {
       <Form.Item label="Headers">
         <HeadersEditor />
       </Form.Item>
+
+      <TestConnection />
     </>
   );
 }
