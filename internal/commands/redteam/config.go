@@ -21,6 +21,7 @@ const (
 	defaultGoal                = "system_prompt_extraction"
 	defaultResponseSelector    = "response"
 	defaultRequestBodyTemplate = `{"message": "{{prompt}}"}`
+	defaultTargetType          = "api"
 	contentTypePlain           = "text/plain"
 )
 
@@ -135,9 +136,6 @@ func applyTargetURLOverride(config configuration.Configuration, rtConfig *Config
 	if rtConfig.Target.Name == "" {
 		rtConfig.Target.Name = targetURL
 	}
-	if rtConfig.Target.Type == "" {
-		rtConfig.Target.Type = "api"
-	}
 }
 
 func applyFlagOverrides(config configuration.Configuration, rtConfig *Config) {
@@ -161,8 +159,7 @@ func applyFlagOverrides(config configuration.Configuration, rtConfig *Config) {
 	}
 }
 
-// ToCreateScanRequest builds the control server StartScan request from config.
-// Purpose is sent at top level; ground_truth contains system_prompt and tools (tools joined as comma-separated string).
+// ToCreateScanRequest builds the control server CreateScan request from config.
 func (cfg *Config) ToCreateScanRequest() *controlserver.CreateScanRequest {
 	req := &controlserver.CreateScanRequest{
 		Goal:        cfg.Goal,
@@ -224,6 +221,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if len(cfg.Strategies) == 0 {
 		cfg.Strategies = defaultStrategies
+	}
+	if cfg.Target.Type == "" {
+		cfg.Target.Type = defaultTargetType
 	}
 	if cfg.Target.Settings.ResponseSelector == "" {
 		cfg.Target.Settings.ResponseSelector = defaultResponseSelector
