@@ -11,7 +11,7 @@ export const steps: Step[] = [
   { key: "target-type", label: "Target Type", icon: <AimOutlined /> },
   { key: "target-config", label: "Target Configuration", icon: <SettingOutlined /> },
   { key: "app-context", label: "Application Context", icon: <FileTextOutlined /> },
-  { key: "goal", label: "Goal", icon: <FlagOutlined /> },
+  { key: "goal", label: "Goals", icon: <FlagOutlined /> },
   { key: "strategies", label: "Strategies", icon: <ThunderboltOutlined /> },
   { key: "review", label: "Review and Download", icon: <EyeOutlined /> },
 ];

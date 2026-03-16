@@ -18,7 +18,7 @@ export default function TargetTypeStep() {
       >
         <Select
           options={[
-            { value: "http", label: "HTTP" },
+            { value: "http", label: "HTTP/HTTPS Endpoint" },
           ]}
         />
       </Form.Item>
