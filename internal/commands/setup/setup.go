@@ -21,10 +21,11 @@ var SetupWorkflowID = workflow.NewWorkflowIdentifier("redteam.setup")
 
 func RegisterSetupWorkflow(e workflow.Engine) error {
 	flagset := pflag.NewFlagSet("snyk-cli-extension-ai-redteam-setup", pflag.ExitOnError)
+	const flagPort = "port"
+
 	flagset.Bool(utils.FlagExperimental, false, "This is an experimental feature that will contain breaking changes in future revisions")
-	flagset.String(utils.FlagOutput, "redteam.yaml", "Output path for the generated configuration file")
 	flagset.String(utils.FlagConfig, "", "Load an existing configuration file to edit")
-	flagset.Int(utils.FlagPort, 8484, "Port for the setup wizard web server")
+	flagset.Int(flagPort, 8484, "Port for the setup wizard web server")
 
 	cfg := workflow.ConfigurationOptionsFromFlagset(flagset)
 	if _, err := e.Register(SetupWorkflowID, cfg, setupWorkflow); err != nil {
@@ -41,8 +42,7 @@ func setupWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) 
 		return nil, cli_errors.NewCommandIsExperimentalError("")
 	}
 
-	outputPath := config.GetString(utils.FlagOutput)
-	port := config.GetInt(utils.FlagPort)
+	port := config.GetInt("port")
 	configPath := config.GetString(utils.FlagConfig)
 
 	var initialConfig *redteam.Config
@@ -65,7 +65,7 @@ func setupWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) 
 	logger := zerolog.Nop()
 	csClient := controlserver.NewClient(&logger, httpClient, apiURL, "")
 
-	server := web.NewServer(port, outputPath, configPath, initialConfig, csClient)
+	server := web.NewServer(port, configPath, initialConfig, csClient)
 	if err := server.Start(); err != nil {
 		return nil, fmt.Errorf("setup wizard error: %w", err)
 	}

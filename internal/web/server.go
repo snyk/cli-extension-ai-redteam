@@ -20,7 +20,6 @@ import (
 // Server serves the setup wizard UI and exposes API endpoints for config validation and saving.
 type Server struct {
 	port          int
-	outputPath    string
 	configPath    string
 	initialConfig *redteam.Config
 	csClient      controlserver.Client
@@ -28,10 +27,9 @@ type Server struct {
 	shutdown      chan struct{}
 }
 
-func NewServer(port int, outputPath string, configPath string, initialConfig *redteam.Config, csClient controlserver.Client) *Server {
+func NewServer(port int, configPath string, initialConfig *redteam.Config, csClient controlserver.Client) *Server {
 	return &Server{
 		port:          port,
-		outputPath:    outputPath,
 		configPath:    configPath,
 		initialConfig: initialConfig,
 		csClient:      csClient,
@@ -44,12 +42,12 @@ func (s *Server) Start() error {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /api/config", handleGetInitialConfig(s.initialConfig, s.configPath))
-	mux.HandleFunc("POST /api/config", handleGenerateConfig())
 	mux.HandleFunc("POST /api/ping", handlePing())
 	mux.HandleFunc("GET /api/goals", handleListGoals(s.csClient))
 	mux.HandleFunc("GET /api/strategies", handleListStrategies(s.csClient))
 
 	if s.devMode {
+		// In dev mode, proxy all non-API requests to the Vite dev server for hot-reload.
 		viteURL, _ := url.Parse("http://localhost:5173")
 		mux.Handle("/", httputil.NewSingleHostReverseProxy(viteURL))
 	} else {

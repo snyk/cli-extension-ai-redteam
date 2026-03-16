@@ -97,6 +97,7 @@ func (c *HTTPClient) Ping(ctx context.Context) PingResult {
 		}
 	}
 
+	// No selector configured — we can only verify reachability (2xx), not response structure.
 	if c.responseSelector == "" {
 		return PingResult{
 			Success:    true,

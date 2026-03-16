@@ -5,22 +5,10 @@ import (
 	"net/http"
 	"sort"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/target"
 )
-
-type validationResponse struct {
-	Valid  bool     `json:"valid"`
-	Errors []string `json:"errors,omitempty"`
-}
-
-type generateResponse struct {
-	Yaml     string `json:"yaml"`
-	Filename string `json:"filename"`
-}
 
 type initialConfigResponse struct {
 	ConfigPath string        `json:"config_path,omitempty"`
@@ -40,32 +28,6 @@ func handleGetInitialConfig(cfg *redteam.Config, configPath string) http.Handler
 	}
 }
 
-func handleGenerateConfig() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var cfg redteam.Config
-		if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
-			writeJSON(w, http.StatusBadRequest, validationResponse{
-				Valid:  false,
-				Errors: []string{"invalid JSON: " + err.Error()},
-			})
-			return
-		}
-
-		data, err := yaml.Marshal(&cfg)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, validationResponse{
-				Valid:  false,
-				Errors: []string{"failed to marshal config: " + err.Error()},
-			})
-			return
-		}
-
-		writeJSON(w, http.StatusOK, generateResponse{
-			Yaml:     string(data),
-			Filename: "redteam.yaml",
-		})
-	}
-}
 
 type pingRequest struct {
 	URL                 string              `json:"url"`
@@ -82,13 +44,7 @@ func handlePing() http.HandlerFunc {
 			return
 		}
 
-		headers := make(map[string]string)
-		for _, h := range req.Headers {
-			if h.Name != "" {
-				headers[h.Name] = h.Value
-			}
-		}
-
+		headers := redteam.HeadersToMap(req.Headers)
 		client := target.NewHTTPClient(nil, req.URL, headers, req.RequestBodyTemplate, req.ResponseSelector)
 		result := client.Ping(r.Context())
 		writeJSON(w, http.StatusOK, result)

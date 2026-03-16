@@ -18,8 +18,6 @@ const (
 	FlagPurpose          = "purpose"
 	FlagSystemPrompt     = "system-prompt"
 	FlagTools            = "tools"
-	FlagOutput           = "output"
-	FlagPort             = "port"
 )
 
 // AddTargetFlags registers the common target-related flags shared by commands

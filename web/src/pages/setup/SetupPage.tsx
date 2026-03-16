@@ -18,7 +18,8 @@ interface SetupPageProps {
   onConfigPathLoaded: (path: string | null) => void;
 }
 
-const stepFields: Record<string, string[][]> = {
+// Required fields per step — validated on "Next" and flagged as missing on the review step.
+const requiredStepFields: Record<string, string[][]> = {
   "target-type": [["target", "name"], ["target", "type"]],
   "target-config": [["target", "settings", "url"], ["target", "settings", "request_body_template"]],
   "app-context": [],
@@ -80,7 +81,6 @@ const defaultValues = {
 
 export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded }: SetupPageProps) {
   const [form] = Form.useForm();
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [yamlContent, setYamlContent] = useState<string | null>(null);
   const [missingFields, setMissingFields] = useState<string[]>([]);
@@ -133,7 +133,7 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
       .filter((f) => f.errors.length > 0)
       .map((f) => f.name.join("."));
 
-    const requiredFields = Object.values(stepFields).flat();
+    const requiredFields = Object.values(requiredStepFields).flat();
     const values = form.getFieldsValue(true);
     const missing: string[] = [];
 
@@ -161,7 +161,7 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
   }, [activeStep]);
 
   const goNext = async () => {
-    const fields = stepFields[activeStep] ?? [];
+    const fields = requiredStepFields[activeStep] ?? [];
     if (fields.length > 0) {
       await form.validateFields(fields);
     }
@@ -191,28 +191,9 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
     }
   };
 
-  const validateAndDownload = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const values = form.getFieldsValue(true);
-      const config = buildConfig(values);
-      const res = await fetch("/api/config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(config),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        const msg = body?.errors?.join("\n") || `Server error: ${res.status}`;
-        throw new Error(msg);
-      }
-      const data: { yaml: string } = await res.json();
-      downloadFile(data.yaml, filename);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An unexpected error occurred");
-    } finally {
-      setLoading(false);
+  const handleDownloadConfirm = () => {
+    if (yamlContent) {
+      downloadFile(yamlContent, filename);
     }
   };
 
@@ -222,7 +203,7 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
 
   const confirmDownload = () => {
     setFilenameModalOpen(false);
-    validateAndDownload();
+    handleDownloadConfirm();
   };
 
   return (
@@ -305,12 +286,11 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
             type="primary"
             icon={<DownloadOutlined />}
             onClick={handleDownload}
-            loading={loading}
           >
             Download Configuration
           </Button>
         ) : (
-          <Button type="primary" onClick={goNext} loading={loading}>
+          <Button type="primary" onClick={goNext}>
             {currentIndex === steps.length - 2 ? "Review Configuration" : "Next"}
           </Button>
         )}

@@ -236,12 +236,18 @@ func applyDefaults(cfg *Config) {
 	}
 }
 
-func (cfg *Config) HeadersMap() map[string]string {
+func HeadersToMap(hdrs []ConfigHeader) map[string]string {
 	headers := make(map[string]string)
-	for _, h := range cfg.Target.Settings.Headers {
-		headers[h.Name] = h.Value
+	for _, h := range hdrs {
+		if h.Name != "" {
+			headers[h.Name] = h.Value
+		}
 	}
 	return headers
+}
+
+func (cfg *Config) HeadersMap() map[string]string {
+	return HeadersToMap(cfg.Target.Settings.Headers)
 }
 
 func getToolsFlags(config configuration.Configuration) []string {

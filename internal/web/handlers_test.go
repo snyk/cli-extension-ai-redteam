@@ -51,53 +51,6 @@ func TestHandleGetInitialConfig_WithConfig(t *testing.T) {
 	assert.Equal(t, "test-target", resp.Config.Target.Name)
 }
 
-// --- handleGenerateConfig ---
-
-func TestHandleGenerateConfig_ValidConfig(t *testing.T) {
-	cfg := redteam.Config{
-		Target: redteam.ConfigTarget{Name: "my-target"},
-		Goals:  []string{"goal1"},
-	}
-	body, _ := json.Marshal(cfg)
-
-	handler := handleGenerateConfig()
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
-
-	handler.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusOK, rec.Code)
-	var resp generateResponse
-	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
-	assert.Contains(t, resp.Yaml, "my-target")
-	assert.Equal(t, "redteam.yaml", resp.Filename)
-}
-
-func TestHandleGenerateConfig_InvalidJSON(t *testing.T) {
-	handler := handleGenerateConfig()
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString("{broken"))
-
-	handler.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	var resp validationResponse
-	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
-	assert.False(t, resp.Valid)
-	require.Len(t, resp.Errors, 1)
-	assert.Contains(t, resp.Errors[0], "invalid JSON")
-}
-
-func TestHandleGenerateConfig_IncompleteConfig(t *testing.T) {
-	handler := handleGenerateConfig()
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(`{"target":{}}`))
-
-	handler.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusOK, rec.Code)
-}
-
 // --- handlePing ---
 
 func TestHandlePing_Success(t *testing.T) {
