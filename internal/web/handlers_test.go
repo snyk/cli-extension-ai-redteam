@@ -1,4 +1,4 @@
-package web
+package web_test
 
 import (
 	"bytes"
@@ -14,19 +14,20 @@ import (
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
 	controlservermock "github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver/mock"
+	"github.com/snyk/cli-extension-ai-redteam/internal/web"
 )
 
 // --- handleGetInitialConfig ---
 
 func TestHandleGetInitialConfig_NilConfig(t *testing.T) {
-	handler := handleGetInitialConfig(nil, "")
+	handler := web.HandleGetInitialConfig(nil, "")
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 
 	handler.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
-	var resp initialConfigResponse
+	var resp web.InitialConfigResponse
 	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
 	assert.Nil(t, resp.Config)
 	assert.Empty(t, resp.ConfigPath)
@@ -37,14 +38,14 @@ func TestHandleGetInitialConfig_WithConfig(t *testing.T) {
 		Target: redteam.ConfigTarget{Name: "test-target"},
 		Goals:  []string{"goal1"},
 	}
-	handler := handleGetInitialConfig(cfg, "/path/to/config.yaml")
+	handler := web.HandleGetInitialConfig(cfg, "/path/to/config.yaml")
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 
 	handler.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
-	var resp initialConfigResponse
+	var resp web.InitialConfigResponse
 	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
 	assert.Equal(t, "/path/to/config.yaml", resp.ConfigPath)
 	require.NotNil(t, resp.Config)
@@ -59,14 +60,14 @@ func TestHandlePing_Success(t *testing.T) {
 	}))
 	defer targetSrv.Close()
 
-	pingReq := pingRequest{
+	pingReq := web.PingRequest{
 		URL:                 targetSrv.URL,
 		RequestBodyTemplate: `{"message":"{{prompt}}"}`,
 		ResponseSelector:    "response",
 	}
 	body, _ := json.Marshal(pingReq)
 
-	handler := handlePing()
+	handler := web.HandlePing()
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 
@@ -87,7 +88,7 @@ func TestHandlePing_HeaderConversion(t *testing.T) {
 	}))
 	defer targetSrv.Close()
 
-	pingReq := pingRequest{
+	pingReq := web.PingRequest{
 		URL:                 targetSrv.URL,
 		RequestBodyTemplate: `{"message":"{{prompt}}"}`,
 		ResponseSelector:    "response",
@@ -98,7 +99,7 @@ func TestHandlePing_HeaderConversion(t *testing.T) {
 	}
 	body, _ := json.Marshal(pingReq)
 
-	handler := handlePing()
+	handler := web.HandlePing()
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 
@@ -108,7 +109,7 @@ func TestHandlePing_HeaderConversion(t *testing.T) {
 }
 
 func TestHandlePing_InvalidJSON(t *testing.T) {
-	handler := handlePing()
+	handler := web.HandlePing()
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString("{bad"))
 
@@ -127,9 +128,9 @@ func TestHandleListGoals_Success(t *testing.T) {
 		},
 	}
 
-	handler := handleListGoals(mock)
+	handler := web.HandleListGoals(mock)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 
 	handler.ServeHTTP(rec, req)
 
@@ -146,9 +147,9 @@ func TestHandleListGoals_ClientError(t *testing.T) {
 		GoalsErr: errors.New("connection failed"),
 	}
 
-	handler := handleListGoals(mock)
+	handler := web.HandleListGoals(mock)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 
 	handler.ServeHTTP(rec, req)
 
@@ -165,9 +166,9 @@ func TestHandleListStrategies_Success(t *testing.T) {
 		},
 	}
 
-	handler := handleListStrategies(mock)
+	handler := web.HandleListStrategies(mock)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 
 	handler.ServeHTTP(rec, req)
 
@@ -184,9 +185,9 @@ func TestHandleListStrategies_ClientError(t *testing.T) {
 		StrategiesErr: errors.New("timeout"),
 	}
 
-	handler := handleListStrategies(mock)
+	handler := web.HandleListStrategies(mock)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 
 	handler.ServeHTTP(rec, req)
 

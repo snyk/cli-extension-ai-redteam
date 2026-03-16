@@ -35,7 +35,7 @@ func pingWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) (
 	logger := invocationCtx.GetEnhancedLogger()
 	rtConfig, earlyReturn, err := redteam.LoadAndValidateConfig(logger, config)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("config error: %w", err)
 	}
 	if earlyReturn != nil {
 		return earlyReturn, nil

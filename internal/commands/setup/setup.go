@@ -44,6 +44,7 @@ func setupWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) 
 
 	port := config.GetInt("port")
 	configPath := config.GetString(utils.FlagConfig)
+	logger := zerolog.Nop()
 
 	var initialConfig *redteam.Config
 	if configPath == "" {
@@ -51,18 +52,17 @@ func setupWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) 
 	}
 	if data, err := os.ReadFile(configPath); err == nil {
 		var cfg redteam.Config
-		if err := yaml.Unmarshal(data, &cfg); err != nil {
-			return nil, fmt.Errorf("failed to parse %s: %w", configPath, err)
+		if unmarshalErr := yaml.Unmarshal(data, &cfg); unmarshalErr != nil {
+			return nil, fmt.Errorf("failed to parse %s: %w", configPath, unmarshalErr)
 		}
 		initialConfig = &cfg
-		fmt.Printf("Loaded existing configuration from %s\n", configPath)
+		logger.Info().Str("path", configPath).Msg("loaded existing configuration")
 	} else if config.GetString(utils.FlagConfig) != "" {
 		return nil, fmt.Errorf("failed to read config file %s: %w", configPath, err)
 	}
 
 	httpClient := invocationCtx.GetNetworkAccess().GetHttpClient()
 	apiURL := config.GetString(configuration.API_URL)
-	logger := zerolog.Nop()
 	csClient := controlserver.NewClient(&logger, httpClient, apiURL, "")
 
 	server := web.NewServer(port, configPath, initialConfig, csClient)

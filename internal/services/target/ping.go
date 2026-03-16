@@ -66,36 +66,50 @@ func (c *HTTPClient) Ping(ctx context.Context) PingResult {
 		}
 	}
 
-	rawBody := string(respBytes)
-
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return PingResult{
-			Error:      fmt.Sprintf("HTTP %d", resp.StatusCode),
-			Suggestion: "Authentication failed. Check your headers (e.g. Authorization).",
-			RawBody:    truncate(rawBody, 500),
-		}
+	if result, done := classifyStatusCode(resp.StatusCode, string(respBytes)); done {
+		return result
 	}
-	if resp.StatusCode == http.StatusNotFound {
+
+	return c.parseResponse(respBytes)
+}
+
+func classifyStatusCode(statusCode int, rawBody string) (PingResult, bool) {
+	truncatedBody := truncate(rawBody, 500)
+
+	if statusCode == http.StatusUnauthorized || statusCode == http.StatusForbidden {
+		return PingResult{
+			Error:      fmt.Sprintf("HTTP %d", statusCode),
+			Suggestion: "Authentication failed. Check your headers (e.g. Authorization).",
+			RawBody:    truncatedBody,
+		}, true
+	}
+	if statusCode == http.StatusNotFound {
 		return PingResult{
 			Error:      "HTTP 404",
 			Suggestion: "Endpoint not found. Verify the URL path.",
-			RawBody:    truncate(rawBody, 500),
-		}
+			RawBody:    truncatedBody,
+		}, true
 	}
-	if resp.StatusCode >= 500 {
+	if statusCode >= 500 {
 		return PingResult{
-			Error:      fmt.Sprintf("HTTP %d", resp.StatusCode),
-			Suggestion: fmt.Sprintf("Server error on the target side (status %d).", resp.StatusCode),
-			RawBody:    truncate(rawBody, 500),
-		}
+			Error:      fmt.Sprintf("HTTP %d", statusCode),
+			Suggestion: fmt.Sprintf("Server error on the target side (status %d).", statusCode),
+			RawBody:    truncatedBody,
+		}, true
 	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+	if statusCode < 200 || statusCode >= 300 {
 		return PingResult{
-			Error:      fmt.Sprintf("HTTP %d", resp.StatusCode),
-			Suggestion: fmt.Sprintf("Target returned unexpected status %d.", resp.StatusCode),
-			RawBody:    truncate(rawBody, 500),
-		}
+			Error:      fmt.Sprintf("HTTP %d", statusCode),
+			Suggestion: fmt.Sprintf("Target returned unexpected status %d.", statusCode),
+			RawBody:    truncatedBody,
+		}, true
 	}
+
+	return PingResult{}, false
+}
+
+func (c *HTTPClient) parseResponse(respBytes []byte) PingResult {
+	rawBody := string(respBytes)
 
 	// No selector configured — we can only verify reachability (2xx), not response structure.
 	if c.responseSelector == "" {
@@ -116,33 +130,43 @@ func (c *HTTPClient) Ping(ctx context.Context) PingResult {
 
 	extracted, err := extractResponse(respBytes, c.responseSelector)
 	if err != nil {
-		prettyBody := prettyJSON(respBytes, rawBody)
-		if strings.Contains(err.Error(), "no match found") {
-			var parsed any
-			_ = json.Unmarshal(respBytes, &parsed)
-			paths := extractJMESPaths(parsed, "", 3)
-			suggestion := fmt.Sprintf("Response selector %q didn't match.", c.responseSelector)
-			if len(paths) > 0 {
-				suggestion += fmt.Sprintf(" Available selectors: %s", strings.Join(paths, ", "))
-			}
-			return PingResult{
-				Error:         err.Error(),
-				Suggestion:    suggestion,
-				RawBody:       prettyBody,
-				AvailableKeys: paths,
-			}
-		}
-		return PingResult{
-			Error:      err.Error(),
-			Suggestion: fmt.Sprintf("Response selector %q failed: %s", c.responseSelector, err.Error()),
-			RawBody:    prettyBody,
-		}
+		return c.buildSelectorErrorResult(respBytes, rawBody, err)
 	}
 
 	return PingResult{
 		Success:    true,
 		Response:   extracted,
 		Suggestion: "Target is reachable and responding correctly.",
+	}
+}
+
+func (c *HTTPClient) buildSelectorErrorResult(respBytes []byte, rawBody string, err error) PingResult {
+	prettyBody := prettyJSON(respBytes, rawBody)
+	if strings.Contains(err.Error(), "no match found") {
+		var parsed any
+		if unmarshalErr := json.Unmarshal(respBytes, &parsed); unmarshalErr != nil {
+			return PingResult{
+				Error:      err.Error(),
+				Suggestion: fmt.Sprintf("Response selector %q failed: %s", c.responseSelector, unmarshalErr.Error()),
+				RawBody:    prettyBody,
+			}
+		}
+		paths := extractJMESPaths(parsed, "", 3)
+		suggestion := fmt.Sprintf("Response selector %q didn't match.", c.responseSelector)
+		if len(paths) > 0 {
+			suggestion += fmt.Sprintf(" Available selectors: %s", strings.Join(paths, ", "))
+		}
+		return PingResult{
+			Error:         err.Error(),
+			Suggestion:    suggestion,
+			RawBody:       prettyBody,
+			AvailableKeys: paths,
+		}
+	}
+	return PingResult{
+		Error:      err.Error(),
+		Suggestion: fmt.Sprintf("Response selector %q failed: %s", c.responseSelector, err.Error()),
+		RawBody:    prettyBody,
 	}
 }
 

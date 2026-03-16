@@ -3,6 +3,7 @@ package web
 import (
 	"fmt"
 	"io/fs"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -48,7 +49,10 @@ func (s *Server) Start() error {
 
 	if s.devMode {
 		// In dev mode, proxy all non-API requests to the Vite dev server for hot-reload.
-		viteURL, _ := url.Parse("http://localhost:5173")
+		viteURL, err := url.Parse("http://localhost:5173")
+		if err != nil {
+			return fmt.Errorf("failed to parse vite dev URL: %w", err)
+		}
 		mux.Handle("/", httputil.NewSingleHostReverseProxy(viteURL))
 	} else {
 		sub, err := fs.Sub(DistFS, "dist")
@@ -64,13 +68,18 @@ func (s *Server) Start() error {
 	}
 
 	addr := listener.Addr().String()
-	url := fmt.Sprintf("http://%s", addr)
-	fmt.Printf("Setup wizard running at %s\n", url)
+	wizardURL := fmt.Sprintf("http://%s", addr)
+	log.Printf("Setup wizard running at %s", wizardURL)
 	if !s.devMode {
-		_ = browser.OpenURL(url)
+		if err := browser.OpenURL(wizardURL); err != nil {
+			log.Printf("Could not open browser: %v", err)
+		}
 	}
 
-	server := &http.Server{Handler: mux}
+	server := &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
 
 	go func() {
 		<-s.shutdown

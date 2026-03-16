@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"sort"
 
@@ -11,12 +12,12 @@ import (
 )
 
 type initialConfigResponse struct {
-	ConfigPath string        `json:"config_path,omitempty"`
+	ConfigPath string          `json:"config_path,omitempty"`
 	Config     *redteam.Config `json:"config,omitempty"`
 }
 
 func handleGetInitialConfig(cfg *redteam.Config, configPath string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, _ *http.Request) {
 		if cfg == nil {
 			writeJSON(w, http.StatusOK, initialConfigResponse{})
 			return
@@ -28,12 +29,11 @@ func handleGetInitialConfig(cfg *redteam.Config, configPath string) http.Handler
 	}
 }
 
-
 type pingRequest struct {
-	URL                 string              `json:"url"`
+	URL                 string                 `json:"url"`
 	Headers             []redteam.ConfigHeader `json:"headers"`
-	RequestBodyTemplate string              `json:"request_body_template"`
-	ResponseSelector    string              `json:"response_selector"`
+	RequestBodyTemplate string                 `json:"request_body_template"`
+	ResponseSelector    string                 `json:"response_selector"`
 }
 
 func handlePing() http.HandlerFunc {
@@ -78,5 +78,7 @@ func handleListStrategies(client controlserver.Client) http.HandlerFunc {
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		log.Printf("failed to encode JSON response: %v", err)
+	}
 }
