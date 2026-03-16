@@ -285,7 +285,7 @@ func getInvalidConfigMessage() string {
 
 	target:
 		name: <required, name your target>
-		type: <required, e.g., api or socket_io>
+		type: <optional, default: http>
 		context:
 			purpose: '<optional, intended purpose of the target>'
 			ground_truth:
