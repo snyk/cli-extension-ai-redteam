@@ -36,11 +36,11 @@ generate: ## Run commands described by //go:generate directives within source co
 
 .PHONY: test-wizard
 test-wizard: ## Run setup wizard frontend unit tests
-	cd web && npm install && npx vitest run
+	cd web && npm ci && npx vitest run
 
 .PHONY: build-wizard
 build-wizard: ## Build setup wizard React frontend
-	cd web && npm install && npm run build
+	cd web && npm ci && npm run build
 	rm -rf internal/wizard/dist && cp -r web/dist internal/wizard/dist
 
 .PHONY: dev-wizard
