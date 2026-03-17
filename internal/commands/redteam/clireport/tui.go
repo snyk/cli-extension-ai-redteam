@@ -272,7 +272,7 @@ func (m model) renderFinding(idx int, vuln models.AIVulnerability, l layout) str
 	name := vuln.Definition.Name
 	badge := renderSeverityBadge(vuln.Severity)
 
-	breach := breachedBadge.Render(" BREACHED ")
+	candidateBadge := findingCandidateBadge.Render(" FINDING CANDIDATE ")
 
 	if isSelected {
 		sb.WriteString(fmt.Sprintf("  %s %s  %s  %s  %s  %s",
@@ -281,7 +281,7 @@ func (m model) renderFinding(idx int, vuln models.AIVulnerability, l layout) str
 			failText.Render(numStr),
 			selectedStyle.Render(name),
 			badge,
-			breach,
+			candidateBadge,
 		))
 	} else {
 		sb.WriteString(fmt.Sprintf("    %s  %s  %s  %s  %s",
@@ -289,7 +289,7 @@ func (m model) renderFinding(idx int, vuln models.AIVulnerability, l layout) str
 			failText.Render(numStr),
 			valueStyle.Render(name),
 			badge,
-			breach,
+			candidateBadge,
 		))
 	}
 
@@ -303,9 +303,9 @@ func (m model) renderFinding(idx int, vuln models.AIVulnerability, l layout) str
 
 	// Probe result.
 	_, total := findingPassRate(vuln.Definition.ID, m.data.Summary)
-	breachCount := findingFailCount(vuln.Definition.ID, m.data.Summary)
+	candidateCount := findingFailCount(vuln.Definition.ID, m.data.Summary)
 	sb.WriteString(fmt.Sprintf("      %s\n",
-		failText.Render(fmt.Sprintf("%d of %d probes breached defenses", breachCount, total)),
+		failText.Render(fmt.Sprintf("%d of %d probes are finding candidates", candidateCount, total)),
 	))
 
 	// OWASP reference inline.

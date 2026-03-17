@@ -60,11 +60,6 @@ func RegisterRedTeamWorkflow(e workflow.Engine) error {
 	flagset.String(utils.FlagHTMLFileOutput, "", "Write the HTML report to the specified file path")
 	flagset.Bool(utils.FlagFullConversation, false, "Show all conversation turns in findings (default: first and last only)")
 	flagset.Bool(utils.FlagJSON, false, "Output raw JSON instead of the styled CLI report")
-	flagset.String(utils.FlagConfig, "", "Path to the red team configuration file (default: redteam.yaml)")
-	flagset.String(utils.FlagTargetURL, "", "URL of the target to scan (overrides config file)")
-	flagset.String(utils.FlagRequestBodyTmpl, "", `Request body template with {{prompt}} placeholder (e.g. '{"message": "{{prompt}}"}')`)
-	flagset.String(utils.FlagResponseSelector, "", "Dot-notation path to extract response from target JSON (e.g. response)")
-	flagset.StringArray(utils.FlagHeaders, nil, `Request headers in "Key: Value" format (repeatable)`)
 	flagset.Bool(utils.FlagListGoals, false, "List all available attack goals and exit")
 	flagset.Bool(utils.FlagListStrategies, false, "List all available attack strategies and exit")
 	flagset.String(utils.FlagTenantID, "", "Tenant ID (auto-discovered if not provided)")
@@ -164,7 +159,7 @@ func RunRedTeamWorkflow(
 	if !returnJSON && !returnHTML && normalized != nil {
 		meta := clireport.ScanMeta{
 			TargetURL:  rtConfig.Target.Settings.URL,
-			Goal:       rtConfig.Goal,
+			Goals:      rtConfig.Goals,
 			Strategies: rtConfig.Strategies,
 		}
 		// Save report for later re-display via --report.
@@ -339,7 +334,7 @@ func outputStatus(userInterface ui.UserInterface, logger *zerolog.Logger, status
 	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("#7f8c8d"))
 	msg := fmt.Sprintf("\nScan complete: %d/%d probes | %s | %s",
 		status.Completed, status.TotalChats,
-		red.Render(fmt.Sprintf("%d breached", status.Successful)),
+		red.Render(fmt.Sprintf("%d finding candidates", status.Successful)),
 		green.Render(fmt.Sprintf("%d blocked", status.Failed)))
 	msg += "\n" + dim.Render("Tip: Re-open this report anytime with --report")
 	if err := userInterface.Output(msg); err != nil {

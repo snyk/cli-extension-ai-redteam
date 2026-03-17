@@ -21,7 +21,7 @@ func displayBanner(userInterface ui.UserInterface, cfg *Config) {
 	sb.WriteString(fmt.Sprintf("  %s\n", bannerTitle.Render("SNYK AGENT RED TEAMING")))
 	sb.WriteString("\n")
 	sb.WriteString(fmt.Sprintf("  %s %s\n", bannerLabel.Render("Target:    "), bannerValue.Render(cfg.Target.Settings.URL)))
-	sb.WriteString(fmt.Sprintf("  %s %s\n", bannerLabel.Render("Goal:      "), bannerValue.Render(cfg.Goal)))
+	sb.WriteString(fmt.Sprintf("  %s %s\n", bannerLabel.Render("Goals:     "), bannerValue.Render(strings.Join(cfg.Goals, ", "))))
 	sb.WriteString(fmt.Sprintf("  %s %s\n", bannerLabel.Render("Strategies:"), bannerValue.Render(strings.Join(cfg.Strategies, ", "))))
 	sb.WriteString("\n")
 
