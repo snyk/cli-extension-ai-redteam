@@ -8,7 +8,10 @@ import (
 	"path/filepath"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/auth"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/devtools"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/cli-extension-ai-redteam/pkg/redteam"
 )
@@ -23,11 +26,30 @@ func main() {
 	}
 
 	if !isAuthCommand() && !isAuthenticated() {
-		fmt.Fprintln(os.Stderr, "Error: not authenticated. Run `go run ./cmd/develop auth` or set SNYK_TOKEN.")
+		if os.Getenv("SNYK_API") != "" {
+			fmt.Fprintln(os.Stderr,
+				"Error: not authenticated. Set SNYK_TOKEN "+
+					"(SNYK_API is set, so stored OAuth "+
+					"credentials are ignored).")
+		} else {
+			fmt.Fprintln(os.Stderr,
+				"Error: not authenticated. Run "+
+					"`go run ./cmd/develop auth` "+
+					"or set SNYK_TOKEN.")
+		}
 		os.Exit(1)
 	}
 
-	cmd, err := devtools.Cmd(redteam.Init)
+	cmd, err := devtools.Cmd(func(e workflow.Engine) error {
+		// A stored OAuth token in the shared configstore has an
+		// audience claim that the framework uses as the API URL,
+		// ignoring SNYK_API. Clear it so SNYK_TOKEN is used instead.
+		if apiURL := os.Getenv("SNYK_API"); apiURL != "" {
+			e.GetConfiguration().Set(auth.CONFIG_KEY_OAUTH_TOKEN, "")
+			e.GetConfiguration().Set(configuration.API_URL, apiURL)
+		}
+		return redteam.Init(e)
+	})
 	if err != nil {
 		log.Fatal(err)
 	}

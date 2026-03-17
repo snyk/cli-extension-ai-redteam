@@ -13,6 +13,7 @@ case "${1:-}" in
     local_proxy_port="${3:-9079}"
     export HTTP_PROXY="http://localhost:${local_proxy_port}"
     export SNYK_API="http://localhost:${local_api_port}"
+    export SNYK_TOKEN=local-dev
     export SNYK_CFG_ORG=d67ab91e-2549-4d6f-b3c4-033bb98e8e98
     export SNYK_TENANT_ID=9900b2b0-cea4-472a-a33b-2478c74552d5
     echo "Environment set to local (API :${local_api_port}, proxy :${local_proxy_port})"
@@ -20,6 +21,7 @@ case "${1:-}" in
   pre-prod)
     unset HTTP_PROXY
     export SNYK_API=https://api.dev.snyk.io
+    unset SNYK_TOKEN
     unset SNYK_CFG_ORG
     unset SNYK_TENANT_ID
     echo "Environment set to pre-prod"
