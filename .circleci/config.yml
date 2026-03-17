@@ -53,10 +53,11 @@ jobs:
       - go/mod-download
       - go/save-cache
       - run:
+          name: Install uv
+          command: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - run:
           name: Install tools
-          command: |
-            sudo apt-get update -qq && sudo apt-get install -y -qq python3-venv
-            make install-tools
+          command: make install-tools
       - run:
           name: Run pre-commit hooks
           command: |
