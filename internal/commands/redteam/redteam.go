@@ -121,15 +121,23 @@ func RunRedTeamWorkflow(
 		return nil, fmt.Errorf("failed to resolve tenant: %w", err)
 	}
 
-	userInterface := invocationCtx.GetUserInterface()
-	displayBanner(userInterface, rtConfig)
-
 	targetHTTPClient := &http.Client{Timeout: target.DefaultTimeout}
 	controlServerHTTPClient := invocationCtx.GetNetworkAccess().GetHttpClient()
 	controlServerHTTPClient.Timeout = 60 * time.Second
 	controlServerURL := config.GetString(configuration.API_URL)
 
 	controlServerClient := controlServerFactory(logger, controlServerHTTPClient, controlServerURL, tenantID)
+
+	if rtConfig.NeedsDefaultProfile() {
+		if err := applyDefaultProfile(
+			context.Background(), controlServerClient, rtConfig,
+		); err != nil {
+			return nil, err
+		}
+	}
+
+	userInterface := invocationCtx.GetUserInterface()
+	displayBanner(userInterface, rtConfig)
 	targetClient := targetFactory(
 		targetHTTPClient,
 		rtConfig.Target.Settings.URL,

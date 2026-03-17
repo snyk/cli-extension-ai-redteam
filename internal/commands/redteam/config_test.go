@@ -264,7 +264,7 @@ func writeTestConfig(t *testing.T, content string) string {
 	return f.Name()
 }
 
-func TestLoadAndValidateConfig_AppliesDefaultGoal(t *testing.T) {
+func TestLoadAndValidateConfig_NeedsDefaultProfileWhenNoGoals(t *testing.T) {
 	path := writeTestConfig(t, baseTargetYAML)
 	cfg := configuration.New()
 	cfg.Set(utils.FlagConfig, path)
@@ -272,7 +272,7 @@ func TestLoadAndValidateConfig_AppliesDefaultGoal(t *testing.T) {
 	rtCfg, data, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
 	require.NoError(t, err)
 	assert.Nil(t, data)
-	assert.Equal(t, []string{"system_prompt_extraction"}, rtCfg.Goals)
+	assert.True(t, rtCfg.NeedsDefaultProfile())
 }
 
 func TestLoadAndValidateConfig_AppliesDefaultResponseSelector(t *testing.T) {

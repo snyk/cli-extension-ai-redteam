@@ -1,6 +1,7 @@
 package redteam
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -24,7 +25,7 @@ const (
 	contentTypePlain           = "text/plain"
 )
 
-var defaultGoals = []string{"system_prompt_extraction"}
+const defaultProfileID = "fast"
 
 type Config struct {
 	Target  ConfigTarget                `yaml:"target" json:"target"`
@@ -218,10 +219,32 @@ func validateURL(rawURL, label string) error {
 	return nil
 }
 
-func applyDefaults(cfg *Config) {
-	if len(cfg.Goals) == 0 && len(cfg.Attacks) == 0 {
-		cfg.Goals = defaultGoals
+// NeedsDefaultProfile returns true when no goals or attacks are configured.
+func (cfg *Config) NeedsDefaultProfile() bool {
+	return len(cfg.Goals) == 0 && len(cfg.Attacks) == 0
+}
+
+func applyDefaultProfile(
+	ctx context.Context,
+	client controlserver.Client,
+	cfg *Config,
+) error {
+	profiles, err := client.ListProfiles(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to fetch profiles: %w", err)
 	}
+	for _, p := range profiles {
+		if p.ID == defaultProfileID {
+			cfg.Attacks = p.Entries
+			return nil
+		}
+	}
+	return fmt.Errorf(
+		"default profile %q not found on server", defaultProfileID,
+	)
+}
+
+func applyDefaults(cfg *Config) {
 	if cfg.Target.Type == "" {
 		cfg.Target.Type = defaultTargetType
 	}
