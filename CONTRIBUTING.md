@@ -37,8 +37,9 @@ go run cmd/develop/main.go auth
 Set up your environment using the helper script:
 
 ```bash
-source scripts/env.sh local     # local minired via tilt
-source scripts/env.sh pre-prod  # pre-prod backend
+source scripts/env.sh local              # local minired via tilt (default ports)
+source scripts/env.sh local 8186 9180    # custom ports (e.g. from `make serve-new`)
+source scripts/env.sh pre-prod           # pre-prod backend
 ```
 
 Then run:
