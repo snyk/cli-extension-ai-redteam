@@ -55,6 +55,8 @@ func RegisterRedTeamWorkflow(e workflow.Engine) error {
 	flagset.String(utils.FlagHTMLFileOutput, "", "Write the HTML report to the specified file path")
 	flagset.Bool(utils.FlagListGoals, false, "List all available attack goals and exit")
 	flagset.Bool(utils.FlagListStrategies, false, "List all available attack strategies and exit")
+	flagset.Bool(utils.FlagListProfiles, false, "List all available attack profiles and exit")
+	flagset.StringArray(utils.FlagAttack, nil, `Attack in "goal:strategy" format (repeatable, overrides goals)`)
 	flagset.String(utils.FlagTenantID, "", "Tenant ID (auto-discovered if not provided)")
 	flagset.String(utils.FlagPurpose, "", "Intended purpose of the target (ground truth for the judge)")
 	flagset.String(utils.FlagSystemPrompt, "", "Target system prompt (ground truth for prompt-extraction scoring)")
@@ -89,9 +91,10 @@ func RunRedTeamWorkflow(
 
 	listGoals := config.GetBool(utils.FlagListGoals)
 	listStrategies := config.GetBool(utils.FlagListStrategies)
-	if listGoals || listStrategies {
+	listProfiles := config.GetBool(utils.FlagListProfiles)
+	if listGoals || listStrategies || listProfiles {
 		httpClient := invocationCtx.GetNetworkAccess().GetHttpClient()
-		return handleListFlags(config, controlServerFactory, logger, httpClient, listGoals, listStrategies)
+		return handleListFlags(config, controlServerFactory, logger, httpClient, listGoals, listStrategies, listProfiles)
 	}
 
 	rtConfig, configData, err := LoadAndValidateConfig(logger, config)
@@ -100,6 +103,10 @@ func RunRedTeamWorkflow(
 	}
 	if err != nil {
 		return nil, err
+	}
+
+	if attacks := parseAttackFlags(config); len(attacks) > 0 {
+		rtConfig.Attacks = attacks
 	}
 
 	tenantID, err := helpers.GetTenantID(invocationCtx, config.GetString(utils.FlagTenantID))
@@ -141,7 +148,7 @@ func handleListFlags(
 	controlServerFactory ControlServerFactory,
 	logger *zerolog.Logger,
 	httpClient *http.Client,
-	listGoals, listStrategies bool,
+	listGoals, listStrategies, listProfiles bool,
 ) ([]workflow.Data, error) {
 	ctx := context.Background()
 	snykAPIURL := config.GetString(configuration.API_URL)
@@ -169,9 +176,37 @@ func handleListFlags(
 		lines = append(lines, "Available strategies:", "")
 		lines = appendEnumTable(lines, strategies)
 	}
+	if listProfiles {
+		if len(lines) > 0 {
+			lines = append(lines, "")
+		}
+		profiles, err := controlServerClient.ListProfiles(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list profiles: %w", err)
+		}
+		lines = append(lines, "Available profiles:", "")
+		lines = appendProfileTable(lines, profiles)
+	}
 
 	output := strings.Join(lines, "\n") + "\n"
 	return []workflow.Data{newWorkflowData(contentTypePlain, []byte(output))}, nil
+}
+
+func parseAttackFlags(config configuration.Configuration) []controlserver.AttackEntry {
+	raw := config.Get(utils.FlagAttack)
+	vals, ok := raw.([]string)
+	if !ok || len(vals) == 0 {
+		return nil
+	}
+	attacks := make([]controlserver.AttackEntry, 0, len(vals))
+	for _, v := range vals {
+		goal, strategy, _ := strings.Cut(v, ":")
+		attacks = append(attacks, controlserver.AttackEntry{
+			Goal:     goal,
+			Strategy: strategy,
+		})
+	}
+	return attacks
 }
 
 func appendEnumTable(lines []string, entries []controlserver.EnumEntry) []string {
@@ -186,6 +221,27 @@ func appendEnumTable(lines []string, entries []controlserver.EnumEntry) []string
 	lines = append(lines, fmt.Sprintf("  %-*s  %s", nameWidth, "NAME", "DESCRIPTION"))
 	for _, e := range entries {
 		lines = append(lines, fmt.Sprintf("  %-*s  %s", nameWidth, e.Value, e.Description))
+	}
+	return lines
+}
+
+func appendProfileTable(lines []string, profiles []controlserver.ProfileResponse) []string {
+	idWidth := len("ID")
+	nameWidth := len("NAME")
+	for _, p := range profiles {
+		if len(p.ID) > idWidth {
+			idWidth = len(p.ID)
+		}
+		if len(p.Name) > nameWidth {
+			nameWidth = len(p.Name)
+		}
+	}
+	idWidth += 2
+	nameWidth += 2
+
+	lines = append(lines, fmt.Sprintf("  %-*s  %-*s  %s", idWidth, "ID", nameWidth, "NAME", "ATTACKS"))
+	for _, p := range profiles {
+		lines = append(lines, fmt.Sprintf("  %-*s  %-*s  %d", idWidth, p.ID, nameWidth, p.Name, len(p.Entries)))
 	}
 	return lines
 }
@@ -208,8 +264,8 @@ func runClientDrivenScan(
 
 	progressBar := userInterface.NewProgressBar()
 	progressBar.SetTitle(fmt.Sprintf("Scanning %s...", rtConfig.Target.Name))
-	_ = progressBar.UpdateProgress(ui.InfiniteProgress) //nolint:errcheck // best-effort progress
-	defer func() { _ = progressBar.Clear() }()          //nolint:errcheck // best-effort cleanup
+	_ = progressBar.UpdateProgress(ui.InfiniteProgress)
+	defer func() { _ = progressBar.Clear() }()
 
 	var responses []controlserver.ChatResponse
 	for {
@@ -241,7 +297,7 @@ func runClientDrivenScan(
 	}
 
 	progressBar.SetTitle("Scan completed")
-	_ = progressBar.UpdateProgress(1.0) //nolint:errcheck // best-effort progress
+	_ = progressBar.UpdateProgress(1.0)
 
 	status, statusErr := csClient.GetStatus(ctx, scanID)
 	if statusErr != nil {
@@ -273,7 +329,7 @@ func updateProgress(
 	}
 	if status.TotalChats > 0 {
 		progressBar.SetTitle(fmt.Sprintf("Scanning (%d/%d)", status.Completed, status.TotalChats))
-		_ = progressBar.UpdateProgress(float64(status.Completed) / float64(status.TotalChats)) //nolint:errcheck // best-effort
+		_ = progressBar.UpdateProgress(float64(status.Completed) / float64(status.TotalChats))
 	}
 }
 

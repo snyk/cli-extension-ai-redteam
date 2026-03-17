@@ -24,16 +24,13 @@ const (
 	contentTypePlain           = "text/plain"
 )
 
-var (
-	defaultGoals      = []string{"system_prompt_extraction"}
-	defaultStrategies = []string{"directly_asking"}
-)
+var defaultGoals = []string{"system_prompt_extraction"}
 
 type Config struct {
-	Target           ConfigTarget `yaml:"target" json:"target"`
-	ControlServerURL string       `yaml:"control_server_url" json:"control_server_url,omitempty"`
-	Goals            []string     `yaml:"goals" json:"goals"`
-	Strategies       []string     `yaml:"strategies" json:"strategies"`
+	Target           ConfigTarget                `yaml:"target" json:"target"`
+	ControlServerURL string                      `yaml:"control_server_url" json:"control_server_url,omitempty"`
+	Goals            []string                    `yaml:"goals" json:"goals"`
+	Attacks          []controlserver.AttackEntry `yaml:"attacks" json:"attacks,omitempty"`
 }
 
 type ConfigTarget struct {
@@ -163,9 +160,15 @@ func applyFlagOverrides(config configuration.Configuration, rtConfig *Config) {
 
 // ToCreateScanRequest builds the control server CreateScan request from config.
 func (cfg *Config) ToCreateScanRequest() *controlserver.CreateScanRequest {
+	attacks := cfg.Attacks
+	if len(attacks) == 0 {
+		attacks = make([]controlserver.AttackEntry, 0, len(cfg.Goals))
+		for _, g := range cfg.Goals {
+			attacks = append(attacks, controlserver.AttackEntry{Goal: g})
+		}
+	}
 	req := &controlserver.CreateScanRequest{
-		Goals:       cfg.Goals,
-		Strategies:  cfg.Strategies,
+		Attacks:     attacks,
 		Purpose:     cfg.Target.Context.Purpose,
 		GroundTruth: buildGroundTruthFromConfig(&cfg.Target.Context.GroundTruth),
 		TargetURL:   cfg.Target.Settings.URL,
@@ -219,11 +222,8 @@ func validateURL(rawURL, label string) error {
 }
 
 func applyDefaults(cfg *Config) {
-	if len(cfg.Goals) == 0 {
+	if len(cfg.Goals) == 0 && len(cfg.Attacks) == 0 {
 		cfg.Goals = defaultGoals
-	}
-	if len(cfg.Strategies) == 0 {
-		cfg.Strategies = defaultStrategies
 	}
 	if cfg.Target.Type == "" {
 		cfg.Target.Type = defaultTargetType
@@ -301,9 +301,10 @@ func getInvalidConfigMessage() string {
 	control_server_url: '<optional, control server URL>'
 	goals:
 		- '<optional, default: system_prompt_extraction>'
-	strategies:
-		- directly_asking
-	
+	attacks:
+		- goal: '<optional, goal name>'
+		  strategy: '<optional, strategy name>'
+
 	For more configuration options, refer to the documentation.
 
 	`

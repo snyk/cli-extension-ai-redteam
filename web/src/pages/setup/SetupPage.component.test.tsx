@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, cleanup, screen, fireEvent, waitFor } from "@testing-library/react";
 import SetupPage from "./SetupPage";
 
-// GoalStep and StrategiesStep fetch on mount — stub fetch globally
+// GoalStep fetches on mount — stub fetch globally
 beforeEach(() => {
   vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     const url = typeof input === "string" ? input : (input as Request).url;
@@ -17,13 +17,10 @@ beforeEach(() => {
       } as Response);
     }
 
-    if (url === "/api/strategies") {
+    if (url === "/api/profiles") {
       return Promise.resolve({
         ok: true,
-        json: () =>
-          Promise.resolve([
-            { value: "directly_asking", description: "Ask directly", display_order: 1 },
-          ]),
+        json: () => Promise.resolve([]),
       } as Response);
     }
 
@@ -99,8 +96,8 @@ describe("SetupPage", () => {
     expect(screen.getByRole("button", { name: /download configuration/i })).toBeInTheDocument();
   });
 
-  it("renders Review Configuration text on strategies step (last before review)", () => {
-    render(<SetupPage {...defaultProps} activeStep="strategies" />);
+  it("renders Review Configuration text on goal step (last before review)", () => {
+    render(<SetupPage {...defaultProps} activeStep="goal" />);
     expect(screen.getByRole("button", { name: /review configuration/i })).toBeInTheDocument();
   });
 
@@ -129,13 +126,12 @@ describe("SetupPage", () => {
                   settings: { url: "https://loaded.com" },
                 },
                 goals: ["system_prompt_extraction"],
-                strategies: ["directly_asking"],
               },
             }),
         } as Response);
       }
 
-      if (url === "/api/goals" || url === "/api/strategies") {
+      if (url === "/api/goals" || url === "/api/profiles") {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve([]),

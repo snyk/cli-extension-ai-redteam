@@ -48,9 +48,14 @@ export function configToYaml(config: Config): string {
     lines.push(`  - ${g}`);
   }
 
-  lines.push("strategies:");
-  for (const s of config.strategies) {
-    lines.push(`  - ${s}`);
+  if (config.attacks && config.attacks.length > 0) {
+    lines.push("attacks:");
+    for (const a of config.attacks) {
+      lines.push(`  - goal: ${a.goal}`);
+      if (a.strategy) {
+        lines.push(`    strategy: ${a.strategy}`);
+      }
+    }
   }
 
   return lines.join("\n") + "\n";

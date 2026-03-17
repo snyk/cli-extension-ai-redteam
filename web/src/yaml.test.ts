@@ -17,7 +17,7 @@ function minimalConfig(overrides?: Partial<Config>): Config {
       },
     },
     goals: overrides?.goals ?? ["harmful_content"],
-    strategies: overrides?.strategies ?? ["basic"],
+    attacks: "attacks" in (overrides ?? {}) ? overrides!.attacks : [{ goal: "harmful_content" }],
   };
 }
 
@@ -30,9 +30,34 @@ describe("configToYaml", () => {
     expect(yaml).toContain("  settings:");
     expect(yaml).toContain("goals:");
     expect(yaml).toContain("  - harmful_content");
-    expect(yaml).toContain("strategies:");
-    expect(yaml).toContain("  - basic");
+    expect(yaml).toContain("attacks:");
+    expect(yaml).toContain("  - goal: harmful_content");
     expect(yaml.endsWith("\n")).toBe(true);
+  });
+
+  it("renders attacks with strategy when provided", () => {
+    const yaml = configToYaml(
+      minimalConfig({
+        attacks: [
+          { goal: "system_prompt_extraction", strategy: "crescendo" },
+          { goal: "pii_extraction" },
+        ],
+      }),
+    );
+    expect(yaml).toContain("attacks:");
+    expect(yaml).toContain("  - goal: system_prompt_extraction");
+    expect(yaml).toContain("    strategy: crescendo");
+    expect(yaml).toContain("  - goal: pii_extraction");
+  });
+
+  it("omits attacks section when attacks is empty", () => {
+    const yaml = configToYaml(minimalConfig({ attacks: [] }));
+    expect(yaml).not.toContain("attacks:");
+  });
+
+  it("omits attacks section when attacks is undefined", () => {
+    const yaml = configToYaml(minimalConfig({ attacks: undefined }));
+    expect(yaml).not.toContain("attacks:");
   });
 
   it("omits context block when purpose is empty and no ground_truth", () => {

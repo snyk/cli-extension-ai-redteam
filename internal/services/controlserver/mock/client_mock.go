@@ -16,6 +16,7 @@ type MockClient struct {
 	Report        json.RawMessage
 	Goals         []controlserver.EnumEntry
 	Strategies    []controlserver.EnumEntry
+	Profiles      []controlserver.ProfileResponse
 	CreateErr     error
 	NextErr       error
 	StatusErr     error
@@ -23,6 +24,7 @@ type MockClient struct {
 	ReportErr     error
 	GoalsErr      error
 	StrategiesErr error
+	ProfilesErr   error
 
 	// Capture CreateScan arguments for tests (set when CreateScan is called).
 	CreateScanRequest *controlserver.CreateScanRequest
@@ -83,4 +85,11 @@ func (m *MockClient) ListStrategies(_ context.Context) ([]controlserver.EnumEntr
 		return nil, m.StrategiesErr
 	}
 	return m.Strategies, nil
+}
+
+func (m *MockClient) ListProfiles(_ context.Context) ([]controlserver.ProfileResponse, error) {
+	if m.ProfilesErr != nil {
+		return nil, m.ProfilesErr
+	}
+	return m.Profiles, nil
 }

@@ -27,8 +27,13 @@ export interface ConfigTarget {
   settings: ConfigSettings;
 }
 
+export interface Attack {
+  goal: string;
+  strategy?: string;
+}
+
 export interface Config {
   target: ConfigTarget;
   goals: string[];
-  strategies: string[];
+  attacks?: Attack[];
 }

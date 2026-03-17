@@ -48,7 +48,6 @@ describe("buildConfig", () => {
         },
       },
       goals: ["system_prompt_extraction"],
-      strategies: ["directly_asking"],
     };
 
     const config = buildConfig(values);
@@ -58,13 +57,13 @@ describe("buildConfig", () => {
     expect(config.target.settings.url).toBe("https://api.example.com");
     expect(config.target.settings.headers).toHaveLength(1);
     expect(config.goals).toEqual(["system_prompt_extraction"]);
-    expect(config.strategies).toEqual(["directly_asking"]);
+    expect(config.attacks).toEqual([{ goal: "system_prompt_extraction" }]);
   });
 
-  it("applies default goals and strategies when empty", () => {
+  it("applies default goals and attacks when empty", () => {
     const config = buildConfig({ target: { name: "t", type: "http", settings: {} } });
     expect(config.goals).toEqual(["system_prompt_extraction"]);
-    expect(config.strategies).toEqual(["directly_asking"]);
+    expect(config.attacks).toEqual([{ goal: "system_prompt_extraction" }]);
   });
 
   it("filters out incomplete headers", () => {

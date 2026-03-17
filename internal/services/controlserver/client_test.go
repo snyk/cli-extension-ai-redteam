@@ -33,8 +33,8 @@ func TestCreateScan_Happy(t *testing.T) {
 		var req controlserver.CreateScanRequest
 		body, _ := io.ReadAll(r.Body)
 		require.NoError(t, json.Unmarshal(body, &req))
-		assert.Equal(t, []string{"system_prompt_extraction"}, req.Goals)
-		assert.Equal(t, []string{"directly_asking"}, req.Strategies)
+		require.Len(t, req.Attacks, 1)
+		assert.Equal(t, "system_prompt_extraction", req.Attacks[0].Goal)
 
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(controlserver.CreateScanResponse{ScanID: testScanID})
@@ -42,7 +42,7 @@ func TestCreateScan_Happy(t *testing.T) {
 	defer server.Close()
 
 	client := newTestClient(t, server.URL)
-	req := &controlserver.CreateScanRequest{Goals: []string{"system_prompt_extraction"}, Strategies: []string{"directly_asking"}}
+	req := &controlserver.CreateScanRequest{Attacks: []controlserver.AttackEntry{{Goal: "system_prompt_extraction"}}}
 	scanID, err := client.CreateScan(t.Context(), req)
 	require.NoError(t, err)
 	assert.Equal(t, testScanID, scanID)
@@ -61,8 +61,8 @@ func TestCreateScan_WithGroundTruth(t *testing.T) {
 		var req controlserver.CreateScanRequest
 		body, _ := io.ReadAll(r.Body)
 		require.NoError(t, json.Unmarshal(body, &req))
-		assert.Equal(t, []string{"system_prompt_extraction"}, req.Goals)
-		assert.Equal(t, []string{"directly_asking"}, req.Strategies)
+		require.Len(t, req.Attacks, 1)
+		assert.Equal(t, "system_prompt_extraction", req.Attacks[0].Goal)
 		assert.Equal(t, purpose, req.Purpose)
 		require.NotNil(t, req.GroundTruth)
 		assert.Equal(t, systemPrompt, req.GroundTruth.SystemPrompt)
@@ -75,9 +75,8 @@ func TestCreateScan_WithGroundTruth(t *testing.T) {
 
 	client := newTestClient(t, server.URL)
 	req := &controlserver.CreateScanRequest{
-		Goals:      []string{"system_prompt_extraction"},
-		Strategies: []string{"directly_asking"},
-		Purpose:    purpose,
+		Attacks: []controlserver.AttackEntry{{Goal: "system_prompt_extraction"}},
+		Purpose: purpose,
 		GroundTruth: &controlserver.GroundTruth{
 			SystemPrompt: systemPrompt,
 			Tools:        toolsStr,
@@ -96,7 +95,10 @@ func TestCreateScan_ServerError(t *testing.T) {
 	defer server.Close()
 
 	client := newTestClient(t, server.URL)
-	_, err := client.CreateScan(t.Context(), &controlserver.CreateScanRequest{Goals: []string{"test"}})
+	req := &controlserver.CreateScanRequest{
+		Attacks: []controlserver.AttackEntry{{Goal: "test"}},
+	}
+	_, err := client.CreateScan(t.Context(), req)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "400")
 }
@@ -323,6 +325,49 @@ func TestListEnums_ServerError(t *testing.T) {
 			assert.Contains(t, err.Error(), tt.wantStatus)
 		})
 	}
+}
+
+func TestListProfiles_Happy(t *testing.T) {
+	profiles := []controlserver.ProfileResponse{
+		{
+			ID:          "prof-1",
+			Name:        "OWASP LLM Top 10",
+			Description: "Tests based on the OWASP LLM Top 10",
+			Entries: []controlserver.AttackEntry{
+				{Goal: "system_prompt_extraction", Strategy: "directly_asking"},
+				{Goal: "harmful_content"},
+			},
+		},
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "/hidden/profiles", r.URL.Path)
+		assert.Contains(t, r.URL.RawQuery, "version="+controlserver.APIVersion)
+		json.NewEncoder(w).Encode(profiles)
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	results, err := client.ListProfiles(t.Context())
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, "prof-1", results[0].ID)
+	assert.Equal(t, "OWASP LLM Top 10", results[0].Name)
+	assert.Len(t, results[0].Entries, 2)
+}
+
+func TestListProfiles_ServerError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`error`))
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	_, err := client.ListProfiles(t.Context())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "500")
 }
 
 func TestGetResult_NotFound(t *testing.T) {
