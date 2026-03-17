@@ -183,7 +183,7 @@ func RunRedTeamWorkflow(
 		if parseErr == nil && reportData != nil {
 			meta := clireport.ScanMeta{
 				TargetURL:        rtConfig.Target.Settings.URL,
-				Goal:             strings.Join(rtConfig.UniqueGoals(), ", "),
+				Goals:            rtConfig.UniqueGoals(),
 				FullConversation: config.GetBool(utils.FlagFullConversation),
 			}
 			if err := clireport.RunInteractive(reportData, meta); err != nil {
@@ -415,7 +415,7 @@ func outputStatus(userInterface ui.UserInterface, logger *zerolog.Logger, status
 	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("#7f8c8d"))
 	msg := fmt.Sprintf("\nScan complete: %d/%d probes | %s | %s",
 		status.Completed, status.TotalChats,
-		red.Render(fmt.Sprintf("%d breached", status.Successful)),
+		red.Render(fmt.Sprintf("%d finding candidates", status.Successful)),
 		green.Render(fmt.Sprintf("%d blocked", status.Failed)))
 	msg += "\n" + dim.Render("Tip: Re-open this report anytime with --report")
 	if err := userInterface.Output(msg); err != nil {

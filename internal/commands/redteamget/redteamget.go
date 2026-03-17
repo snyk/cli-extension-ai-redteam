@@ -130,7 +130,7 @@ func handleGetScanResults(
 	if !returnJSON && !returnHTML {
 		report := clireport.Render(normalized, clireport.ScanMeta{
 			TargetURL:  "",
-			Goal:       status.Goal,
+			Goals:      status.Goals,
 			Strategies: []string{},
 		})
 		return []workflow.Data{workflow.NewData(getWorkflowType, "text/plain", []byte(report))}, nil

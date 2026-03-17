@@ -26,7 +26,7 @@ type layout struct {
 	strategy   int
 	severity   int
 	blocked    int
-	breached   int
+	findingCandidate int
 	tableWidth int
 	chatBox    int
 }
@@ -54,21 +54,21 @@ func newLayout(termWidth int) layout {
 		available = 40
 	}
 
-	// Proportions: strategy 45%, severity 15%, blocked 20%, breached 20%
+	// Proportions: strategy 45%, severity 15%, blocked 20%, finding candidate 20%
 	strategy := available * 45 / 100
 	severity := available * 15 / 100
 	blocked := available * 20 / 100
-	breached := available - strategy - severity - blocked
+	findingCandidate := available - strategy - severity - blocked
 
-	tw := strategy + severity + blocked + breached + (3 * colGap)
+	tw := strategy + severity + blocked + findingCandidate + (3 * colGap)
 
 	return layout{
-		termWidth:  termWidth,
-		content:    content,
-		strategy:   strategy,
-		severity:   severity,
-		blocked:    blocked,
-		breached:   breached,
+		termWidth:        termWidth,
+		content:          content,
+		strategy:         strategy,
+		severity:         severity,
+		blocked:          blocked,
+		findingCandidate: findingCandidate,
 		tableWidth: tw,
 		chatBox:    chatBox,
 	}
@@ -77,7 +77,7 @@ func newLayout(termWidth int) layout {
 // ScanMeta holds metadata about the scan for display in the report header.
 type ScanMeta struct {
 	TargetURL        string
-	Goal             string
+	Goals            []string
 	Strategies       []string
 	FullConversation bool
 }
@@ -165,7 +165,7 @@ var (
 			Foreground(colWhite).
 			Background(colLowSev)
 
-	breachedBadge = lipgloss.NewStyle().
+	findingCandidateBadge = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(colDarkGray).
 			Background(colRed)
@@ -214,10 +214,10 @@ var (
 func renderBanner(data *models.GetAIVulnerabilitiesResponseData) string {
 	var sb strings.Builder
 
-	breached, blocked, totalProbes := countOutcomes(data)
+	findingCandidates, blocked, totalProbes := countOutcomes(data)
 
 	sb.WriteString("\n")
-	if breached == 0 {
+	if findingCandidates == 0 {
 		banner := fmt.Sprintf(" \u2713 All %d probes blocked \u2014 no vulnerabilities found ", totalProbes)
 		sb.WriteString("  " + bannerCleanStyle.Render(banner))
 	} else {
@@ -236,15 +236,15 @@ func renderBanner(data *models.GetAIVulnerabilitiesResponseData) string {
 			parts = append(parts, fmt.Sprintf("%d LOW", n))
 		}
 
-		noun := "BREACH CONFIRMED"
-		if breached > 1 {
-			noun = "BREACHES CONFIRMED"
+		noun := "FINDING CANDIDATE"
+		if findingCandidates > 1 {
+			noun = "FINDING CANDIDATES"
 		}
 		banner := fmt.Sprintf(" \u26a0 %d %s   %d blocked   (%d probes) ",
-			breached, noun, blocked, totalProbes)
+			findingCandidates, noun, blocked, totalProbes)
 		if len(parts) > 0 {
 			banner = fmt.Sprintf(" \u26a0 %d %s: %s   %d blocked   (%d probes) ",
-				breached, noun, strings.Join(parts, ", "), blocked, totalProbes)
+				findingCandidates, noun, strings.Join(parts, ", "), blocked, totalProbes)
 		}
 		sb.WriteString("  " + bannerStyle.Render(banner))
 	}
@@ -253,16 +253,16 @@ func renderBanner(data *models.GetAIVulnerabilitiesResponseData) string {
 	return sb.String()
 }
 
-func countOutcomes(data *models.GetAIVulnerabilitiesResponseData) (breached, blocked, total int) {
+func countOutcomes(data *models.GetAIVulnerabilitiesResponseData) (findingCandidates, blocked, total int) {
 	if data.Summary == nil {
 		return 0, 0, 0
 	}
 	for _, v := range data.Summary.Vulnerabilities {
 		total += v.TotalChats
-		breached += v.Successful
+		findingCandidates += v.Successful
 		blocked += v.TotalChats - v.Successful
 	}
-	return breached, blocked, total
+	return findingCandidates, blocked, total
 }
 
 // --- header ---
@@ -273,7 +273,7 @@ func renderHeader(meta ScanMeta) string {
 	sb.WriteString("  " + headingStyle.Render("Scan Metadata"))
 	sb.WriteString("\n\n")
 	sb.WriteString("    " + labelStyle.Render("Target:     ") + valueStyle.Render(meta.TargetURL) + "\n")
-	sb.WriteString("    " + labelStyle.Render("Goal:       ") + valueStyle.Render(meta.Goal) + "\n")
+	sb.WriteString("    " + labelStyle.Render("Goals:      ") + valueStyle.Render(strings.Join(meta.Goals, ", ")) + "\n")
 	sb.WriteString("    " + labelStyle.Render("Strategies: ") + valueStyle.Render(strings.Join(meta.Strategies, ", ")) + "\n")
 	sb.WriteString("\n")
 
@@ -330,7 +330,7 @@ func renderStrategyTable(summary *models.AIScanSummary, l layout) string {
 		gap,
 		padRight(dimStyle.Render("BLOCKED"), l.blocked),
 		gap,
-		padRight(dimStyle.Render("BREACHED"), l.breached),
+		padRight(dimStyle.Render("FINDING CANDIDATE"), l.findingCandidate),
 	))
 	sb.WriteString("    " + dash + "\n")
 
@@ -338,21 +338,21 @@ func renderStrategyTable(summary *models.AIScanSummary, l layout) string {
 		leaf := truncateCol(leafStrategy(v.EngineTag), l.strategy)
 		sev := padRight(renderSeverityText(v.Severity), l.severity)
 		blocked := v.TotalChats - v.Successful
-		breached := v.Successful
+		candidates := v.Successful
 
 		blockedStr := padRight(passText.Render(fmt.Sprintf("%d", blocked)), l.blocked)
-		var breachedStr string
-		if breached > 0 {
-			breachedStr = padRight(failText.Render(fmt.Sprintf("\u25cf %d", breached)), l.breached)
+		var candidateStr string
+		if candidates > 0 {
+			candidateStr = padRight(failText.Render(fmt.Sprintf("\u25cf %d", candidates)), l.findingCandidate)
 		} else {
-			breachedStr = padRight(dimStyle.Render("0"), l.breached)
+			candidateStr = padRight(dimStyle.Render("0"), l.findingCandidate)
 		}
 
 		sb.WriteString(fmt.Sprintf("    %s%s%s%s%s%s%s\n",
 			padRight(valueStyle.Render(leaf), l.strategy),
 			gap, sev,
 			gap, blockedStr,
-			gap, breachedStr,
+			gap, candidateStr,
 		))
 		sb.WriteString(fmt.Sprintf("      %s\n", dimStyle.Render(v.EngineTag)))
 	}
@@ -391,13 +391,13 @@ func stripAnsi(s string) string {
 	return out.String()
 }
 
-func probeResult(breached, total int) string {
-	if breached > 0 {
+func probeResult(findingCandidates, total int) string {
+	if findingCandidates > 0 {
 		noun := "vulnerability confirmed"
-		if breached > 1 {
+		if findingCandidates > 1 {
 			noun = "vulnerabilities confirmed"
 		}
-		label := fmt.Sprintf("%d %s", breached, noun)
+		label := fmt.Sprintf("%d %s", findingCandidates, noun)
 		return failText.Render(label)
 	}
 	label := fmt.Sprintf("%d of %d probes blocked", total, total)
@@ -514,20 +514,20 @@ func renderFindings(results []models.AIVulnerability, summary *models.AIScanSumm
 	for i, vuln := range results {
 		sb.WriteString("\n")
 
-		// Finding header with severity + breached badges inline.
+		// Finding header with severity + finding candidate badges inline.
 		sb.WriteString(fmt.Sprintf("    %s  %s  %s  %s\n",
 			failText.Render(fmt.Sprintf("\u25bc #%d", i+1)),
 			valueStyle.Render(vuln.Definition.Name),
 			renderSeverityBadge(vuln.Severity),
-			breachedBadge.Render(" BREACHED "),
+			findingCandidateBadge.Render(" FINDING CANDIDATE "),
 		))
 		sb.WriteString(fmt.Sprintf("    %s\n", dimStyle.Render(vuln.Definition.Description)))
 
 		// Probe result.
 		_, total := findingPassRate(vuln.Definition.ID, summary)
-		breachCount := findingFailCount(vuln.Definition.ID, summary)
+		candidateCount := findingFailCount(vuln.Definition.ID, summary)
 		sb.WriteString(fmt.Sprintf("    %s\n",
-			failText.Render(fmt.Sprintf("%d of %d probes breached defenses", breachCount, total)),
+			failText.Render(fmt.Sprintf("%d of %d probes are finding candidates", candidateCount, total)),
 		))
 
 		// OWASP reference inline.
@@ -569,7 +569,7 @@ func renderEvidenceBlock(sb *strings.Builder, reason string, l layout) {
 		truncated = true
 	}
 
-	header := failText.Render("Extracted content (breach confirmed)")
+	header := failText.Render("Extracted content (finding candidate)")
 	content := fmt.Sprintf("%s\n%s", header, dimStyle.Render(evidence))
 	if truncated {
 		content += fmt.Sprintf("\n%s",
