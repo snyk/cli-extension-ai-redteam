@@ -61,9 +61,6 @@ linters:
       - path: _test\.go
         linters:
           - errcheck
-      - path: ^cmd/
-        linters:
-          - forbidigo
 
 linters-settings:
   errcheck:

@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"sort"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/target"
@@ -77,6 +79,7 @@ func handleListStrategies(client controlserver.Client) http.HandlerFunc {
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	//nolint:errcheck // response already committed, nothing to do on encode failure
-	json.NewEncoder(w).Encode(v)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		log.Debug().Err(err).Msg("failed to encode JSON response")
+	}
 }

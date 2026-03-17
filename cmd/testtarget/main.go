@@ -34,6 +34,6 @@ func main() {
 	})
 
 	addr := "127.0.0.1:" + port
-	log.Printf("Test target listening on http://%s", addr)
-	log.Fatal(http.ListenAndServe(addr, nil)) //nolint:gosec // test helper, no need for timeouts
+	log.Printf("Test target listening on http://%s", addr) //nolint:forbidigo // standalone test helper
+	log.Fatal(http.ListenAndServe(addr, nil))              //nolint:forbidigo,gosec // standalone test helper, no need for timeouts
 }
