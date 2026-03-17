@@ -323,14 +323,14 @@ func renderStrategyTable(summary *models.AIScanSummary, l layout) string {
 
 	sb.WriteString("    " + dash + "\n")
 
-	sb.WriteString(fmt.Sprintf("    %-*s%s%-*s%s%-*s%s%-*s\n",
-		l.strategy, dimStyle.Render("STRATEGY"),
+	sb.WriteString(fmt.Sprintf("    %s%s%s%s%s%s%s\n",
+		padRight(dimStyle.Render("STRATEGY"), l.strategy),
 		gap,
-		l.severity, dimStyle.Render("SEVERITY"),
+		padRight(dimStyle.Render("SEVERITY"), l.severity),
 		gap,
-		l.blocked, dimStyle.Render("BLOCKED"),
+		padRight(dimStyle.Render("BLOCKED"), l.blocked),
 		gap,
-		l.breached, dimStyle.Render("BREACHED"),
+		padRight(dimStyle.Render("BREACHED"), l.breached),
 	))
 	sb.WriteString("    " + dash + "\n")
 
@@ -348,8 +348,8 @@ func renderStrategyTable(summary *models.AIScanSummary, l layout) string {
 			breachedStr = padRight(dimStyle.Render("0"), l.breached)
 		}
 
-		sb.WriteString(fmt.Sprintf("    %-*s%s%s%s%s%s%s\n",
-			l.strategy, valueStyle.Render(leaf),
+		sb.WriteString(fmt.Sprintf("    %s%s%s%s%s%s%s\n",
+			padRight(valueStyle.Render(leaf), l.strategy),
 			gap, sev,
 			gap, blockedStr,
 			gap, breachedStr,
