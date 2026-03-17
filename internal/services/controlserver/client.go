@@ -18,6 +18,7 @@ type Client interface {
 	NextChats(ctx context.Context, scanID string, responses []ChatResponse) ([]ChatPrompt, error)
 	GetStatus(ctx context.Context, scanID string) (*ScanStatus, error)
 	GetResult(ctx context.Context, scanID string) (*ScanResult, error)
+	GetReport(ctx context.Context, scanID string) (json.RawMessage, error)
 	ListGoals(ctx context.Context) ([]EnumEntry, error)
 	ListStrategies(ctx context.Context) ([]EnumEntry, error)
 }
@@ -186,6 +187,34 @@ func (c *ClientImpl) GetResult(ctx context.Context, scanID string) (*ScanResult,
 	}
 
 	return &result, nil
+}
+
+func (c *ClientImpl) GetReport(ctx context.Context, scanID string) (json.RawMessage, error) {
+	url := fmt.Sprintf("%s/hidden/tenants/%s/red_team_scans/%s/report?version=%s", c.baseURL, c.tenantID, scanID, APIVersion)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("build GetReport request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("GetReport request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read GetReport response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusNotFound {
+			return nil, fmt.Errorf("scan %s not found", scanID)
+		}
+		return nil, fmt.Errorf("GetReport returned status %d: %s", resp.StatusCode, string(respBytes))
+	}
+
+	return json.RawMessage(respBytes), nil
 }
 
 func (c *ClientImpl) listEnum(ctx context.Context, endpoint string) ([]EnumEntry, error) {

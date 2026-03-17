@@ -2,6 +2,7 @@ package controlservermock
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
 )
@@ -12,12 +13,14 @@ type MockClient struct {
 	ChatSeqs      [][]controlserver.ChatPrompt
 	Status        *controlserver.ScanStatus
 	Result        *controlserver.ScanResult
+	Report        json.RawMessage
 	Goals         []controlserver.EnumEntry
 	Strategies    []controlserver.EnumEntry
 	CreateErr     error
 	NextErr       error
 	StatusErr     error
 	ResultErr     error
+	ReportErr     error
 	GoalsErr      error
 	StrategiesErr error
 
@@ -59,6 +62,13 @@ func (m *MockClient) GetResult(_ context.Context, _ string) (*controlserver.Scan
 		return nil, m.ResultErr
 	}
 	return m.Result, nil
+}
+
+func (m *MockClient) GetReport(_ context.Context, _ string) (json.RawMessage, error) {
+	if m.ReportErr != nil {
+		return nil, m.ReportErr
+	}
+	return m.Report, nil
 }
 
 func (m *MockClient) ListGoals(_ context.Context) ([]controlserver.EnumEntry, error) {
