@@ -16,13 +16,13 @@ const (
 func displayBanner(userInterface ui.UserInterface, cfg *Config) {
 	var sb strings.Builder
 
-	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("  %s%sSnyk Agent Red Teaming%s\n", bold, bred, reset))
-	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("  Target:     %s\n", cfg.Target.Settings.URL))
-	sb.WriteString(fmt.Sprintf("  Goals:      %s\n", strings.Join(cfg.Goals, ", ")))
-	sb.WriteString(fmt.Sprintf("  Strategies: %s\n", strings.Join(cfg.Strategies, ", ")))
-	sb.WriteString("\n")
+	fmt.Fprintf(&sb, "\n")
+	fmt.Fprintf(&sb, "  %s%sSnyk Agent Red Teaming%s\n", bold, bred, reset)
+	fmt.Fprintf(&sb, "\n")
+	fmt.Fprintf(&sb, "  Target:     %s\n", cfg.Target.Settings.URL)
+	fmt.Fprintf(&sb, "  Goals:      %s\n", strings.Join(cfg.Goals, ", "))
+	fmt.Fprintf(&sb, "  Strategies: %s\n", strings.Join(cfg.Strategies, ", "))
+	fmt.Fprintf(&sb, "\n")
 
 	_ = userInterface.Output(sb.String()) //nolint:errcheck // best-effort display
 }

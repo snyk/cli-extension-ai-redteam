@@ -1,2 +1,8 @@
 ### Tooling ###
 /.bin/
+
+### Web ###
+web/node_modules/
+web/dist/
+web/tsconfig.tsbuildinfo
+web/.vite/

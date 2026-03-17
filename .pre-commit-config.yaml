@@ -28,3 +28,12 @@ repos:
         - lint
         language: system
         pass_filenames: false
+    -   id: build-wizard
+        name: Rebuild wizard dist if frontend changed
+        entry: bash
+        args:
+        - -c
+        - 'make build-wizard && git add internal/wizard/dist'
+        language: system
+        pass_filenames: false
+        files: ^web/

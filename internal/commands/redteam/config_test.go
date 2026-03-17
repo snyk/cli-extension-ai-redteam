@@ -336,7 +336,7 @@ func TestLoadAndValidateConfig_TargetURLFlagWithoutConfigFile(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "https://example.com/chat", rtCfg.Target.Settings.URL)
 	assert.Equal(t, "https://example.com/chat", rtCfg.Target.Name)
-	assert.Equal(t, "api", rtCfg.Target.Type)
+	assert.Equal(t, "http", rtCfg.Target.Type)
 }
 
 func TestLoadAndValidateConfig_TargetURLFlagSetsNameAndTypeIfEmpty(t *testing.T) {
@@ -353,7 +353,7 @@ target:
 	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
 	require.NoError(t, err)
 	assert.Equal(t, "https://example.com", rtCfg.Target.Name)
-	assert.Equal(t, "api", rtCfg.Target.Type)
+	assert.Equal(t, "http", rtCfg.Target.Type)
 }
 
 func TestLoadAndValidateConfig_TargetURLFlagDoesNotOverrideExistingNameAndType(t *testing.T) {

@@ -1,6 +1,6 @@
 target:
   name: "Default Config"
-  type: api
+  type: http
   context:
     purpose: "Testing chatbot"
     ground_truth:

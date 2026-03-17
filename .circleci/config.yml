@@ -27,10 +27,51 @@ jobs:
           race: true
   lint:
     docker:
-      - image: golangci/golangci-lint:v1.64.7-alpine
+      - image: golangci/golangci-lint:v2.11.3-alpine
     steps:
       - checkout
       - run: golangci-lint run -v ./...
+
+  setup-wizard-test:
+    docker:
+      - image: cimg/node:22.16
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: cd web && npm ci
+      - run:
+          name: Run frontend tests
+          command: cd web && npx vitest run
+
+  pre-commit:
+    docker:
+      - image: cimg/go:1.24-node
+    steps:
+      - checkout
+      - go/load-cache
+      - go/mod-download
+      - go/save-cache
+      - run:
+          name: Install uv
+          command: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - run:
+          name: Install tools
+          command: make install-tools
+      - run:
+          name: Run pre-commit hooks
+          command: |
+            export PATH="$(pwd)/.bin/go:$(pwd)/.bin/python/bin:$PATH"
+            pre-commit run --all-files
+      - run:
+          name: Verify no uncommitted changes
+          when: always
+          command: |
+            if ! git diff --quiet; then
+              echo "Pre-commit hooks produced uncommitted changes:"
+              git diff --stat
+              exit 1
+            fi
 
   security-scans:
     executor:
@@ -63,3 +104,7 @@ workflows:
           name: Unit Test
       - lint:
           name: Linting
+      - setup-wizard-test:
+          name: Setup Wizard Tests
+      - pre-commit:
+          name: Pre-commit Checks

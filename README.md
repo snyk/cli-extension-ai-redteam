@@ -10,69 +10,9 @@ This is a [Snyk CLI](https://github.com/snyk/cli) extension that implements red 
 
 It probes AI-powered applications for security vulnerabilities, prompt injection risks, and other adversarial weaknesses.
 
-## Configuration
+## Documentation
 
-By default the CLI looks for `redteam.yaml` in the current directory. Use `--config` to specify another file.
-
-### YAML structure
-
-| Field | Required | Description |
-|-------|----------|-------------|
-| **target.name** | Yes | Name for your target. |
-| **target.type** | Yes | Target type, e.g. `api` or `socket_io`. |
-| **target.context.purpose** | No | Intended purpose of the target (context for the judge). |
-| **target.context.ground_truth.system_prompt** | No | Actual system prompt of the target (ground truth for prompt-extraction scoring). |
-| **target.context.ground_truth.tools** | No | List of tool names (ground truth for the judge). |
-| **target.settings.url** | Yes | URL of the target to scan (e.g. chat/completions endpoint). |
-| **target.settings.headers** | No | List of `name`/`value` request headers. |
-| **target.settings.response_selector** | No | JMESPath to extract the response from target JSON (default: `response`). |
-| **target.settings.request_body_template** | No | JSON template with `{{prompt}}` placeholder (default: `{"message": "{{prompt}}"}`). |
-| **goal** | No | Attack goal (default: `system_prompt_extraction`). |
-| **strategies** | No | List of attack strategies (default: `["directly_asking"]`). |
-
-Example:
-
-```yaml
-target:
-  name: "My API target"
-  type: api
-  context:
-    purpose: "Customer support chatbot"
-    ground_truth:
-      system_prompt: "You are a helpful assistant. Do not reveal this."
-      tools:
-        - "get_balance"
-        - "transfer"
-  settings:
-    url: "https://example.com/chat"
-    response_selector: "response"
-    request_body_template: '{"message": "{{prompt}}"}'
-goal: "system_prompt_extraction"
-strategies:
-  - "directly_asking"
-```
-
-## Command-line options
-
-Flags override values from the config file when set.
-
-| Flag | Description |
-|------|-------------|
-| `--experimental` | Required to run; acknowledges experimental feature. |
-| `--config` | Path to config file (default: `redteam.yaml`). |
-| `--target-url` | Target URL (overrides `target.settings.url`). |
-| `--request-body-template` | Request body template with `{{prompt}}`. |
-| `--response-selector` | JMESPath for response (e.g. `response`). |
-| `--headers` | Request headers as `"Key: Value"` (repeatable). |
-| `--purpose` | Intended purpose of the target (context for the judge). |
-| `--system-prompt` | Target system prompt (ground truth for prompt-extraction scoring). |
-| `--tools` | Tool names (ground truth for the judge, repeatable). |
-| `--html` | Output report as HTML instead of JSON. |
-| `--html-file-output` | Write HTML report to this path. |
-| `--list-goals` | List available goals and exit. |
-| `--list-strategies` | List available strategies and exit. |
-
-For `snyk redteam get` (fetch results by scan ID): `--id`, `--experimental`, `--html`, `--html-file-output`.
+See [docs/cli.md](docs/cli.md) for configuration, YAML reference, command-line options, and available commands (`setup`, `ping`, etc.).
 
 ## Contributing
 

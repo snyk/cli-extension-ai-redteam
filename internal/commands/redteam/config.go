@@ -20,7 +20,7 @@ import (
 const (
 	defaultResponseSelector    = "response"
 	defaultRequestBodyTemplate = `{"message": "{{prompt}}"}`
-	defaultTargetType          = "api"
+	defaultTargetType          = "http"
 	contentTypePlain           = "text/plain"
 )
 
@@ -30,43 +30,43 @@ var (
 )
 
 type Config struct {
-	Target           ConfigTarget `yaml:"target"`
-	ControlServerURL string       `yaml:"control_server_url"`
-	Goals            []string     `yaml:"goals"`
-	Strategies       []string     `yaml:"strategies"`
+	Target           ConfigTarget `yaml:"target" json:"target"`
+	ControlServerURL string       `yaml:"control_server_url" json:"control_server_url,omitempty"`
+	Goals            []string     `yaml:"goals" json:"goals"`
+	Strategies       []string     `yaml:"strategies" json:"strategies"`
 }
 
 type ConfigTarget struct {
-	Name     string         `yaml:"name"`
-	Type     string         `yaml:"type"`
-	Context  ConfigContext  `yaml:"context"`
-	Settings ConfigSettings `yaml:"settings"`
+	Name     string         `yaml:"name" json:"name"`
+	Type     string         `yaml:"type" json:"type"`
+	Context  ConfigContext  `yaml:"context" json:"context"`
+	Settings ConfigSettings `yaml:"settings" json:"settings"`
 }
 
 type ConfigContext struct {
-	Purpose     string            `yaml:"purpose"`
-	GroundTruth ConfigGroundTruth `yaml:"ground_truth"`
+	Purpose     string            `yaml:"purpose" json:"purpose"`
+	GroundTruth ConfigGroundTruth `yaml:"ground_truth" json:"ground_truth,omitempty"`
 }
 
 type ConfigGroundTruth struct {
-	SystemPrompt string   `yaml:"system_prompt"`
-	Tools        []string `yaml:"tools"`
+	SystemPrompt string   `yaml:"system_prompt" json:"system_prompt,omitempty"`
+	Tools        []string `yaml:"tools" json:"tools,omitempty"`
 }
 
 type ConfigSettings struct {
-	URL                       string         `yaml:"url"`
-	Headers                   []ConfigHeader `yaml:"headers,omitempty"`
-	ResponseSelector          string         `yaml:"response_selector"`
-	RequestBodyTemplate       string         `yaml:"request_body_template"`
-	SocketIOPath              string         `yaml:"socketio_path,omitempty"`
-	SocketIONamespace         string         `yaml:"socketio_namespace,omitempty"`
-	SocketIOSendEventName     string         `yaml:"socketio_send_event_name,omitempty"`
-	SocketIOResponseEventName string         `yaml:"socketio_response_event_name,omitempty"`
+	URL                       string         `yaml:"url" json:"url"`
+	Headers                   []ConfigHeader `yaml:"headers,omitempty" json:"headers,omitempty"`
+	ResponseSelector          string         `yaml:"response_selector" json:"response_selector"`
+	RequestBodyTemplate       string         `yaml:"request_body_template" json:"request_body_template"`
+	SocketIOPath              string         `yaml:"socketio_path,omitempty" json:"socketio_path,omitempty"`
+	SocketIONamespace         string         `yaml:"socketio_namespace,omitempty" json:"socketio_namespace,omitempty"`
+	SocketIOSendEventName     string         `yaml:"socketio_send_event_name,omitempty" json:"socketio_send_event_name,omitempty"`
+	SocketIOResponseEventName string         `yaml:"socketio_response_event_name,omitempty" json:"socketio_response_event_name,omitempty"`
 }
 
 type ConfigHeader struct {
-	Name  string `yaml:"name"`
-	Value string `yaml:"value"`
+	Name  string `yaml:"name" json:"name"`
+	Value string `yaml:"value" json:"value"`
 }
 
 func LoadAndValidateConfig(logger *zerolog.Logger, config configuration.Configuration) (*Config, []workflow.Data, error) {
@@ -236,12 +236,18 @@ func applyDefaults(cfg *Config) {
 	}
 }
 
-func (cfg *Config) HeadersMap() map[string]string {
+func HeadersToMap(hdrs []ConfigHeader) map[string]string {
 	headers := make(map[string]string)
-	for _, h := range cfg.Target.Settings.Headers {
-		headers[h.Name] = h.Value
+	for _, h := range hdrs {
+		if h.Name != "" {
+			headers[h.Name] = h.Value
+		}
 	}
 	return headers
+}
+
+func (cfg *Config) HeadersMap() map[string]string {
+	return HeadersToMap(cfg.Target.Settings.Headers)
 }
 
 func getToolsFlags(config configuration.Configuration) []string {
@@ -279,7 +285,7 @@ func getInvalidConfigMessage() string {
 
 	target:
 		name: <required, name your target>
-		type: <required, e.g., api or socket_io>
+		type: <optional, default: http>
 		context:
 			purpose: '<optional, intended purpose of the target>'
 			ground_truth:
