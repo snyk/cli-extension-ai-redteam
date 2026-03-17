@@ -18,4 +18,5 @@ const (
 	FlagPurpose          = "purpose"
 	FlagSystemPrompt     = "system-prompt"
 	FlagTools            = "tools"
+	FlagReport           = "report"
 )

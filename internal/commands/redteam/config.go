@@ -162,8 +162,9 @@ func applyFlagOverrides(config configuration.Configuration, rtConfig *Config) {
 // ToCreateScanRequest builds the control server CreateScan request from config.
 func (cfg *Config) ToCreateScanRequest() *controlserver.CreateScanRequest {
 	req := &controlserver.CreateScanRequest{
-		Goal:        cfg.Goal,
+		Goals:       []string{cfg.Goal},
 		Strategies:  cfg.Strategies,
+		TargetURL:   cfg.Target.Settings.URL,
 		Purpose:     cfg.Target.Context.Purpose,
 		GroundTruth: buildGroundTruthFromConfig(&cfg.Target.Context.GroundTruth),
 	}

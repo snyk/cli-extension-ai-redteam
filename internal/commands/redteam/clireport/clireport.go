@@ -1,7 +1,10 @@
 package clireport
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -10,21 +13,66 @@ import (
 )
 
 const (
-	maxEvidenceLen  = 300
-	maxConvoLen     = 300
-	defaultTermWidth = 100
-
-	// Table column widths — used by both header and data rows.
-	colStrategy = 45
-	colSeverity = 13
-	colPassW    = 6
-	colFailW    = 6
-	colRate     = 11
-	colOwasp    = 26
+	maxEvidenceLen   = 300
+	maxConvoLen      = 300
+	defaultTermWidth = 120
+	colGap           = 3
 )
 
-// Total table width: all columns + 2-space gaps between each.
-const tableWidth = colStrategy + colSeverity + colPassW + colFailW + colRate + colOwasp + 10 // 5 gaps * 2
+// layout holds responsive widths computed from the terminal width.
+type layout struct {
+	termWidth  int
+	content    int // usable width inside report box (border + padding removed)
+	strategy   int
+	severity   int
+	blocked    int
+	breached   int
+	tableWidth int
+	chatBox    int
+}
+
+func newLayout(termWidth int) layout {
+	if termWidth <= 0 {
+		termWidth = defaultTermWidth
+	}
+	// Report box eats ~6 chars (border + padding on each side).
+	content := termWidth - 6
+	if content < 60 {
+		content = 60
+	}
+
+	// Chat/evidence boxes: content minus left margin (6) and box border/padding (4).
+	chatBox := content - 10
+	if chatBox < 40 {
+		chatBox = 40
+	}
+
+	// Table columns: distribute proportionally within content width.
+	// Reserve indent (4) + 3 gaps (3*3=9) = 13 chars.
+	available := content - 13
+	if available < 40 {
+		available = 40
+	}
+
+	// Proportions: strategy 45%, severity 15%, blocked 20%, breached 20%
+	strategy := available * 45 / 100
+	severity := available * 15 / 100
+	blocked := available * 20 / 100
+	breached := available - strategy - severity - blocked
+
+	tw := strategy + severity + blocked + breached + (3 * colGap)
+
+	return layout{
+		termWidth:  termWidth,
+		content:    content,
+		strategy:   strategy,
+		severity:   severity,
+		blocked:    blocked,
+		breached:   breached,
+		tableWidth: tw,
+		chatBox:    chatBox,
+	}
+}
 
 // ScanMeta holds metadata about the scan for display in the report header.
 type ScanMeta struct {
@@ -36,22 +84,30 @@ type ScanMeta struct {
 
 // Render produces a styled CLI report from normalized scan results.
 func Render(data *models.GetAIVulnerabilitiesResponseData, meta ScanMeta) string {
+	return RenderWithWidth(data, meta, defaultTermWidth)
+}
+
+// RenderWithWidth produces a styled CLI report responsive to the given terminal width.
+func RenderWithWidth(data *models.GetAIVulnerabilitiesResponseData, meta ScanMeta, termWidth int) string {
+	l := newLayout(termWidth)
 	var sb strings.Builder
 
+	sb.WriteString(renderBanner(data))
 	sb.WriteString(renderHeader(meta))
 	sb.WriteString(renderSummary(data))
 
 	if data.Summary != nil && len(data.Summary.Vulnerabilities) > 0 {
-		sb.WriteString(renderStrategyTable(data.Summary))
+		sb.WriteString(renderStrategyTable(data.Summary, l))
 	}
 
 	if len(data.Results) > 0 {
-		sb.WriteString(renderFindings(data.Results, data.Summary, meta.FullConversation))
+		sb.WriteString(renderFindings(data.Results, data.Summary, meta.FullConversation, l))
 	}
 
 	sb.WriteString(renderFooter(data))
 
-	return reportBoxStyle.Render(sb.String()) + "\n"
+	box := reportBoxStyle.Width(l.termWidth - 2)
+	return box.Render(sb.String()) + "\n"
 }
 
 // --- palette ---
@@ -65,6 +121,8 @@ var (
 	colSlate  = lipgloss.Color("#5d6d7e")
 	colDim    = lipgloss.Color("#7f8c8d")
 	colWhite  = lipgloss.Color("#FFFFFF")
+	colBlack    = lipgloss.Color("#000000")
+	colDarkGray = lipgloss.Color("#2d2d2d")
 
 	headingStyle = lipgloss.NewStyle().
 			Bold(true).
@@ -92,6 +150,38 @@ var (
 	purpleText = lipgloss.NewStyle().
 			Foreground(colPurple)
 
+	sevBadgeHigh = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(colDarkGray).
+			Background(colRed)
+
+	sevBadgeMed = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(colBlack).
+			Background(colMedSev)
+
+	sevBadgeLow = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(colWhite).
+			Background(colLowSev)
+
+	breachedBadge = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(colDarkGray).
+			Background(colRed)
+
+	bannerStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(colDarkGray).
+			Background(colRed).
+			Padding(0, 1)
+
+	bannerCleanStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(colDarkGray).
+				Background(colPass).
+				Padding(0, 1)
+
 	reportBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(colSlate).
@@ -102,29 +192,84 @@ var (
 			BorderForeground(colSlate).
 			Padding(0, 1).
 			MarginLeft(6).
-			Width(70)
+			Width(140)
 
 	agentBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).
 			BorderForeground(colPurple).
 			Padding(0, 1).
 			MarginLeft(6).
-			Width(70)
+			Width(140)
 
 	evidenceBoxStyle = lipgloss.NewStyle().
 				Border(lipgloss.NormalBorder()).
 				BorderForeground(colSlate).
 				Padding(0, 1).
 				MarginLeft(6).
-				Width(70)
+				Width(140)
 )
+
+// --- banner ---
+
+func renderBanner(data *models.GetAIVulnerabilitiesResponseData) string {
+	var sb strings.Builder
+
+	breached, blocked, totalProbes := countOutcomes(data)
+
+	sb.WriteString("\n")
+	if breached == 0 {
+		banner := fmt.Sprintf(" \u2713 All %d probes blocked \u2014 no vulnerabilities found ", totalProbes)
+		sb.WriteString("  " + bannerCleanStyle.Render(banner))
+	} else {
+		counts := countBySeverity(data.Results)
+		var parts []string
+		if n, ok := counts["critical"]; ok && n > 0 {
+			parts = append(parts, fmt.Sprintf("%d CRITICAL", n))
+		}
+		if n, ok := counts["high"]; ok && n > 0 {
+			parts = append(parts, fmt.Sprintf("%d HIGH", n))
+		}
+		if n, ok := counts["medium"]; ok && n > 0 {
+			parts = append(parts, fmt.Sprintf("%d MEDIUM", n))
+		}
+		if n, ok := counts["low"]; ok && n > 0 {
+			parts = append(parts, fmt.Sprintf("%d LOW", n))
+		}
+
+		noun := "BREACH CONFIRMED"
+		if breached > 1 {
+			noun = "BREACHES CONFIRMED"
+		}
+		banner := fmt.Sprintf(" \u26a0 %d %s   %d blocked   (%d probes) ",
+			breached, noun, blocked, totalProbes)
+		if len(parts) > 0 {
+			banner = fmt.Sprintf(" \u26a0 %d %s: %s   %d blocked   (%d probes) ",
+				breached, noun, strings.Join(parts, ", "), blocked, totalProbes)
+		}
+		sb.WriteString("  " + bannerStyle.Render(banner))
+	}
+	sb.WriteString("\n\n")
+
+	return sb.String()
+}
+
+func countOutcomes(data *models.GetAIVulnerabilitiesResponseData) (breached, blocked, total int) {
+	if data.Summary == nil {
+		return 0, 0, 0
+	}
+	for _, v := range data.Summary.Vulnerabilities {
+		total += v.TotalChats
+		breached += v.Successful
+		blocked += v.TotalChats - v.Successful
+	}
+	return breached, blocked, total
+}
 
 // --- header ---
 
 func renderHeader(meta ScanMeta) string {
 	var sb strings.Builder
 
-	sb.WriteString("\n")
 	sb.WriteString("  " + headingStyle.Render("Scan Metadata"))
 	sb.WriteString("\n\n")
 	sb.WriteString("    " + labelStyle.Render("Target:     ") + valueStyle.Render(meta.TargetURL) + "\n")
@@ -138,14 +283,14 @@ func renderHeader(meta ScanMeta) string {
 // --- summary ---
 
 func renderSummary(data *models.GetAIVulnerabilitiesResponseData) string {
-	var passed, failed, skipped int
+	var vulnerable, blocked, skipped int
 
 	if data.Summary != nil {
 		for _, v := range data.Summary.Vulnerabilities {
 			if v.Vulnerable {
-				failed++
+				vulnerable++
 			} else if v.Status == "completed" {
-				passed++
+				blocked++
 			} else {
 				skipped++
 			}
@@ -156,9 +301,9 @@ func renderSummary(data *models.GetAIVulnerabilitiesResponseData) string {
 
 	sb.WriteString("  " + headingStyle.Render("Summary"))
 	sb.WriteString("\n\n")
-	sb.WriteString(fmt.Sprintf("    %s %d passed    %s %d failed    %s %d skipped\n\n",
-		passText.Render("\u2713"), passed,
-		failText.Render("\u2715"), failed,
+	sb.WriteString(fmt.Sprintf("    %s %d vulnerable    %s %d blocked    %s %d skipped\n\n",
+		failText.Render("\u26a0"), vulnerable,
+		passText.Render("\u2713"), blocked,
 		dimStyle.Render("\u25cc"), skipped,
 	))
 
@@ -167,52 +312,96 @@ func renderSummary(data *models.GetAIVulnerabilitiesResponseData) string {
 
 // --- strategy table ---
 
-func renderStrategyTable(summary *models.AIScanSummary) string {
+func renderStrategyTable(summary *models.AIScanSummary, l layout) string {
 	var sb strings.Builder
+	gap := strings.Repeat(" ", colGap)
 
 	sb.WriteString("  " + headingStyle.Render("Strategy Breakdown"))
 	sb.WriteString("\n\n")
 
-	dash := dimStyle.Render(strings.Repeat("- ", tableWidth/2))
+	dash := dimStyle.Render(strings.Repeat("\u2500", l.tableWidth))
 
-	// Top border
 	sb.WriteString("    " + dash + "\n")
 
-	// Column header — uses the exact same widths as data rows.
-	sb.WriteString(fmt.Sprintf("    %-*s  %-*s  %*s  %*s  %*s  %-*s\n",
-		colStrategy, dimStyle.Render("STRATEGY"),
-		colSeverity, dimStyle.Render("SEVERITY"),
-		colPassW, dimStyle.Render("PASS"),
-		colFailW, dimStyle.Render("FAIL"),
-		colRate, dimStyle.Render("PASS RATE"),
-		colOwasp, dimStyle.Render("TESTED VULNERABILITIES"),
+	sb.WriteString(fmt.Sprintf("    %-*s%s%-*s%s%-*s%s%-*s\n",
+		l.strategy, dimStyle.Render("STRATEGY"),
+		gap,
+		l.severity, dimStyle.Render("SEVERITY"),
+		gap,
+		l.blocked, dimStyle.Render("BLOCKED"),
+		gap,
+		l.breached, dimStyle.Render("BREACHED"),
 	))
 	sb.WriteString("    " + dash + "\n")
 
 	for _, v := range summary.Vulnerabilities {
-		leaf := truncateCol(leafStrategy(v.EngineTag), colStrategy)
-		sev := renderSeverityText(v.Severity)
-		tags := truncateCol(formatTags(v.EngineTag), colOwasp)
+		leaf := truncateCol(leafStrategy(v.EngineTag), l.strategy)
+		sev := padRight(renderSeverityText(v.Severity), l.severity)
+		blocked := v.TotalChats - v.Successful
+		breached := v.Successful
 
-		pass := v.TotalChats - v.Successful
-		fail := v.Successful
-		rate := passRate(pass, fail)
+		blockedStr := padRight(passText.Render(fmt.Sprintf("%d", blocked)), l.blocked)
+		var breachedStr string
+		if breached > 0 {
+			breachedStr = padRight(failText.Render(fmt.Sprintf("\u25cf %d", breached)), l.breached)
+		} else {
+			breachedStr = padRight(dimStyle.Render("0"), l.breached)
+		}
 
-		sb.WriteString(fmt.Sprintf("    %-*s  %-*s  %*d  %*d  %*s  %-*s\n",
-			colStrategy, valueStyle.Render(leaf),
-			colSeverity, sev,
-			colPassW, pass,
-			colFailW, fail,
-			colRate, rate,
-			colOwasp, dimStyle.Render(tags),
+		sb.WriteString(fmt.Sprintf("    %-*s%s%s%s%s%s%s\n",
+			l.strategy, valueStyle.Render(leaf),
+			gap, sev,
+			gap, blockedStr,
+			gap, breachedStr,
 		))
-		// Full ID on next line, indented and dim.
 		sb.WriteString(fmt.Sprintf("      %s\n", dimStyle.Render(v.EngineTag)))
 	}
 
-	// Bottom border
-	sb.WriteString("    " + dash + "\n")
+	sb.WriteString("    " + dash + "\n\n\n")
 	return sb.String()
+}
+
+// padRight pads a styled string to a fixed visible width.
+// ANSI escape codes are excluded from the width count.
+func padRight(styled string, width int) string {
+	visible := stripAnsi(styled)
+	pad := width - len(visible)
+	if pad <= 0 {
+		return styled
+	}
+	return styled + strings.Repeat(" ", pad)
+}
+
+func stripAnsi(s string) string {
+	var out strings.Builder
+	inEsc := false
+	for _, r := range s {
+		if r == '\033' {
+			inEsc = true
+			continue
+		}
+		if inEsc {
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+				inEsc = false
+			}
+			continue
+		}
+		out.WriteRune(r)
+	}
+	return out.String()
+}
+
+func probeResult(breached, total int) string {
+	if breached > 0 {
+		noun := "vulnerability confirmed"
+		if breached > 1 {
+			noun = "vulnerabilities confirmed"
+		}
+		label := fmt.Sprintf("%d %s", breached, noun)
+		return failText.Render(label)
+	}
+	label := fmt.Sprintf("%d of %d probes blocked", total, total)
+	return passText.Render(label)
 }
 
 func leafStrategy(engineTag string) string {
@@ -244,30 +433,79 @@ func renderSeverityText(sev string) string {
 	}
 }
 
-func passRate(pass, fail int) string {
-	total := pass + fail
-	if total == 0 {
-		return dimStyle.Render("--")
+func renderSeverityBadge(sev string) string {
+	upper := strings.ToUpper(sev)
+	label := fmt.Sprintf(" \u26a0 %s ", upper)
+	switch strings.ToLower(sev) {
+	case "critical", "high":
+		return sevBadgeHigh.Render(label)
+	case "medium":
+		return sevBadgeMed.Render(label)
+	case "low":
+		return sevBadgeLow.Render(label)
+	default:
+		return sevBadgeMed.Render(label)
 	}
-	pct := pass * 100 / total
-	s := fmt.Sprintf("%d%%", pct)
-	if pct >= 50 {
-		return passText.Render(s)
-	}
-	return failText.Render(s)
 }
 
-func formatTags(engineTag string) string {
-	parts := strings.Split(engineTag, "/")
-	if len(parts) >= 1 {
-		return parts[0]
+// owaspLabel returns a human-readable label for known OWASP LLM Top 10 tags.
+func owaspLabel(tags []string) string {
+	lookup := map[string]string{
+		"LLM01": "LLM01: Prompt Injection",
+		"LLM02": "LLM02: Insecure Output Handling",
+		"LLM03": "LLM03: Training Data Poisoning",
+		"LLM04": "LLM04: Model Denial of Service",
+		"LLM05": "LLM05: Supply Chain Vulnerabilities",
+		"LLM06": "LLM06: Sensitive Information Disclosure",
+		"LLM07": "LLM07: Insecure Plugin Design",
+		"LLM08": "LLM08: Excessive Agency",
+		"LLM09": "LLM09: Overreliance",
+		"LLM10": "LLM10: Model Theft",
+	}
+	var labels []string
+	for _, tag := range tags {
+		upper := strings.ToUpper(tag)
+		for prefix, label := range lookup {
+			if strings.Contains(upper, prefix) {
+				labels = append(labels, label)
+				break
+			}
+		}
+	}
+	if len(labels) > 0 {
+		return strings.Join(labels, ", ")
 	}
 	return ""
 }
 
+func formatTags(engineTag string) string {
+	parts := strings.Split(engineTag, "/")
+	// Extract LLM IDs (e.g. LLM01, LLM07) from path segments.
+	var ids []string
+	for _, p := range parts {
+		upper := strings.ToUpper(p)
+		if len(upper) >= 5 && strings.HasPrefix(upper, "LLM") {
+			ids = append(ids, upper)
+		}
+	}
+	if len(ids) > 0 {
+		return "OWASP Top 10 for LLMs: " + strings.Join(ids, ", ")
+	}
+	// Fallback: show all segments.
+	return strings.Join(parts, ", ")
+}
+
+func formatTagList(engineTag string) []string {
+	parts := strings.Split(engineTag, "/")
+	if len(parts) <= 1 {
+		return []string{engineTag}
+	}
+	return parts
+}
+
 // --- findings ---
 
-func renderFindings(results []models.AIVulnerability, summary *models.AIScanSummary, fullConversation bool) string {
+func renderFindings(results []models.AIVulnerability, summary *models.AIScanSummary, fullConversation bool, l layout) string {
 	var sb strings.Builder
 
 	sb.WriteString("  " + headingStyle.Render("Findings"))
@@ -275,37 +513,42 @@ func renderFindings(results []models.AIVulnerability, summary *models.AIScanSumm
 
 	for i, vuln := range results {
 		sb.WriteString("\n")
-		sb.WriteString(fmt.Sprintf("    %s  %s\n",
-			failText.Render(fmt.Sprintf("! #%d", i+1)),
+
+		// Finding header with severity + breached badges inline.
+		sb.WriteString(fmt.Sprintf("    %s  %s  %s  %s\n",
+			failText.Render(fmt.Sprintf("\u25bc #%d", i+1)),
 			valueStyle.Render(vuln.Definition.Name),
+			renderSeverityBadge(vuln.Severity),
+			breachedBadge.Render(" BREACHED "),
 		))
 		sb.WriteString(fmt.Sprintf("    %s\n", dimStyle.Render(vuln.Definition.Description)))
 
-		pass, total := findingPassRate(vuln.Definition.ID, summary)
-		sb.WriteString(fmt.Sprintf("    %s  %s\n",
-			labelStyle.Render("Pass Rate"),
-			dimStyle.Render(fmt.Sprintf("%d / %d tests passed", pass, total)),
+		// Probe result.
+		_, total := findingPassRate(vuln.Definition.ID, summary)
+		breachCount := findingFailCount(vuln.Definition.ID, summary)
+		sb.WriteString(fmt.Sprintf("    %s\n",
+			failText.Render(fmt.Sprintf("%d of %d probes breached defenses", breachCount, total)),
 		))
 
+		// OWASP reference inline.
 		if len(vuln.Tags) > 0 {
-			sb.WriteString(fmt.Sprintf("    %s %s\n",
-				labelStyle.Render("Tested Vulnerabilities:"),
-				dimStyle.Render(strings.Join(vuln.Tags, ", ")),
-			))
+			owasp := owaspLabel(vuln.Tags)
+			if owasp != "" {
+				sb.WriteString(fmt.Sprintf("    %s\n", valueStyle.Render(owasp)))
+			} else {
+				sb.WriteString(fmt.Sprintf("    %s %s\n",
+					labelStyle.Render("Tested Vulnerabilities:"),
+					dimStyle.Render(strings.Join(vuln.Tags, ", ")),
+				))
+			}
 		}
 
 		if fullConversation {
 			sb.WriteString("\n")
-			sb.WriteString(renderConversation(vuln.Turns, true))
+			sb.WriteString(renderConversation(vuln.Turns, true, l))
 
 			if vuln.Evidence.Content.Reason != "" {
-				evidence := vuln.Evidence.Content.Reason
-				if len(evidence) > maxEvidenceLen {
-					evidence = evidence[:maxEvidenceLen] + "..."
-				}
-				content := fmt.Sprintf("%s  %s", labelStyle.Render("Evidence"), dimStyle.Render(evidence))
-				sb.WriteString(evidenceBoxStyle.Render(content))
-				sb.WriteString("\n")
+				renderEvidenceBlock(&sb, vuln.Evidence.Content.Reason, l)
 			}
 		} else {
 			sb.WriteString(fmt.Sprintf("    %s\n",
@@ -315,6 +558,25 @@ func renderFindings(results []models.AIVulnerability, summary *models.AIScanSumm
 
 	sb.WriteString("\n")
 	return sb.String()
+}
+
+func renderEvidenceBlock(sb *strings.Builder, reason string, l layout) {
+	fullLen := len(reason)
+	evidence := reason
+	truncated := false
+	if fullLen > maxEvidenceLen {
+		evidence = reason[:maxEvidenceLen]
+		truncated = true
+	}
+
+	header := failText.Render("Extracted content (breach confirmed)")
+	content := fmt.Sprintf("%s\n%s", header, dimStyle.Render(evidence))
+	if truncated {
+		content += fmt.Sprintf("\n%s",
+			labelStyle.Render(fmt.Sprintf("Showing %d / %d chars", maxEvidenceLen, fullLen)))
+	}
+	sb.WriteString(evidenceBoxStyle.Width(l.chatBox).Render(content))
+	sb.WriteString("\n")
 }
 
 func findingPassRate(defID string, summary *models.AIScanSummary) (pass, total int) {
@@ -331,10 +593,22 @@ func findingPassRate(defID string, summary *models.AIScanSummary) (pass, total i
 	return 0, 1
 }
 
+func findingFailCount(defID string, summary *models.AIScanSummary) int {
+	if summary == nil {
+		return 0
+	}
+	for _, v := range summary.Vulnerabilities {
+		if v.Slug == defID {
+			return v.Successful
+		}
+	}
+	return 0
+}
+
 // renderConversation renders turns as a chat-style layout.
 // By default only the first and last turns are shown. Pass fullConversation=true
 // to display all turns (--full-conversation flag).
-func renderConversation(turns []models.Turn, fullConversation bool) string {
+func renderConversation(turns []models.Turn, fullConversation bool, l layout) string {
 	visible := turns
 	omitted := 0
 
@@ -349,13 +623,13 @@ func renderConversation(turns []models.Turn, fullConversation bool) string {
 		if turn.Request != nil {
 			msg := truncate(*turn.Request, maxConvoLen)
 			content := fmt.Sprintf("%s  %s", dimStyle.Render("You"), valueStyle.Render(msg))
-			sb.WriteString(userBoxStyle.Render(content))
+			sb.WriteString(userBoxStyle.Width(l.chatBox).Render(content))
 			sb.WriteString("\n")
 		}
 		if turn.Response != nil {
 			msg := truncate(*turn.Response, maxConvoLen)
-			content := fmt.Sprintf("%s  %s", purpleText.Render("Agent"), purpleText.Render(msg))
-			sb.WriteString(agentBoxStyle.Render(content))
+			content := fmt.Sprintf("%s  %s", purpleText.Render("Agent"), valueStyle.Render(msg))
+			sb.WriteString(agentBoxStyle.Width(l.chatBox).Render(content))
 			sb.WriteString("\n")
 		}
 
@@ -383,40 +657,14 @@ func truncate(s string, max int) string {
 // --- footer ---
 
 func renderFooter(data *models.GetAIVulnerabilitiesResponseData) string {
-	counts := countBySeverity(data.Results)
-
 	var sb strings.Builder
 
 	if len(data.Results) == 0 {
-		sb.WriteString("\n    " + passText.Render("\u2713 No vulnerabilities found"))
-		sb.WriteString("\n\n")
+		sb.WriteString("\n")
 		return sb.String()
 	}
 
-	var parts []string
-	if n, ok := counts["critical"]; ok && n > 0 {
-		parts = append(parts, failText.Render(fmt.Sprintf("%d critical", n)))
-	}
-	if n, ok := counts["high"]; ok && n > 0 {
-		parts = append(parts, failText.Render(fmt.Sprintf("%d high", n)))
-	}
-	if n, ok := counts["medium"]; ok && n > 0 {
-		parts = append(parts, lipgloss.NewStyle().Foreground(colMedSev).Render(fmt.Sprintf("%d medium", n)))
-	}
-	if n, ok := counts["low"]; ok && n > 0 {
-		parts = append(parts, lipgloss.NewStyle().Foreground(colLowSev).Render(fmt.Sprintf("%d low", n)))
-	}
-
-	total := len(data.Results)
-	noun := "vulnerability"
-	if total > 1 {
-		noun = "vulnerabilities"
-	}
-
-	sb.WriteString(fmt.Sprintf("\n    %d %s found:  %s\n\n",
-		total, noun, strings.Join(parts, "  ")))
-
-	sb.WriteString("    " + dimStyle.Render("Tip: Re-run with")+
+	sb.WriteString("\n    " + dimStyle.Render("Tip: Re-run with")+
 		" "+valueStyle.Render("--html")+
 		" "+dimStyle.Render("to view in browser, or")+
 		" "+valueStyle.Render("--html-file-output report.html")+
@@ -431,4 +679,59 @@ func countBySeverity(results []models.AIVulnerability) map[string]int {
 		counts[strings.ToLower(r.Severity)]++
 	}
 	return counts
+}
+
+// --- report persistence ---
+
+// SavedReport bundles scan data and metadata for re-display.
+type SavedReport struct {
+	Data *models.GetAIVulnerabilitiesResponseData `json:"data"`
+	Meta ScanMeta                                  `json:"meta"`
+}
+
+const reportFileName = "redteam-last-report.json"
+
+func reportPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(home, ".snyk")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, reportFileName), nil
+}
+
+// SaveReport persists the latest scan report so it can be re-opened with --report.
+func SaveReport(data *models.GetAIVulnerabilitiesResponseData, meta ScanMeta) error {
+	p, err := reportPath()
+	if err != nil {
+		return err
+	}
+	b, err := json.Marshal(SavedReport{Data: data, Meta: meta})
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(p, b, 0o644)
+}
+
+// LoadReport loads the last saved report from disk.
+func LoadReport() (*models.GetAIVulnerabilitiesResponseData, ScanMeta, error) {
+	p, err := reportPath()
+	if err != nil {
+		return nil, ScanMeta{}, err
+	}
+	b, err := os.ReadFile(p)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, ScanMeta{}, fmt.Errorf("no saved report found — run a scan first")
+		}
+		return nil, ScanMeta{}, err
+	}
+	var saved SavedReport
+	if err := json.Unmarshal(b, &saved); err != nil {
+		return nil, ScanMeta{}, fmt.Errorf("saved report is corrupted: %w", err)
+	}
+	return saved.Data, saved.Meta, nil
 }
