@@ -62,16 +62,14 @@ jobs:
           name: Run pre-commit hooks
           command: |
             export PATH="$(pwd)/.bin/go:$(pwd)/.bin/python/bin:$PATH"
-            pre-commit run gitleaks --all-files
-            pre-commit run format --all-files
-            pre-commit run lint --all-files
+            pre-commit run --all-files
       - run:
-          name: Verify wizard dist is up to date
+          name: Verify no uncommitted changes
+          when: always
           command: |
-            make build-wizard
-            if ! git diff --quiet internal/wizard/dist; then
-              echo "Wizard dist is stale. Run 'make build-wizard' and commit the result."
-              git diff --stat internal/wizard/dist
+            if ! git diff --quiet; then
+              echo "Pre-commit hooks produced uncommitted changes:"
+              git diff --stat
               exit 1
             fi
 
