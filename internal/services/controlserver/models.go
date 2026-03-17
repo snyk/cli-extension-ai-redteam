@@ -3,9 +3,9 @@ package controlserver
 type CreateScanRequest struct {
 	Goals       []string     `json:"goals,omitempty"`
 	Strategies  []string     `json:"strategies,omitempty"`
+	TargetURL   string       `json:"target_url"`
 	Purpose     string       `json:"purpose,omitempty"`
 	GroundTruth *GroundTruth `json:"ground_truth,omitempty"`
-	TargetURL   string       `json:"target_url,omitempty"`
 }
 
 // GroundTruth is optional context for judging: system prompt and tools of the target.

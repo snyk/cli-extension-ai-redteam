@@ -71,6 +71,7 @@ func RegisterRedTeamWorkflow(e workflow.Engine) error {
 	flagset.String(utils.FlagPurpose, "", "Intended purpose of the target (ground truth for the judge)")
 	flagset.String(utils.FlagSystemPrompt, "", "Target system prompt (ground truth for prompt-extraction scoring)")
 	flagset.StringArray(utils.FlagTools, nil, "Tool names the target is configured with (ground truth, repeatable)")
+	flagset.Bool(utils.FlagReport, false, "Re-open the last scan report without running a new scan")
 
 	cfg := workflow.ConfigurationOptionsFromFlagset(flagset)
 	if _, err := e.Register(WorkflowID, cfg, redTeamWorkflow); err != nil {
@@ -97,6 +98,18 @@ func RunRedTeamWorkflow(
 	if !experimental {
 		logger.Debug().Msg("Required experimental flag is not present")
 		return nil, cli_errors.NewCommandIsExperimentalError("")
+	}
+
+	if config.GetBool(utils.FlagReport) {
+		data, meta, err := clireport.LoadReport()
+		if err != nil {
+			return nil, fmt.Errorf("failed to load report: %w", err)
+		}
+		if err := clireport.RunInteractive(data, meta); err != nil {
+			report := clireport.Render(data, meta)
+			return []workflow.Data{newWorkflowData(contentTypePlain, []byte(report))}, nil
+		}
+		return []workflow.Data{newWorkflowData(contentTypePlain, []byte(""))}, nil
 	}
 
 	listGoals := config.GetBool(utils.FlagListGoals)
@@ -153,6 +166,10 @@ func RunRedTeamWorkflow(
 			TargetURL:  rtConfig.Target.Settings.URL,
 			Goal:       rtConfig.Goal,
 			Strategies: rtConfig.Strategies,
+		}
+		// Save report for later re-display via --report.
+		if saveErr := clireport.SaveReport(normalized, meta); saveErr != nil {
+			logger.Debug().Err(saveErr).Msg("failed to save report for --report flag")
 		}
 		if err := clireport.RunInteractive(normalized, meta); err != nil {
 			// Fallback to static report if TUI fails (e.g. piped output).
@@ -319,10 +336,12 @@ func outputStatus(userInterface ui.UserInterface, logger *zerolog.Logger, status
 	}
 	green := lipgloss.NewStyle().Foreground(lipgloss.Color("#7BF1A8"))
 	red := lipgloss.NewStyle().Foreground(lipgloss.Color("#E44A50"))
-	msg := fmt.Sprintf("\nScan complete: %d/%d chats | %s | %s",
+	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("#7f8c8d"))
+	msg := fmt.Sprintf("\nScan complete: %d/%d probes | %s | %s",
 		status.Completed, status.TotalChats,
-		green.Render(fmt.Sprintf("%d successful", status.Successful)),
-		red.Render(fmt.Sprintf("%d failed", status.Failed)))
+		red.Render(fmt.Sprintf("%d breached", status.Successful)),
+		green.Render(fmt.Sprintf("%d blocked", status.Failed)))
+	msg += "\n" + dim.Render("Tip: Re-open this report anytime with --report")
 	if err := userInterface.Output(msg); err != nil {
 		logger.Debug().Err(err).Msg("failed to output status")
 	}

@@ -14,7 +14,7 @@ import (
 // It returns the final static report string for piping when stdout is not a TTY.
 func RunInteractive(data *models.GetAIVulnerabilitiesResponseData, meta ScanMeta) error {
 	m := newModel(data, meta)
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	_, err := p.Run()
 	return err
 }
@@ -29,6 +29,7 @@ type model struct {
 	scroll   int    // vertical scroll offset
 	height   int    // terminal height
 	width    int    // terminal width
+	showHelp bool   // help overlay visible
 }
 
 func newModel(data *models.GetAIVulnerabilitiesResponseData, meta ScanMeta) model {
@@ -47,6 +48,12 @@ func (m model) Init() tea.Cmd {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// When help overlay is shown, any key dismisses it.
+		if m.showHelp {
+			m.showHelp = false
+			return m, nil
+		}
+
 		switch msg.String() {
 		case "q", "ctrl+c", "esc":
 			return m, tea.Quit
@@ -76,6 +83,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			for i := range m.expanded {
 				m.expanded[i] = !allOpen
 			}
+		case "?":
+			m.showHelp = true
 		case "pgup":
 			m.scroll -= m.height / 2
 			if m.scroll < 0 {
@@ -83,6 +92,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "pgdown":
 			m.scroll += m.height / 2
+		case "ctrl+up":
+			m.scroll -= 3
+			if m.scroll < 0 {
+				m.scroll = 0
+			}
+		case "ctrl+down":
+			m.scroll += 3
+		}
+	case tea.MouseMsg:
+		switch msg.Type {
+		case tea.MouseWheelUp:
+			m.scroll -= 3
+			if m.scroll < 0 {
+				m.scroll = 0
+			}
+		case tea.MouseWheelDown:
+			m.scroll += 3
 		}
 	case tea.WindowSizeMsg:
 		m.height = msg.Height
@@ -92,24 +118,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) ensureVisible() {
-	// Simple heuristic: scroll so cursor finding is roughly visible.
-	// Each collapsed finding ~4 lines, expanded ~15+ lines.
+	// Estimate line position of the current finding.
+	// Each collapsed finding ~5 lines, expanded ~25+ lines.
 	approxLine := 0
 	for i := 0; i < m.cursor; i++ {
 		if m.expanded[i] {
-			approxLine += 15
+			approxLine += 25
 		} else {
-			approxLine += 4
+			approxLine += 5
 		}
 	}
-	// Add header offset (~15 lines for metadata + summary + table header).
-	approxLine += 15
+	// Add header offset (banner + metadata + summary + table).
+	approxLine += 20
 
 	viewEnd := m.scroll + m.height
-	if approxLine < m.scroll {
+	if approxLine < m.scroll+2 {
 		m.scroll = approxLine - 2
-	} else if approxLine > viewEnd-5 {
-		m.scroll = approxLine - m.height + 10
+	} else if approxLine > viewEnd-8 {
+		m.scroll = approxLine - m.height + 12
 	}
 	if m.scroll < 0 {
 		m.scroll = 0
@@ -117,24 +143,33 @@ func (m *model) ensureVisible() {
 }
 
 func (m model) View() string {
+	// Help overlay takes over the screen.
+	if m.showHelp {
+		return m.renderHelpOverlay()
+	}
+
+	l := newLayout(m.width)
 	var sb strings.Builder
+
+	// Banner at the very top.
+	sb.WriteString(renderBanner(m.data))
 
 	// Header sections (reuse existing renderers).
 	sb.WriteString(renderHeader(m.meta))
 	sb.WriteString(renderSummary(m.data))
 
 	if m.data.Summary != nil && len(m.data.Summary.Vulnerabilities) > 0 {
-		sb.WriteString(renderStrategyTable(m.data.Summary))
+		sb.WriteString(renderStrategyTable(m.data.Summary, l))
 	}
 
 	// Interactive findings.
 	if len(m.data.Results) > 0 {
 		sb.WriteString("  " + headingStyle.Render("Findings"))
-		sb.WriteString("  " + dimStyle.Render("(enter: expand/collapse, a: toggle all)"))
+		sb.WriteString("  " + dimStyle.Render("(enter: expand/collapse, a: toggle all, ?: help)"))
 		sb.WriteString("\n")
 
 		for i, vuln := range m.data.Results {
-			sb.WriteString(m.renderFinding(i, vuln))
+			sb.WriteString(m.renderFinding(i, vuln, l))
 		}
 		sb.WriteString("\n")
 	}
@@ -143,10 +178,10 @@ func (m model) View() string {
 	sb.WriteString(renderFooter(m.data))
 
 	// Help bar.
-	sb.WriteString(dimStyle.Render("  \u2191\u2193 navigate  enter expand/collapse  a toggle all  q quit"))
+	sb.WriteString(dimStyle.Render("  \u2191\u2193 navigate  enter expand/collapse  a toggle all  ? help  q quit"))
 	sb.WriteString("\n")
 
-	content := reportBoxStyle.Render(sb.String())
+	content := reportBoxStyle.Width(l.termWidth - 2).Render(sb.String())
 
 	// Apply scrolling.
 	lines := strings.Split(content, "\n")
@@ -174,6 +209,43 @@ func (m model) View() string {
 	return strings.Join(lines[start:end], "\n")
 }
 
+func (m model) renderHelpOverlay() string {
+	w := m.width
+	if w <= 0 {
+		w = 80
+	}
+	h := m.height
+	if h <= 0 {
+		h = 24
+	}
+
+	helpContent := strings.Join([]string{
+		headingStyle.Render("Keyboard Shortcuts"),
+		"",
+		valueStyle.Render("  \u2191 / k        ") + dimStyle.Render("Move to previous finding"),
+		valueStyle.Render("  \u2193 / j        ") + dimStyle.Render("Move to next finding"),
+		valueStyle.Render("  enter / space ") + dimStyle.Render("Expand or collapse selected finding"),
+		valueStyle.Render("  a             ") + dimStyle.Render("Toggle all findings open/closed"),
+		valueStyle.Render("  e             ") + dimStyle.Render("Expand full evidence (when available)"),
+		valueStyle.Render("  ctrl+\u2191/\u2193     ") + dimStyle.Render("Scroll content"),
+		valueStyle.Render("  mouse wheel   ") + dimStyle.Render("Scroll content"),
+		valueStyle.Render("  pgup / pgdown ") + dimStyle.Render("Scroll half a page"),
+		valueStyle.Render("  ?             ") + dimStyle.Render("Toggle this help overlay"),
+		valueStyle.Render("  q / esc       ") + dimStyle.Render("Quit"),
+		"",
+		dimStyle.Render("  Press any key to close this overlay"),
+	}, "\n")
+
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colPurple).
+		Padding(1, 3).
+		Width(56).
+		Render(helpContent)
+
+	return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, box)
+}
+
 var (
 	selectedStyle = lipgloss.NewStyle().
 			Foreground(colPurple).
@@ -183,7 +255,7 @@ var (
 	expandedIcon  = dimStyle.Render("\u25bc") // ▼
 )
 
-func (m model) renderFinding(idx int, vuln models.AIVulnerability) string {
+func (m model) renderFinding(idx int, vuln models.AIVulnerability, l layout) string {
 	var sb strings.Builder
 
 	isSelected := idx == m.cursor
@@ -194,53 +266,67 @@ func (m model) renderFinding(idx int, vuln models.AIVulnerability) string {
 		icon = expandedIcon
 	}
 
-	// Finding header line.
+	// Finding header line with severity badge.
 	sb.WriteString("\n")
 	numStr := fmt.Sprintf("#%d", idx+1)
 	name := vuln.Definition.Name
+	badge := renderSeverityBadge(vuln.Severity)
+
+	breach := breachedBadge.Render(" BREACHED ")
 
 	if isSelected {
-		sb.WriteString(fmt.Sprintf("  %s %s  %s  %s\n",
+		sb.WriteString(fmt.Sprintf("  %s %s  %s  %s  %s  %s",
 			selectedStyle.Render("\u25b8"),
 			icon,
 			failText.Render(numStr),
 			selectedStyle.Render(name),
+			badge,
+			breach,
 		))
 	} else {
-		sb.WriteString(fmt.Sprintf("    %s  %s  %s\n",
+		sb.WriteString(fmt.Sprintf("    %s  %s  %s  %s  %s",
 			icon,
 			failText.Render(numStr),
 			valueStyle.Render(name),
+			badge,
+			breach,
 		))
 	}
 
+	// Contextual keybinding hint for collapsed findings.
+	if !isExpanded && isSelected {
+		sb.WriteString("  " + dimStyle.Render("[enter] expand"))
+	}
+	sb.WriteString("\n")
+
 	sb.WriteString(fmt.Sprintf("      %s\n", dimStyle.Render(vuln.Definition.Description)))
 
-	pass, total := findingPassRate(vuln.Definition.ID, m.data.Summary)
-	sb.WriteString(fmt.Sprintf("      %s  %s\n",
-		labelStyle.Render("Pass Rate"),
-		dimStyle.Render(fmt.Sprintf("%d / %d tests passed", pass, total)),
+	// Probe result.
+	_, total := findingPassRate(vuln.Definition.ID, m.data.Summary)
+	breachCount := findingFailCount(vuln.Definition.ID, m.data.Summary)
+	sb.WriteString(fmt.Sprintf("      %s\n",
+		failText.Render(fmt.Sprintf("%d of %d probes breached defenses", breachCount, total)),
 	))
 
+	// OWASP reference inline.
 	if len(vuln.Tags) > 0 {
-		sb.WriteString(fmt.Sprintf("      %s %s\n",
-			labelStyle.Render("Tested Vulnerabilities:"),
-			dimStyle.Render(strings.Join(vuln.Tags, ", ")),
-		))
+		owasp := owaspLabel(vuln.Tags)
+		if owasp != "" {
+			sb.WriteString(fmt.Sprintf("      %s\n", valueStyle.Render(owasp)))
+		} else {
+			sb.WriteString(fmt.Sprintf("      %s %s\n",
+				labelStyle.Render("Tested Vulnerabilities:"),
+				dimStyle.Render(strings.Join(vuln.Tags, ", ")),
+			))
+		}
 	}
 
 	if isExpanded {
 		sb.WriteString("\n")
-		sb.WriteString(renderConversation(vuln.Turns, true))
+		sb.WriteString(renderConversation(vuln.Turns, true, l))
 
 		if vuln.Evidence.Content.Reason != "" {
-			evidence := vuln.Evidence.Content.Reason
-			if len(evidence) > maxEvidenceLen {
-				evidence = evidence[:maxEvidenceLen] + "..."
-			}
-			content := fmt.Sprintf("%s  %s", labelStyle.Render("Evidence"), dimStyle.Render(evidence))
-			sb.WriteString(evidenceBoxStyle.Render(content))
-			sb.WriteString("\n")
+			renderEvidenceBlock(&sb, vuln.Evidence.Content.Reason, l)
 		}
 	}
 
