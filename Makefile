@@ -33,21 +33,24 @@ test: ## Run unit tests
 generate: ## Run commands described by //go:generate directives within source code
 	go generate ./...
 
-.PHONY: test-web
-test-web: ## Run frontend unit tests
+.PHONY: test-wizard
+test-wizard: ## Run setup wizard frontend unit tests
 	cd web && npm install && npx vitest run
 
-.PHONY: build-web
-build-web: ## Build React frontend
+.PHONY: build-wizard
+build-wizard: ## Build setup wizard React frontend
 	cd web && npm install && npm run build
 	rm -rf internal/wizard/dist && cp -r web/dist internal/wizard/dist
 
-.PHONY: dev-web
-dev-web: ## Run frontend (HMR) + Go API server for development
-	REDTEAM_DEV=1 go run ./cmd/develop redteam setup --experimental & \
-	cd web && npm install && npx vite dev --open; \
-	kill %1 2>/dev/null
+.PHONY: dev-wizard
+dev-wizard: ## Run setup wizard frontend (HMR) + Go API server for development
+	cd web && npm install --silent
+	./scripts/dev-web.sh
 
-.PHONY: web
-web: build-web ## Run full production-like setup for testing
+.PHONY: wizard
+wizard: build-wizard ## Run full production-like setup wizard for testing
 	go run ./cmd/develop redteam setup --experimental
+
+.PHONY: auth
+auth: ## Authenticate with Snyk (required before running the setup wizard locally)
+	go run ./cmd/develop auth
