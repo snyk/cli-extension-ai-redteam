@@ -31,9 +31,6 @@ type Config struct {
 	Target  ConfigTarget                `yaml:"target" json:"target"`
 	Goals   []string                    `yaml:"goals" json:"goals"`
 	Attacks []controlserver.AttackEntry `yaml:"attacks" json:"attacks,omitempty"`
-
-	// ProfileName is set when attacks are resolved from a profile.
-	ProfileName string `yaml:"-" json:"-"`
 }
 
 type ConfigTarget struct {
@@ -232,19 +229,18 @@ func applyProfile(
 	client controlserver.Client,
 	cfg *Config,
 	profileID string,
-) error {
+) (string, error) {
 	profiles, err := client.ListProfiles(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to fetch profiles: %w", err)
+		return "", fmt.Errorf("failed to fetch profiles: %w", err)
 	}
 	for _, p := range profiles {
 		if p.ID == profileID {
 			cfg.Attacks = p.Entries
-			cfg.ProfileName = p.Name
-			return nil
+			return p.Name, nil
 		}
 	}
-	return fmt.Errorf("profile %q not found on server", profileID)
+	return "", fmt.Errorf("profile %q not found on server", profileID)
 }
 
 func applyDefaults(cfg *Config) {

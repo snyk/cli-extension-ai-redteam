@@ -132,26 +132,32 @@ func RunRedTeamWorkflow(
 		return nil, fmt.Errorf("--goals and --profile cannot be used together")
 	}
 
+	var profileName string
+
 	switch {
 	case len(goalsFlag) > 0:
 		rtConfig.Goals = goalsFlag
 		rtConfig.Attacks = nil
 	case profileID != "":
-		if err := applyProfile(
+		name, err := applyProfile(
 			context.Background(), controlServerClient, rtConfig, profileID,
-		); err != nil {
+		)
+		if err != nil {
 			return nil, err
 		}
+		profileName = name
 	case rtConfig.NeedsDefaultProfile():
-		if err := applyProfile(
+		name, err := applyProfile(
 			context.Background(), controlServerClient, rtConfig, defaultProfileID,
-		); err != nil {
+		)
+		if err != nil {
 			return nil, err
 		}
+		profileName = name
 	}
 
 	userInterface := invocationCtx.GetUserInterface()
-	displayBanner(userInterface, rtConfig)
+	displayBanner(userInterface, rtConfig, profileName)
 	targetClient := targetFactory(
 		targetHTTPClient,
 		rtConfig.Target.Settings.URL,
