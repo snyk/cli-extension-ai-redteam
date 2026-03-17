@@ -31,6 +31,9 @@ type Config struct {
 	Target  ConfigTarget                `yaml:"target" json:"target"`
 	Goals   []string                    `yaml:"goals" json:"goals"`
 	Attacks []controlserver.AttackEntry `yaml:"attacks" json:"attacks,omitempty"`
+
+	// ProfileName is set when attacks are resolved from a profile.
+	ProfileName string `yaml:"-" json:"-"`
 }
 
 type ConfigTarget struct {
@@ -224,24 +227,24 @@ func (cfg *Config) NeedsDefaultProfile() bool {
 	return len(cfg.Goals) == 0 && len(cfg.Attacks) == 0
 }
 
-func applyDefaultProfile(
+func applyProfile(
 	ctx context.Context,
 	client controlserver.Client,
 	cfg *Config,
+	profileID string,
 ) error {
 	profiles, err := client.ListProfiles(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to fetch profiles: %w", err)
 	}
 	for _, p := range profiles {
-		if p.ID == defaultProfileID {
+		if p.ID == profileID {
 			cfg.Attacks = p.Entries
+			cfg.ProfileName = p.Name
 			return nil
 		}
 	}
-	return fmt.Errorf(
-		"default profile %q not found on server", defaultProfileID,
-	)
+	return fmt.Errorf("profile %q not found on server", profileID)
 }
 
 func applyDefaults(cfg *Config) {
@@ -266,21 +269,46 @@ func HeadersToMap(hdrs []ConfigHeader) map[string]string {
 	return headers
 }
 
+// UniqueGoals returns deduplicated goal names from attacks and goals.
+func (cfg *Config) UniqueGoals() []string {
+	seen := make(map[string]struct{})
+	var goals []string
+	for _, a := range cfg.Attacks {
+		if _, ok := seen[a.Goal]; !ok {
+			seen[a.Goal] = struct{}{}
+			goals = append(goals, a.Goal)
+		}
+	}
+	for _, g := range cfg.Goals {
+		if _, ok := seen[g]; !ok {
+			seen[g] = struct{}{}
+			goals = append(goals, g)
+		}
+	}
+	return goals
+}
+
 func (cfg *Config) HeadersMap() map[string]string {
 	return HeadersToMap(cfg.Target.Settings.Headers)
 }
 
 func getToolsFlags(config configuration.Configuration) []string {
-	raw := config.Get(utils.FlagTools)
-	vals, ok := raw.([]string)
-	if !ok || len(vals) == 0 {
+	raw := config.GetString(utils.FlagTools)
+	if raw == "" {
 		return nil
 	}
-	return vals
+	var tools []string
+	for _, t := range strings.Split(raw, ",") {
+		t = strings.TrimSpace(t)
+		if t != "" {
+			tools = append(tools, t)
+		}
+	}
+	return tools
 }
 
 func parseHeaderFlags(config configuration.Configuration) []ConfigHeader {
-	raw := config.Get(utils.FlagHeaders)
+	raw := config.Get(utils.FlagHeader)
 	vals, ok := raw.([]string)
 	if !ok || len(vals) == 0 {
 		return nil

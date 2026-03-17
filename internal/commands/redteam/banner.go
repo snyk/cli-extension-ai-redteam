@@ -20,15 +20,10 @@ func displayBanner(userInterface ui.UserInterface, cfg *Config) {
 	fmt.Fprintf(&sb, "  %s%sSnyk Agent Red Teaming%s\n", bold, bred, reset)
 	fmt.Fprintf(&sb, "\n")
 	fmt.Fprintf(&sb, "  Target:     %s\n", cfg.Target.Settings.URL)
-	if len(cfg.Attacks) > 0 {
-		goals := make([]string, 0, len(cfg.Attacks))
-		for _, a := range cfg.Attacks {
-			goals = append(goals, a.Goal)
-		}
-		fmt.Fprintf(&sb, "  Attacks:    %s\n", strings.Join(goals, ", "))
-	} else {
-		fmt.Fprintf(&sb, "  Goals:      %s\n", strings.Join(cfg.Goals, ", "))
+	if cfg.ProfileName != "" {
+		fmt.Fprintf(&sb, "  Profile:    %s\n", cfg.ProfileName)
 	}
+	fmt.Fprintf(&sb, "  Goals:      %s\n", strings.Join(cfg.UniqueGoals(), ", "))
 	fmt.Fprintf(&sb, "\n")
 
 	_ = userInterface.Output(sb.String())

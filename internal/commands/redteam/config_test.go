@@ -438,7 +438,7 @@ target:
 `)
 	cfg := configuration.New()
 	cfg.Set(utils.FlagConfig, path)
-	cfg.Set(utils.FlagHeaders, []string{"Authorization: Bearer tok123", "X-Custom: hello"})
+	cfg.Set(utils.FlagHeader, []string{"Authorization: Bearer tok123", "X-Custom: hello"})
 
 	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
 	require.NoError(t, err)
@@ -453,7 +453,7 @@ func TestLoadAndValidateConfig_HeaderFlagMalformedIgnored(t *testing.T) {
 	path := writeTestConfig(t, baseTargetYAML)
 	cfg := configuration.New()
 	cfg.Set(utils.FlagConfig, path)
-	cfg.Set(utils.FlagHeaders, []string{"no-colon-here", "Good: header"})
+	cfg.Set(utils.FlagHeader, []string{"no-colon-here", "Good: header"})
 
 	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
 	require.NoError(t, err)
@@ -465,7 +465,7 @@ func TestLoadAndValidateConfig_HeaderFlagValueWithColons(t *testing.T) {
 	path := writeTestConfig(t, baseTargetYAML)
 	cfg := configuration.New()
 	cfg.Set(utils.FlagConfig, path)
-	cfg.Set(utils.FlagHeaders, []string{"Authorization: Bearer eyJ0:abc:def"})
+	cfg.Set(utils.FlagHeader, []string{"Authorization: Bearer eyJ0:abc:def"})
 
 	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
 	require.NoError(t, err)

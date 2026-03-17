@@ -63,11 +63,12 @@ func RegisterRedTeamWorkflow(e workflow.Engine) error {
 	flagset.Bool(utils.FlagListGoals, false, "List all available attack goals and exit")
 	flagset.Bool(utils.FlagListStrategies, false, "List all available attack strategies and exit")
 	flagset.Bool(utils.FlagListProfiles, false, "List all available attack profiles and exit")
-	flagset.StringArray(utils.FlagAttack, nil, `Attack in "goal:strategy" format (repeatable, overrides goals)`)
+	flagset.String(utils.FlagGoals, "", "Comma-separated goals to test (e.g. system_prompt_extraction,pii_extraction)")
+	flagset.String(utils.FlagProfile, "", "Attack profile to use (e.g. fast, security, safety)")
 	flagset.String(utils.FlagTenantID, "", "Tenant ID (auto-discovered if not provided)")
 	flagset.String(utils.FlagPurpose, "", "Intended purpose of the target (ground truth for the judge)")
 	flagset.String(utils.FlagSystemPrompt, "", "Target system prompt (ground truth for prompt-extraction scoring)")
-	flagset.StringArray(utils.FlagTools, nil, "Tool names the target is configured with (ground truth, repeatable)")
+	flagset.String(utils.FlagTools, "", "Comma-separated tool names the target is configured with (ground truth)")
 
 	cfg := workflow.ConfigurationOptionsFromFlagset(flagset)
 	if _, err := e.Register(WorkflowID, cfg, redTeamWorkflow); err != nil {
@@ -112,10 +113,6 @@ func RunRedTeamWorkflow(
 		return nil, err
 	}
 
-	if attacks := parseAttackFlags(config); len(attacks) > 0 {
-		rtConfig.Attacks = attacks
-	}
-
 	tenantID, err := helpers.GetTenantID(invocationCtx, config.GetString(utils.FlagTenantID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve tenant: %w", err)
@@ -128,9 +125,26 @@ func RunRedTeamWorkflow(
 
 	controlServerClient := controlServerFactory(logger, controlServerHTTPClient, controlServerURL, tenantID)
 
-	if rtConfig.NeedsDefaultProfile() {
-		if err := applyDefaultProfile(
-			context.Background(), controlServerClient, rtConfig,
+	goalsFlag := getGoalsFlag(config)
+	profileID := config.GetString(utils.FlagProfile)
+
+	if len(goalsFlag) > 0 && profileID != "" {
+		return nil, fmt.Errorf("--goals and --profile cannot be used together")
+	}
+
+	switch {
+	case len(goalsFlag) > 0:
+		rtConfig.Goals = goalsFlag
+		rtConfig.Attacks = nil
+	case profileID != "":
+		if err := applyProfile(
+			context.Background(), controlServerClient, rtConfig, profileID,
+		); err != nil {
+			return nil, err
+		}
+	case rtConfig.NeedsDefaultProfile():
+		if err := applyProfile(
+			context.Background(), controlServerClient, rtConfig, defaultProfileID,
 		); err != nil {
 			return nil, err
 		}
@@ -207,21 +221,19 @@ func handleListFlags(
 	return []workflow.Data{newWorkflowData(contentTypePlain, []byte(output))}, nil
 }
 
-func parseAttackFlags(config configuration.Configuration) []controlserver.AttackEntry {
-	raw := config.Get(utils.FlagAttack)
-	vals, ok := raw.([]string)
-	if !ok || len(vals) == 0 {
+func getGoalsFlag(config configuration.Configuration) []string {
+	raw := config.GetString(utils.FlagGoals)
+	if raw == "" {
 		return nil
 	}
-	attacks := make([]controlserver.AttackEntry, 0, len(vals))
-	for _, v := range vals {
-		goal, strategy, _ := strings.Cut(v, ":")
-		attacks = append(attacks, controlserver.AttackEntry{
-			Goal:     goal,
-			Strategy: strategy,
-		})
+	var goals []string
+	for _, g := range strings.Split(raw, ",") {
+		g = strings.TrimSpace(g)
+		if g != "" {
+			goals = append(goals, g)
+		}
 	}
-	return attacks
+	return goals
 }
 
 func appendEnumTable(lines []string, entries []controlserver.EnumEntry) []string {

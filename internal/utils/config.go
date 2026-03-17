@@ -12,11 +12,12 @@ const (
 	FlagTargetURL        = "target-url"
 	FlagRequestBodyTmpl  = "request-body-template"
 	FlagResponseSelector = "response-selector"
-	FlagHeaders          = "headers"
+	FlagHeader           = "header"
 	FlagListGoals        = "list-goals"
 	FlagListStrategies   = "list-strategies"
 	FlagListProfiles     = "list-profiles"
-	FlagAttack           = "attack"
+	FlagGoals            = "goals"
+	FlagProfile          = "profile"
 	FlagPurpose          = "purpose"
 	FlagSystemPrompt     = "system-prompt"
 	FlagTools            = "tools"
@@ -33,5 +34,5 @@ func AddTargetFlags(fs *pflag.FlagSet) {
 		`Request body template with {{prompt}} placeholder (e.g. '{"message": "{{prompt}}"}')`)
 	fs.String(FlagResponseSelector, "",
 		"Dot-notation path to extract response from target JSON (e.g. response)")
-	fs.StringArray(FlagHeaders, nil, `Request headers in "Key: Value" format (repeatable)`)
+	fs.StringArray(FlagHeader, nil, `Request header in "Key: Value" format (repeatable)`)
 }

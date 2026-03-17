@@ -62,6 +62,14 @@ func defaultMockCS() *controlservermock.MockClient {
 					{Goal: "system_prompt_extraction"},
 				},
 			},
+			{
+				ID:   "security",
+				Name: "Security",
+				Entries: []controlserver.AttackEntry{
+					{Goal: "system_prompt_extraction", Strategy: "crescendo"},
+					{Goal: "pii_extraction", Strategy: "role_play"},
+				},
+			},
 		},
 		Status: &controlserver.ScanStatus{
 			ScanID:     testScanID,
@@ -707,15 +715,38 @@ func TestRunRedTeamWorkflow_ListProfilesError(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to list profiles")
 }
 
-func TestRunRedTeamWorkflow_AttackFlag(t *testing.T) {
+func TestRunRedTeamWorkflow_ProfileFlag(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
 	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
 	ictx.GetConfiguration().Set(configFlag, redteamTestConfigFile)
-	ictx.GetConfiguration().Set("attack", []string{"harmful_content:role_play", "system_prompt_extraction"})
+	ictx.GetConfiguration().Set("profile", "security")
 
 	originalArgs := os.Args
-	os.Args = []string{"snyk", "redteam", "--attack", "harmful_content:role_play", "--attack", "system_prompt_extraction"}
+	os.Args = []string{"snyk", "redteam", "--profile", "security"}
+	defer func() { os.Args = originalArgs }()
+
+	mockCS := defaultMockCS()
+	_, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(mockCS), mockTargetFactory(defaultMockTarget()))
+	require.NoError(t, err)
+
+	require.NotNil(t, mockCS.CreateScanRequest)
+	require.Len(t, mockCS.CreateScanRequest.Attacks, 2)
+	assert.Equal(t, "system_prompt_extraction", mockCS.CreateScanRequest.Attacks[0].Goal)
+	assert.Equal(t, "crescendo", mockCS.CreateScanRequest.Attacks[0].Strategy)
+	assert.Equal(t, "pii_extraction", mockCS.CreateScanRequest.Attacks[1].Goal)
+	assert.Equal(t, "role_play", mockCS.CreateScanRequest.Attacks[1].Strategy)
+}
+
+func TestRunRedTeamWorkflow_GoalsFlag(t *testing.T) {
+	ictx := frameworkmock.NewMockInvocationContext(t)
+	ictx.GetConfiguration().Set(experimentalKey, true)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
+	ictx.GetConfiguration().Set(configFlag, redteamTestConfigFile)
+	ictx.GetConfiguration().Set("goals", "harmful_content,pii_extraction")
+
+	originalArgs := os.Args
+	os.Args = []string{"snyk", "redteam", "--goals", "harmful_content,pii_extraction"}
 	defer func() { os.Args = originalArgs }()
 
 	mockCS := defaultMockCS()
@@ -725,7 +756,40 @@ func TestRunRedTeamWorkflow_AttackFlag(t *testing.T) {
 	require.NotNil(t, mockCS.CreateScanRequest)
 	require.Len(t, mockCS.CreateScanRequest.Attacks, 2)
 	assert.Equal(t, "harmful_content", mockCS.CreateScanRequest.Attacks[0].Goal)
-	assert.Equal(t, "role_play", mockCS.CreateScanRequest.Attacks[0].Strategy)
-	assert.Equal(t, "system_prompt_extraction", mockCS.CreateScanRequest.Attacks[1].Goal)
+	assert.Empty(t, mockCS.CreateScanRequest.Attacks[0].Strategy)
+	assert.Equal(t, "pii_extraction", mockCS.CreateScanRequest.Attacks[1].Goal)
 	assert.Empty(t, mockCS.CreateScanRequest.Attacks[1].Strategy)
+}
+
+func TestRunRedTeamWorkflow_GoalsAndProfileConflict(t *testing.T) {
+	ictx := frameworkmock.NewMockInvocationContext(t)
+	ictx.GetConfiguration().Set(experimentalKey, true)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
+	ictx.GetConfiguration().Set(configFlag, redteamTestConfigFile)
+	ictx.GetConfiguration().Set("goals", "harmful_content")
+	ictx.GetConfiguration().Set("profile", "security")
+
+	originalArgs := os.Args
+	os.Args = []string{"snyk", "redteam", "--goals", "harmful_content", "--profile", "security"}
+	defer func() { os.Args = originalArgs }()
+
+	_, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--goals and --profile cannot be used together")
+}
+
+func TestRunRedTeamWorkflow_ProfileNotFound(t *testing.T) {
+	ictx := frameworkmock.NewMockInvocationContext(t)
+	ictx.GetConfiguration().Set(experimentalKey, true)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
+	ictx.GetConfiguration().Set(configFlag, redteamTestConfigFile)
+	ictx.GetConfiguration().Set("profile", "nonexistent")
+
+	originalArgs := os.Args
+	os.Args = []string{"snyk", "redteam", "--profile", "nonexistent"}
+	defer func() { os.Args = originalArgs }()
+
+	_, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `profile "nonexistent" not found`)
 }
