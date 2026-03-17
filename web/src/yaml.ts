@@ -43,11 +43,6 @@ export function configToYaml(config: Config): string {
     }
   }
 
-  lines.push("goals:");
-  for (const g of config.goals) {
-    lines.push(`  - ${g}`);
-  }
-
   if (config.attacks && config.attacks.length > 0) {
     lines.push("attacks:");
     for (const a of config.attacks) {

@@ -16,22 +16,21 @@ function minimalConfig(overrides?: Partial<Config>): Config {
         ...overrides?.target?.settings,
       },
     },
-    goals: overrides?.goals ?? ["harmful_content"],
+    goals: [],
     attacks: "attacks" in (overrides ?? {}) ? overrides!.attacks : [{ goal: "harmful_content" }],
   };
 }
 
 describe("configToYaml", () => {
-  it("renders minimal config with correct YAML structure", () => {
+  it("renders minimal config with attacks", () => {
     const yaml = configToYaml(minimalConfig());
     expect(yaml).toContain("target:");
     expect(yaml).toContain("  name: test-target");
     expect(yaml).toContain("  type: http");
     expect(yaml).toContain("  settings:");
-    expect(yaml).toContain("goals:");
-    expect(yaml).toContain("  - harmful_content");
     expect(yaml).toContain("attacks:");
     expect(yaml).toContain("  - goal: harmful_content");
+    expect(yaml).not.toContain("goals:");
     expect(yaml.endsWith("\n")).toBe(true);
   });
 

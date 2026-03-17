@@ -54,10 +54,8 @@ export function buildConfig(values: Record<string, any>): Config {
         request_body_template: settings.request_body_template || "",
       },
     },
-    goals: values?.goals?.length ? values.goals : ["system_prompt_extraction"],
-    attacks: (values?.goals?.length ? values.goals : ["system_prompt_extraction"]).map(
-      (g: string) => ({ goal: g }),
-    ),
+    goals: [],
+    attacks: values?.attacks || (values?.goals || []).map((g: string) => ({ goal: g })),
   };
 }
 
@@ -75,7 +73,6 @@ function downloadFile(content: string, filename: string) {
 
 const defaultValues = {
   target: { type: "http" },
-  goals: ["system_prompt_extraction"],
 };
 
 export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded }: SetupPageProps) {
@@ -117,7 +114,7 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
               request_body_template: cfg.target?.settings?.request_body_template,
             },
           },
-          goals: cfg.goals?.length ? cfg.goals : ["system_prompt_extraction"],
+          goals: cfg.goals || [],
         });
       })
       .catch(() => {});

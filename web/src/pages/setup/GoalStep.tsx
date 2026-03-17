@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Form, Checkbox, Space, Spin, Alert, Card, Row, Col } from "antd";
+import { Form, Checkbox, Space, Spin, Alert, Row, Col } from "antd";
 
 interface EnumEntry {
   value: string;
@@ -53,11 +53,19 @@ export default function GoalStep() {
     const isDeselecting = selectedProfile === profile.id;
     if (isDeselecting) {
       setSelectedProfile(null);
+      form.setFieldsValue({ goals: [], attacks: undefined });
       return;
     }
     setSelectedProfile(profile.id);
     const profileGoals = [...new Set(profile.entries.map((e) => e.goal))];
-    form.setFieldsValue({ goals: profileGoals });
+    form.setFieldsValue({ goals: profileGoals, attacks: profile.entries });
+  };
+
+  const handleGoalsChange = () => {
+    if (selectedProfile) {
+      setSelectedProfile(null);
+      form.setFieldsValue({ attacks: undefined });
+    }
   };
 
   if (loading) return <Spin />;
@@ -69,26 +77,27 @@ export default function GoalStep() {
         <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
           {profiles.map((p) => (
             <Col key={p.id} xs={24} sm={8}>
-              <Card
-                hoverable
+              {/* Custom div instead of antd Card — Card's CSS-in-JS overrides background styles */}
+              <div
                 onClick={() => handleProfileClick(p)}
-                style={{
-                  borderColor: selectedProfile === p.id ? "#1677ff" : undefined,
-                  cursor: "pointer",
-                }}
+                className={selectedProfile === p.id ? "profile-card profile-card-selected" : "profile-card"}
                 data-testid={`profile-card-${p.id}`}
               >
-                <Card.Meta title={p.name} description={p.description} />
-              </Card>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>{p.name}</div>
+                <div style={{ color: "var(--pcl-color-fg-secondary)", fontSize: 13 }}>
+                  {p.description}
+                </div>
+              </div>
             </Col>
           ))}
         </Row>
       )}
+      <Form.Item name="attacks" hidden><input type="hidden" /></Form.Item>
       <Form.Item
         name="goals"
         rules={[{ required: true, message: "Please select at least one goal" }]}
       >
-        <Checkbox.Group>
+        <Checkbox.Group onChange={handleGoalsChange}>
           <Space direction="vertical" size="middle">
             {goals.map((g) => (
               <Checkbox key={g.value} value={g.value}>

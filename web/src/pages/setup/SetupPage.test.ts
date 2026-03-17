@@ -56,14 +56,44 @@ describe("buildConfig", () => {
     expect(config.target.context.purpose).toBe("chatbot");
     expect(config.target.settings.url).toBe("https://api.example.com");
     expect(config.target.settings.headers).toHaveLength(1);
-    expect(config.goals).toEqual(["system_prompt_extraction"]);
+    expect(config.goals).toEqual([]);
     expect(config.attacks).toEqual([{ goal: "system_prompt_extraction" }]);
   });
 
-  it("applies default goals and attacks when empty", () => {
+  it("uses profile attacks with strategies when present", () => {
+    const values = {
+      target: { name: "t", type: "http", settings: {} },
+      goals: ["system_prompt_extraction"],
+      attacks: [
+        { goal: "system_prompt_extraction", strategy: "crescendo" },
+        { goal: "pii_extraction", strategy: "role_play" },
+      ],
+    };
+    const config = buildConfig(values);
+    expect(config.goals).toEqual([]);
+    expect(config.attacks).toEqual([
+      { goal: "system_prompt_extraction", strategy: "crescendo" },
+      { goal: "pii_extraction", strategy: "role_play" },
+    ]);
+  });
+
+  it("converts goals to attacks without strategy when no profile", () => {
+    const values = {
+      target: { name: "t", type: "http", settings: {} },
+      goals: ["harmful_content", "pii_extraction"],
+    };
+    const config = buildConfig(values);
+    expect(config.goals).toEqual([]);
+    expect(config.attacks).toEqual([
+      { goal: "harmful_content" },
+      { goal: "pii_extraction" },
+    ]);
+  });
+
+  it("returns empty attacks when no goals provided", () => {
     const config = buildConfig({ target: { name: "t", type: "http", settings: {} } });
-    expect(config.goals).toEqual(["system_prompt_extraction"]);
-    expect(config.attacks).toEqual([{ goal: "system_prompt_extraction" }]);
+    expect(config.goals).toEqual([]);
+    expect(config.attacks).toEqual([]);
   });
 
   it("filters out incomplete headers", () => {
