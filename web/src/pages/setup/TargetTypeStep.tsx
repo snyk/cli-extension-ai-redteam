@@ -7,6 +7,7 @@ export default function TargetTypeStep() {
         label="Target Name"
         name={["target", "name"]}
         rules={[{ required: true, message: "Target name is required" }]}
+        tooltip="A human-readable name for this target, used to identify it in scan results"
       >
         <Input placeholder="My AI Chatbot" />
       </Form.Item>
@@ -15,6 +16,7 @@ export default function TargetTypeStep() {
         label="Target Type"
         name={["target", "type"]}
         rules={[{ required: true, message: "Target type is required" }]}
+        tooltip="The protocol used to communicate with the target"
       >
         <Select
           options={[

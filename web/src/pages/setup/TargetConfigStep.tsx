@@ -41,6 +41,7 @@ export default function TargetConfigStep() {
         label="Target URL"
         name={["target", "settings", "url"]}
         rules={[{ required: true, validator: validateHttpUrl }]}
+        tooltip="The HTTP(S) endpoint that Agent Red Teaming will send prompts to"
       >
         <Input placeholder="https://api.example.com/chat/completions" />
       </Form.Item>
@@ -49,7 +50,7 @@ export default function TargetConfigStep() {
         label="Request Body Template"
         name={["target", "settings", "request_body_template"]}
         rules={[{ required: true, validator: validateRequestBodyTemplate }]}
-        tooltip="JSON template with {{prompt}} placeholder that will be sent to the target endpoint"
+        tooltip="JSON template sent to the target. Use {{prompt}} as a placeholder — Agent Red Teaming replaces it with each probe"
         extra={
           <Typography.Text type="secondary" style={{ fontFamily: "var(--pcl-font-family-mono)", fontSize: 12 }}>
             Example: {`{"message": "{{prompt}}"}`}
@@ -65,12 +66,12 @@ export default function TargetConfigStep() {
       <Form.Item
         label="Response Selector"
         name={["target", "settings", "response_selector"]}
-        tooltip="JMESPath expression to extract the response from a JSON body (e.g. data.choices[0].message.content). Must follow JMESPath syntax. Leave empty to capture the plain text response."
+        tooltip={<>JMESPath expression to extract the response from a JSON body (e.g. <code>data.choices[0].message.content</code>). Leave empty if the target returns plain text. <a href="https://jmespath.org/specification.html" target="_blank" rel="noopener noreferrer">JMESPath reference</a></>}
       >
         <Input style={{ fontFamily: "var(--pcl-font-family-mono)" }} />
       </Form.Item>
 
-      <Form.Item label="Headers">
+      <Form.Item label="Headers" tooltip="Custom HTTP headers sent with every request (e.g. Authorization, API keys)">
         <HeadersEditor />
       </Form.Item>
 
