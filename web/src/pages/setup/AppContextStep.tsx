@@ -26,7 +26,7 @@ export default function AppContextStep() {
       <Form.Item
         label="System Prompt"
         name={["target", "context", "ground_truth", "system_prompt"]}
-        tooltip="The exact system prompt configured on the target — used as ground truth when scoring prompt extraction attacks"
+        tooltip="The exact system prompt configured on the target - used as ground truth when scoring prompt extraction attacks"
       >
         <TextArea rows={4} placeholder="e.g. You are a helpful customer support agent..." />
       </Form.Item>
@@ -34,7 +34,7 @@ export default function AppContextStep() {
       <Form.Item
         label="Tools"
         name={["target", "context", "ground_truth", "tools"]}
-        tooltip="Comma-separated list of tool/function names the target has access to — used as ground truth when scoring tool discovery attacks"
+        tooltip="Comma-separated list of tool/function names the target has access to - used as ground truth when scoring tool discovery attacks"
       >
         <Input placeholder="e.g. search_orders, refund_payment, check_balance" />
       </Form.Item>

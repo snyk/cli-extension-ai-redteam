@@ -50,7 +50,7 @@ export default function TargetConfigStep() {
         label="Request Body Template"
         name={["target", "settings", "request_body_template"]}
         rules={[{ required: true, validator: validateRequestBodyTemplate }]}
-        tooltip="JSON template sent to the target. Use {{prompt}} as a placeholder — Agent Red Teaming replaces it with each probe"
+        tooltip="JSON template sent to the target. Use {{prompt}} as a placeholder - Agent Red Teaming replaces it with each probe"
         extra={
           <Typography.Text type="secondary" style={{ fontFamily: "var(--pcl-font-family-mono)", fontSize: 12 }}>
             Example: {`{"message": "{{prompt}}"}`}
