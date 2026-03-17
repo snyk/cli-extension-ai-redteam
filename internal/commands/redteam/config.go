@@ -27,10 +27,9 @@ const (
 var defaultGoals = []string{"system_prompt_extraction"}
 
 type Config struct {
-	Target           ConfigTarget                `yaml:"target" json:"target"`
-	ControlServerURL string                      `yaml:"control_server_url" json:"control_server_url,omitempty"`
-	Goals            []string                    `yaml:"goals" json:"goals"`
-	Attacks          []controlserver.AttackEntry `yaml:"attacks" json:"attacks,omitempty"`
+	Target  ConfigTarget                `yaml:"target" json:"target"`
+	Goals   []string                    `yaml:"goals" json:"goals"`
+	Attacks []controlserver.AttackEntry `yaml:"attacks" json:"attacks,omitempty"`
 }
 
 type ConfigTarget struct {
@@ -51,14 +50,10 @@ type ConfigGroundTruth struct {
 }
 
 type ConfigSettings struct {
-	URL                       string         `yaml:"url" json:"url"`
-	Headers                   []ConfigHeader `yaml:"headers,omitempty" json:"headers,omitempty"`
-	ResponseSelector          string         `yaml:"response_selector" json:"response_selector"`
-	RequestBodyTemplate       string         `yaml:"request_body_template" json:"request_body_template"`
-	SocketIOPath              string         `yaml:"socketio_path,omitempty" json:"socketio_path,omitempty"`
-	SocketIONamespace         string         `yaml:"socketio_namespace,omitempty" json:"socketio_namespace,omitempty"`
-	SocketIOSendEventName     string         `yaml:"socketio_send_event_name,omitempty" json:"socketio_send_event_name,omitempty"`
-	SocketIOResponseEventName string         `yaml:"socketio_response_event_name,omitempty" json:"socketio_response_event_name,omitempty"`
+	URL                 string         `yaml:"url" json:"url"`
+	Headers             []ConfigHeader `yaml:"headers,omitempty" json:"headers,omitempty"`
+	ResponseSelector    string         `yaml:"response_selector" json:"response_selector"`
+	RequestBodyTemplate string         `yaml:"request_body_template" json:"request_body_template"`
 }
 
 type ConfigHeader struct {
@@ -66,7 +61,9 @@ type ConfigHeader struct {
 	Value string `yaml:"value" json:"value"`
 }
 
-func LoadAndValidateConfig(logger *zerolog.Logger, config configuration.Configuration) (*Config, []workflow.Data, error) {
+func LoadAndValidateConfig(
+	logger *zerolog.Logger, config configuration.Configuration,
+) (*Config, []workflow.Data, error) {
 	rtConfig, earlyReturn := loadConfigFromFile(logger, config)
 	if earlyReturn != nil {
 		return nil, earlyReturn, nil
@@ -298,7 +295,6 @@ func getInvalidConfigMessage() string {
 				  value: '<optional, e.g. Bearer TOKEN>'
 			response_selector: '<optional, default: response>'
 			request_body_template: '<optional, default: {"message": "{{prompt}}"}'
-	control_server_url: '<optional, control server URL>'
 	goals:
 		- '<optional, default: system_prompt_extraction>'
 	attacks:

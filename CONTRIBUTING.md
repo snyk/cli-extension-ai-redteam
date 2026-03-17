@@ -34,10 +34,18 @@ go run cmd/develop/main.go auth
 
 ### Run a scan
 
+Set up your environment using the helper script:
+
+```bash
+source scripts/env.sh local     # local minired via tilt
+source scripts/env.sh pre-prod  # pre-prod backend
+```
+
+Then run:
+
 ```bash
 go run cmd/develop/main.go redteam --experimental --config=targets/minimal.yaml \
-  --target-url=https://your-app.example.com/api/chat \
-  --headers 'Authorization: Bearer <token>'
+  --target-url=http://localhost:8000/scenarios/chatbot_claude_sonnet_4_5
 ```
 
 ### Target config
@@ -47,15 +55,24 @@ Create a YAML file in `targets/` (see `targets/minimal.yaml` for reference):
 ```yaml
 target:
   name: my-app
-  type: api
+  type: http
   settings:
     url: "https://your-app.example.com/api/chat"
     response_selector: "response"
     request_body_template: '{"message": "{{prompt}}"}'
 
-goal: "system_prompt_extraction"
-strategies:
-  - "directly_asking"
+goals:
+  - "system_prompt_extraction"
+```
+
+For explicit control over strategies, use `attacks` instead of `goals`:
+
+```yaml
+attacks:
+  - goal: "system_prompt_extraction"
+    strategy: "directly_asking"
+  - goal: "system_prompt_extraction"
+    strategy: "crescendo"
 ```
 
 Secrets (auth headers, tokens) should be passed via `--headers` on the command line, not in config files.

@@ -1,10 +1,9 @@
 target:
   name: demo
-  type: api
+  type: http
   settings:
     response_selector: "response"
     request_body_template: '{"message": "{{prompt}}"}'
 
-goal: "system_prompt_extraction"
-strategies:
-  - "directly_asking"
+goals:
+  - "system_prompt_extraction"

@@ -40,7 +40,9 @@ func (m *MockClient) CreateScan(_ context.Context, req *controlserver.CreateScan
 	return m.ScanID, nil
 }
 
-func (m *MockClient) NextChats(_ context.Context, _ string, _ []controlserver.ChatResponse) ([]controlserver.ChatPrompt, error) {
+func (m *MockClient) NextChats(
+	_ context.Context, _ string, _ []controlserver.ChatResponse,
+) ([]controlserver.ChatPrompt, error) {
 	if m.NextErr != nil {
 		return nil, m.NextErr
 	}

@@ -32,7 +32,10 @@ type Server struct {
 	shutdown      chan struct{}
 }
 
-func NewServer(port int, configPath string, initialConfig *redteam.Config, csClient controlserver.Client, userInterface ui.UserInterface) *Server {
+func NewServer(
+	port int, configPath string, initialConfig *redteam.Config,
+	csClient controlserver.Client, userInterface ui.UserInterface,
+) *Server {
 	return &Server{
 		port:          port,
 		configPath:    configPath,

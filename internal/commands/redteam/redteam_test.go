@@ -84,7 +84,8 @@ func TestRunRedTeamWorkflow_HappyPath(t *testing.T) {
 	os.Args = []string{"snyk", "redteam"}
 	defer func() { os.Args = originalArgs }()
 
-	results, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
+	results, err := redteam.RunRedTeamWorkflow(
+		ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
 	require.NoError(t, err)
 	assert.Len(t, results, 1)
 	assert.Equal(t, "application/json", results[0].GetContentType())
@@ -145,7 +146,8 @@ func TestRunRedTeamWorkflow_ConfigFileNotFound(t *testing.T) {
 	os.Args = []string{"snyk", "redteam"}
 	defer func() { os.Args = originalArgs }()
 
-	results, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
+	results, err := redteam.RunRedTeamWorkflow(
+		ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
 	require.NoError(t, err)
 	assert.Len(t, results, 1)
 	assert.Equal(t, "text/plain", results[0].GetContentType())
@@ -160,7 +162,7 @@ func TestRunRedTeamWorkflow_InvalidYAML(t *testing.T) {
 	configContent := `
 target:
   name: "Test Target"
-  type: api
+  type: http
 
   ---- invalid yaml syntax ----
 `
@@ -177,7 +179,8 @@ target:
 	os.Args = []string{"snyk", "redteam"}
 	defer func() { os.Args = originalArgs }()
 
-	results, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
+	results, err := redteam.RunRedTeamWorkflow(
+		ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
 	require.NoError(t, err)
 	payload, _ := results[0].GetPayload().([]byte)
 	assert.Contains(t, string(payload), "Configuration file is invalid")
@@ -187,7 +190,7 @@ func TestRunRedTeamWorkflow_ValidationFailure(t *testing.T) {
 	configContent := `
 target:
   name: "Test Target"
-  type: api
+  type: http
 `
 	err := os.WriteFile("test-validation.yaml", []byte(configContent), 0o600)
 	require.NoError(t, err)
@@ -235,7 +238,8 @@ func TestRunRedTeamWorkflow_CustomConfigPathDoesNotExist(t *testing.T) {
 	os.Args = []string{"snyk", "redteam"}
 	defer func() { os.Args = originalArgs }()
 
-	results, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
+	results, err := redteam.RunRedTeamWorkflow(
+		ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
 	require.NoError(t, err)
 	payload, _ := results[0].GetPayload().([]byte)
 	assert.Contains(t, string(payload), "Configuration file not found")
@@ -290,7 +294,8 @@ func TestRunRedTeamWorkflow_HTMLOutput(t *testing.T) {
 	os.Args = []string{"snyk", "redteam", "--html"}
 	defer func() { os.Args = originalArgs }()
 
-	results, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
+	results, err := redteam.RunRedTeamWorkflow(
+		ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
 	require.NoError(t, err)
 	assert.Len(t, results, 1)
 	assert.Equal(t, "text/html", results[0].GetContentType())
@@ -341,7 +346,8 @@ func TestRunRedTeamWorkflow_HTMLFileOutput(t *testing.T) {
 	os.Args = []string{"snyk", "redteam", "--html-file-output", tmpFile}
 	defer func() { os.Args = originalArgs }()
 
-	results, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
+	results, err := redteam.RunRedTeamWorkflow(
+		ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
 	require.NoError(t, err)
 	assert.Len(t, results, 1)
 	assert.Equal(t, "application/json", results[0].GetContentType())
@@ -367,7 +373,8 @@ func TestRunRedTeamWorkflow_HTMLFileOutputWithHTMLFlag(t *testing.T) {
 	os.Args = []string{"snyk", "redteam", "--html", "--html-file-output", tmpFile}
 	defer func() { os.Args = originalArgs }()
 
-	results, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
+	results, err := redteam.RunRedTeamWorkflow(
+		ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
 	require.NoError(t, err)
 	assert.Len(t, results, 1)
 	assert.Equal(t, "text/html", results[0].GetContentType())
@@ -426,7 +433,10 @@ func TestRunRedTeamWorkflow_ListEnums(t *testing.T) {
 				m.Goals = e
 				m.GoalsErr = err
 			},
-			wantOutputs:    []string{"Available goals:", "NAME", "DESCRIPTION", "system_prompt_extraction", "Extract the system prompt", "harmful_content"},
+			wantOutputs: []string{
+				"Available goals:", "NAME", "DESCRIPTION",
+				"system_prompt_extraction", "Extract the system prompt", "harmful_content",
+			},
 			notWantOutputs: []string{"Available strategies:"},
 		},
 		{
@@ -463,7 +473,10 @@ func TestRunRedTeamWorkflow_ListEnums(t *testing.T) {
 				m.Strategies = e
 				m.StrategiesErr = err
 			},
-			wantOutputs:    []string{"Available strategies:", "NAME", "DESCRIPTION", "directly_asking", "Ask directly for the information", "role_play"},
+			wantOutputs: []string{
+				"Available strategies:", "NAME", "DESCRIPTION",
+				"directly_asking", "Ask directly for the information", "role_play",
+			},
 			notWantOutputs: []string{"Available goals:"},
 		},
 		{

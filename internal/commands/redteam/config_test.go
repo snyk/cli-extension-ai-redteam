@@ -21,7 +21,7 @@ const (
 	baseTargetYAML = `
 target:
   name: test
-  type: api
+  type: http
   settings:
     url: "https://example.com"
     response_selector: "response"
@@ -39,8 +39,7 @@ func validConfig() *redteam.Config {
 				RequestBodyTemplate: `{"message": "{{prompt}}"}`,
 			},
 		},
-		ControlServerURL: "http://localhost:8085",
-		Goals:            []string{"system_prompt_extraction"},
+		Goals: []string{"system_prompt_extraction"},
 	}
 }
 
@@ -280,7 +279,7 @@ func TestLoadAndValidateConfig_AppliesDefaultResponseSelector(t *testing.T) {
 	path := writeTestConfig(t, `
 target:
   name: test
-  type: api
+  type: http
   settings:
     url: "https://example.com"
     request_body_template: '{"message": "{{prompt}}"}'
@@ -297,7 +296,7 @@ func TestLoadAndValidateConfig_AppliesDefaultRequestBodyTemplate(t *testing.T) {
 	path := writeTestConfig(t, `
 target:
   name: test
-  type: api
+  type: http
   settings:
     url: "https://example.com"
     response_selector: "response"
@@ -314,7 +313,7 @@ func TestLoadAndValidateConfig_ExplicitValuesNotOverriddenByDefaults(t *testing.
 	path := writeTestConfig(t, `
 target:
   name: test
-  type: api
+  type: http
   settings:
     url: "https://example.com"
     response_selector: "data.reply"
@@ -340,7 +339,7 @@ func TestLoadAndValidateConfig_TargetURLFlagOverridesConfig(t *testing.T) {
 	path := writeTestConfig(t, `
 target:
   name: test
-  type: api
+  type: http
   settings:
     url: "https://original.com"
     response_selector: "response"
@@ -387,7 +386,7 @@ func TestLoadAndValidateConfig_TargetURLFlagDoesNotOverrideExistingNameAndType(t
 	path := writeTestConfig(t, `
 target:
   name: "My Chatbot"
-  type: socket_io
+  type: http
   settings:
     response_selector: "response"
     request_body_template: '{"message": "{{prompt}}"}'
@@ -399,7 +398,7 @@ target:
 	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
 	require.NoError(t, err)
 	assert.Equal(t, "My Chatbot", rtCfg.Target.Name)
-	assert.Equal(t, "socket_io", rtCfg.Target.Type)
+	assert.Equal(t, "http", rtCfg.Target.Type)
 }
 
 func TestLoadAndValidateConfig_RequestBodyTemplateFlagOverride(t *testing.T) {
@@ -428,7 +427,7 @@ func TestLoadAndValidateConfig_HeaderFlagsAppended(t *testing.T) {
 	path := writeTestConfig(t, `
 target:
   name: test
-  type: api
+  type: http
   settings:
     url: "https://example.com"
     response_selector: "response"
@@ -479,7 +478,7 @@ func TestLoadAndValidateConfig_YAMLHeadersWithColonsInValue(t *testing.T) {
 	path := writeTestConfig(t, `
 target:
   name: test
-  type: api
+  type: http
   settings:
     url: "https://example.com"
     response_selector: "response"
@@ -539,7 +538,7 @@ func TestLoadAndValidateConfig_ValidationError(t *testing.T) {
 	path := writeTestConfig(t, `
 target:
   name: test
-  type: api
+  type: http
   settings:
     url: ""
 `)

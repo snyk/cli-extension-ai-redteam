@@ -128,7 +128,8 @@ func (c *ClientImpl) NextChats(ctx context.Context, scanID string, responses []C
 }
 
 func (c *ClientImpl) GetStatus(ctx context.Context, scanID string) (*ScanStatus, error) {
-	url := fmt.Sprintf("%s/hidden/tenants/%s/red_team_scans/%s/status?version=%s", c.baseURL, c.tenantID, scanID, APIVersion)
+	url := fmt.Sprintf("%s/hidden/tenants/%s/red_team_scans/%s/status?version=%s",
+		c.baseURL, c.tenantID, scanID, APIVersion)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("build GetStatus request: %w", err)

@@ -29,7 +29,7 @@ func main() {
 
 	cmd, err := devtools.Cmd(redteam.Init)
 	if err != nil {
-		log.Fatal(err) //nolint:forbidigo // CLI entry point, ui not available yet
+		log.Fatal(err)
 	}
 	cmd.SilenceUsage = true
 	if err := cmd.Execute(); err != nil {

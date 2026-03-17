@@ -27,11 +27,18 @@ import (
 var WorkflowID = workflow.NewWorkflowIdentifier("redteam")
 
 type (
-	ControlServerFactory func(logger *zerolog.Logger, httpClient *http.Client, url, tenantID string) controlserver.Client
-	TargetFactory        func(httpClient *http.Client, url string, headers map[string]string, bodyTemplate, responseSelector string) target.Client
+	ControlServerFactory func(
+		logger *zerolog.Logger, httpClient *http.Client, url, tenantID string,
+	) controlserver.Client
+	TargetFactory func(
+		httpClient *http.Client, url string, headers map[string]string,
+		bodyTemplate, responseSelector string,
+	) target.Client
 )
 
-var DefaultSnykAPIFactory ControlServerFactory = func(logger *zerolog.Logger, httpClient *http.Client, url, tenantID string) controlserver.Client {
+var DefaultSnykAPIFactory ControlServerFactory = func(
+	logger *zerolog.Logger, httpClient *http.Client, url, tenantID string,
+) controlserver.Client {
 	return controlserver.NewClient(logger, httpClient, url, tenantID)
 }
 
