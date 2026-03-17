@@ -61,11 +61,22 @@ linters:
       - path: _test\.go
         linters:
           - errcheck
+      - path: ^cmd/
+        linters:
+          - forbidigo
 
 linters-settings:
   errcheck:
     check-blank: true
     check-type-assertions: true
+  forbidigo:
+    forbid:
+      - p: ^fmt\.Print.*$
+        msg: use ui.Output() to display messages to the user
+      - p: ^log\.(Print|Fatal|Panic).*$
+        msg: use ui.Output() to display messages to the user
+    exclude-godoc-examples: true
+    analyze-types: true
   exhaustive:
     default-signifies-exhaustive: true
   goconst:
