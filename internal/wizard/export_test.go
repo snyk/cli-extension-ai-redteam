@@ -1,10 +1,11 @@
-package web
+package wizard
 
 import (
 	"net/http"
 
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
+	"github.com/snyk/go-application-framework/pkg/ui"
 )
 
 // HandleGetInitialConfig exports handleGetInitialConfig for external tests.
@@ -32,3 +33,9 @@ type InitialConfigResponse = initialConfigResponse
 
 // PingRequest is an alias for external tests.
 type PingRequest = pingRequest
+
+// HandleDownloadComplete exports handleDownloadComplete for external tests.
+func HandleDownloadComplete(userInterface ui.UserInterface) http.HandlerFunc {
+	s := &Server{ui: userInterface}
+	return s.handleDownloadComplete()
+}

@@ -32,7 +32,7 @@ jobs:
       - checkout
       - run: golangci-lint run -v ./...
 
-  web-test:
+  setup-wizard-test:
     docker:
       - image: cimg/node:22.16
     steps:
@@ -75,5 +75,5 @@ workflows:
           name: Unit Test
       - lint:
           name: Linting
-      - web-test:
-          name: Frontend Tests
+      - setup-wizard-test:
+          name: Setup Wizard Tests

@@ -21,6 +21,6 @@ describe("TargetTypeStep", () => {
 
   it("renders target type select", () => {
     renderInForm();
-    expect(screen.getByText("Target Hype")).toBeInTheDocument();
+    expect(screen.getByText("Target Type")).toBeInTheDocument();
   });
 });

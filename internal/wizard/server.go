@@ -1,9 +1,9 @@
-package web
+package wizard
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/fs"
-	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -16,6 +16,7 @@ import (
 
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
+	"github.com/snyk/go-application-framework/pkg/ui"
 )
 
 // Server serves the setup wizard UI and exposes API endpoints for config validation and saving.
@@ -24,16 +25,18 @@ type Server struct {
 	configPath    string
 	initialConfig *redteam.Config
 	csClient      controlserver.Client
+	ui            ui.UserInterface
 	devMode       bool
 	shutdown      chan struct{}
 }
 
-func NewServer(port int, configPath string, initialConfig *redteam.Config, csClient controlserver.Client) *Server {
+func NewServer(port int, configPath string, initialConfig *redteam.Config, csClient controlserver.Client, userInterface ui.UserInterface) *Server {
 	return &Server{
 		port:          port,
 		configPath:    configPath,
 		initialConfig: initialConfig,
 		csClient:      csClient,
+		ui:            userInterface,
 		devMode:       os.Getenv("REDTEAM_DEV") == "1",
 		shutdown:      make(chan struct{}),
 	}
@@ -46,6 +49,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("POST /api/ping", handlePing())
 	mux.HandleFunc("GET /api/goals", handleListGoals(s.csClient))
 	mux.HandleFunc("GET /api/strategies", handleListStrategies(s.csClient))
+	mux.HandleFunc("POST /api/download-complete", s.handleDownloadComplete())
 
 	if s.devMode {
 		// In dev mode, proxy all non-API requests to the Vite dev server for hot-reload.
@@ -69,10 +73,10 @@ func (s *Server) Start() error {
 
 	addr := listener.Addr().String()
 	wizardURL := fmt.Sprintf("http://%s", addr)
-	log.Printf("Setup wizard running at %s", wizardURL)
+	_ = s.ui.Output(fmt.Sprintf("Setup wizard running at %s\n", wizardURL)) //nolint:errcheck // best-effort display
 	if !s.devMode {
 		if err := browser.OpenURL(wizardURL); err != nil {
-			log.Printf("Could not open browser: %v", err)
+			_ = s.ui.Output(fmt.Sprintf("Could not open browser: %v\n", err)) //nolint:errcheck // best-effort display
 		}
 	}
 
@@ -91,6 +95,33 @@ func (s *Server) Start() error {
 		return fmt.Errorf("server error: %w", err)
 	}
 	return nil
+}
+
+func (s *Server) handleDownloadComplete() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Filename string `json:"filename"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+
+		configFile := req.Filename
+		if configFile == "" {
+			configFile = "redteam.yaml"
+		}
+
+		var sb strings.Builder
+		sb.WriteString("\nConfiguration downloaded successfully!\n\n")
+		sb.WriteString("Next steps:\n")
+		sb.WriteString("  1. Close this wizard with Ctrl+C\n")
+		sb.WriteString("  2. Run your red team scan:\n\n")
+		sb.WriteString(fmt.Sprintf("     snyk redteam --experimental --config %s\n\n", configFile))
+		_ = s.ui.Output(sb.String()) //nolint:errcheck // best-effort display
+	}
 }
 
 // spaHandler serves static files from the given filesystem, falling back to index.html for

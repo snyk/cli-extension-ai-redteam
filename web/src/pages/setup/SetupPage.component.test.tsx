@@ -68,7 +68,7 @@ describe("SetupPage", () => {
   it("renders step title for target-type", async () => {
     render(<SetupPage {...defaultProps} />);
     await waitFor(() => {
-      expect(screen.getByText("Target Type")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Target Type" })).toBeInTheDocument();
     });
   });
 

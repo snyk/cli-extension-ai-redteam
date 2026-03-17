@@ -1,4 +1,4 @@
-package web_test
+package wizard_test
 
 import (
 	"bytes"
@@ -14,20 +14,37 @@ import (
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
 	controlservermock "github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver/mock"
-	"github.com/snyk/cli-extension-ai-redteam/internal/web"
+	"github.com/snyk/cli-extension-ai-redteam/internal/wizard"
+	"github.com/snyk/go-application-framework/pkg/ui"
 )
+
+type mockUI struct {
+	outputs []string
+}
+
+func (m *mockUI) Output(output string) error {
+	m.outputs = append(m.outputs, output)
+	return nil
+}
+
+func (m *mockUI) OutputError(_ error, _ ...ui.Opts) error { return nil }
+func (m *mockUI) NewProgressBar() ui.ProgressBar                     { return nil }
+func (m *mockUI) Input(_ string) (string, error)                     { return "", nil }
+func (m *mockUI) SelectOptions(_ string, _ []string) (int, string, error) {
+	return 0, "", nil
+}
 
 // --- handleGetInitialConfig ---
 
 func TestHandleGetInitialConfig_NilConfig(t *testing.T) {
-	handler := web.HandleGetInitialConfig(nil, "")
+	handler := wizard.HandleGetInitialConfig(nil, "")
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 
 	handler.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
-	var resp web.InitialConfigResponse
+	var resp wizard.InitialConfigResponse
 	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
 	assert.Nil(t, resp.Config)
 	assert.Empty(t, resp.ConfigPath)
@@ -38,14 +55,14 @@ func TestHandleGetInitialConfig_WithConfig(t *testing.T) {
 		Target: redteam.ConfigTarget{Name: "test-target"},
 		Goals:  []string{"goal1"},
 	}
-	handler := web.HandleGetInitialConfig(cfg, "/path/to/config.yaml")
+	handler := wizard.HandleGetInitialConfig(cfg, "/path/to/config.yaml")
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 
 	handler.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
-	var resp web.InitialConfigResponse
+	var resp wizard.InitialConfigResponse
 	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
 	assert.Equal(t, "/path/to/config.yaml", resp.ConfigPath)
 	require.NotNil(t, resp.Config)
@@ -60,14 +77,14 @@ func TestHandlePing_Success(t *testing.T) {
 	}))
 	defer targetSrv.Close()
 
-	pingReq := web.PingRequest{
+	pingReq := wizard.PingRequest{
 		URL:                 targetSrv.URL,
 		RequestBodyTemplate: `{"message":"{{prompt}}"}`,
 		ResponseSelector:    "response",
 	}
 	body, _ := json.Marshal(pingReq)
 
-	handler := web.HandlePing()
+	handler := wizard.HandlePing()
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 
@@ -88,7 +105,7 @@ func TestHandlePing_HeaderConversion(t *testing.T) {
 	}))
 	defer targetSrv.Close()
 
-	pingReq := web.PingRequest{
+	pingReq := wizard.PingRequest{
 		URL:                 targetSrv.URL,
 		RequestBodyTemplate: `{"message":"{{prompt}}"}`,
 		ResponseSelector:    "response",
@@ -99,7 +116,7 @@ func TestHandlePing_HeaderConversion(t *testing.T) {
 	}
 	body, _ := json.Marshal(pingReq)
 
-	handler := web.HandlePing()
+	handler := wizard.HandlePing()
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 
@@ -109,7 +126,7 @@ func TestHandlePing_HeaderConversion(t *testing.T) {
 }
 
 func TestHandlePing_InvalidJSON(t *testing.T) {
-	handler := web.HandlePing()
+	handler := wizard.HandlePing()
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString("{bad"))
 
@@ -128,7 +145,7 @@ func TestHandleListGoals_Success(t *testing.T) {
 		},
 	}
 
-	handler := web.HandleListGoals(mock)
+	handler := wizard.HandleListGoals(mock)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 
@@ -147,7 +164,7 @@ func TestHandleListGoals_ClientError(t *testing.T) {
 		GoalsErr: errors.New("connection failed"),
 	}
 
-	handler := web.HandleListGoals(mock)
+	handler := wizard.HandleListGoals(mock)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 
@@ -166,7 +183,7 @@ func TestHandleListStrategies_Success(t *testing.T) {
 		},
 	}
 
-	handler := web.HandleListStrategies(mock)
+	handler := wizard.HandleListStrategies(mock)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 
@@ -185,11 +202,61 @@ func TestHandleListStrategies_ClientError(t *testing.T) {
 		StrategiesErr: errors.New("timeout"),
 	}
 
-	handler := web.HandleListStrategies(mock)
+	handler := wizard.HandleListStrategies(mock)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 
 	handler.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusBadGateway, rec.Code)
+}
+
+// --- handleDownloadComplete ---
+
+func TestHandleDownloadComplete_Success(t *testing.T) {
+	ui := &mockUI{}
+	body, _ := json.Marshal(map[string]string{"filename": "my-config.yaml"})
+
+	handler := wizard.HandleDownloadComplete(ui)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	var resp map[string]string
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+	assert.Equal(t, "ok", resp["status"])
+
+	require.Len(t, ui.outputs, 1)
+	assert.Contains(t, ui.outputs[0], "Configuration downloaded successfully!")
+	assert.Contains(t, ui.outputs[0], "snyk redteam --experimental --config my-config.yaml")
+}
+
+func TestHandleDownloadComplete_DefaultFilename(t *testing.T) {
+	ui := &mockUI{}
+	body, _ := json.Marshal(map[string]string{"filename": ""})
+
+	handler := wizard.HandleDownloadComplete(ui)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, ui.outputs, 1)
+	assert.Contains(t, ui.outputs[0], "snyk redteam --experimental --config redteam.yaml")
+}
+
+func TestHandleDownloadComplete_InvalidJSON(t *testing.T) {
+	ui := &mockUI{}
+
+	handler := wizard.HandleDownloadComplete(ui)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString("{bad"))
+
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Empty(t, ui.outputs)
 }

@@ -12,7 +12,7 @@ export default function TargetTypeStep() {
       </Form.Item>
 
       <Form.Item
-        label="Target Hype"
+        label="Target Type"
         name={["target", "type"]}
         rules={[{ required: true, message: "Target type is required" }]}
       >

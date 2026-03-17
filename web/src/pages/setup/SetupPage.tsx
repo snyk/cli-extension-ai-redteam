@@ -194,6 +194,11 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
   const handleDownloadConfirm = () => {
     if (yamlContent) {
       downloadFile(yamlContent, filename);
+      fetch("/api/download-complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename }),
+      }).catch(() => {});
     }
   };
 

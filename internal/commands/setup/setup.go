@@ -14,7 +14,7 @@ import (
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
 	"github.com/snyk/cli-extension-ai-redteam/internal/utils"
-	"github.com/snyk/cli-extension-ai-redteam/internal/web"
+	"github.com/snyk/cli-extension-ai-redteam/internal/wizard"
 )
 
 var SetupWorkflowID = workflow.NewWorkflowIdentifier("redteam.setup")
@@ -34,6 +34,9 @@ func RegisterSetupWorkflow(e workflow.Engine) error {
 	return nil
 }
 
+// setupWorkflow launches a local web server that serves the setup wizard UI.
+// The wizard walks the user through configuring a red team target (endpoint, headers,
+// goals, strategies) and produces a YAML configuration file for `snyk redteam`.
 func setupWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
 	config := invocationCtx.GetConfiguration()
 
@@ -65,7 +68,8 @@ func setupWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) 
 	apiURL := config.GetString(configuration.API_URL)
 	csClient := controlserver.NewClient(&logger, httpClient, apiURL, "")
 
-	server := web.NewServer(port, configPath, initialConfig, csClient)
+	userInterface := invocationCtx.GetUserInterface()
+	server := wizard.NewServer(port, configPath, initialConfig, csClient, userInterface)
 	if err := server.Start(); err != nil {
 		return nil, fmt.Errorf("setup wizard error: %w", err)
 	}

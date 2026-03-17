@@ -25,6 +25,8 @@ func RegisterPingWorkflow(e workflow.Engine) error {
 	return nil
 }
 
+// pingWorkflow sends a test request to the configured target endpoint to verify
+// connectivity and correct request/response configuration before running a full red team scan.
 func pingWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
 	config := invocationCtx.GetConfiguration()
 

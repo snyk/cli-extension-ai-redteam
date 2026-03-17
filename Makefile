@@ -40,7 +40,7 @@ test-web: ## Run frontend unit tests
 .PHONY: build-web
 build-web: ## Build React frontend
 	cd web && npm install && npm run build
-	rm -rf internal/web/dist && cp -r web/dist internal/web/dist
+	rm -rf internal/wizard/dist && cp -r web/dist internal/wizard/dist
 
 .PHONY: dev-web
 dev-web: ## Run frontend (HMR) + Go API server for development
