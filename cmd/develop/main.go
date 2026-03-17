@@ -22,7 +22,7 @@ func main() {
 		}
 	}
 
-	if !isAuthenticated() {
+	if !isAuthCommand() && !isAuthenticated() {
 		fmt.Fprintln(os.Stderr, "Error: not authenticated. Run `go run ./cmd/develop auth` or set SNYK_TOKEN.")
 		os.Exit(1)
 	}
@@ -35,6 +35,15 @@ func main() {
 	if err := cmd.Execute(); err != nil {
 		os.Exit(1)
 	}
+}
+
+func isAuthCommand() bool {
+	for _, arg := range os.Args[1:] {
+		if arg == "auth" {
+			return true
+		}
+	}
+	return false
 }
 
 // isAuthenticated checks for a Snyk auth token in environment variables
