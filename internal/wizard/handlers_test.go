@@ -11,11 +11,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/ui"
+
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
 	controlservermock "github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver/mock"
 	"github.com/snyk/cli-extension-ai-redteam/internal/wizard"
-	"github.com/snyk/go-application-framework/pkg/ui"
 )
 
 type mockUI struct {
@@ -28,9 +29,10 @@ func (m *mockUI) Output(output string) error {
 }
 
 func (m *mockUI) OutputError(_ error, _ ...ui.Opts) error { return nil }
-func (m *mockUI) NewProgressBar() ui.ProgressBar                     { return nil }
-func (m *mockUI) Input(_ string) (string, error)                     { return "", nil }
-func (m *mockUI) SelectOptions(_ string, _ []string) (int, string, error) {
+func (m *mockUI) NewProgressBar() ui.ProgressBar          { return nil } //nolint:ireturn // mock
+func (m *mockUI) Input(_ string) (string, error)          { return "", nil }
+
+func (m *mockUI) SelectOptions(_ string, _ []string) (idx int, val string, err error) {
 	return 0, "", nil
 }
 

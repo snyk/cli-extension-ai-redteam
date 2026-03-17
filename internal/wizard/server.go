@@ -14,9 +14,10 @@ import (
 
 	"github.com/pkg/browser"
 
+	"github.com/snyk/go-application-framework/pkg/ui"
+
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
-	"github.com/snyk/go-application-framework/pkg/ui"
 )
 
 // Server serves the setup wizard UI and exposes API endpoints for config validation and saving.

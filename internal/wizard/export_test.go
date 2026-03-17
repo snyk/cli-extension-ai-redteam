@@ -3,9 +3,10 @@ package wizard
 import (
 	"net/http"
 
+	"github.com/snyk/go-application-framework/pkg/ui"
+
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
-	"github.com/snyk/go-application-framework/pkg/ui"
 )
 
 // HandleGetInitialConfig exports handleGetInitialConfig for external tests.

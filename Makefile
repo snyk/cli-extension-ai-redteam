@@ -6,6 +6,7 @@ PRE_COMMIT_V?=v3.8
 
 
 export PYTHONPATH=$(PYTHON_PATH)
+export GOFLAGS?=-buildvcs=false
 SHELL:=env PATH=$(GO_BIN):$(PYTHON_PATH)/bin:$(PATH) $(SHELL)
 
 .PHONY: install-tools

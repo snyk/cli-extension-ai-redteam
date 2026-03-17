@@ -54,7 +54,9 @@ jobs:
       - go/save-cache
       - run:
           name: Install tools
-          command: make install-tools
+          command: |
+            sudo apt-get update -qq && sudo apt-get install -y -qq python3-venv
+            make install-tools
       - run:
           name: Run pre-commit hooks
           command: |
