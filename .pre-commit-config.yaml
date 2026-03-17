@@ -12,11 +12,22 @@ repos:
         stages: [commit-msg]
         additional_dependencies: ["@commitlint/config-conventional"]
 
-  # TODO(pkey): re-enable format and lint hooks after upgrading golangci-lint to v2.
-  # Currently v1.64.7 (built with go1.24) produces false typecheck errors on
-  # dependencies that require go1.25. CI has dedicated lint/format jobs.
   - repo: local
     hooks:
+    -   id: format
+        name: Run make format
+        entry: make
+        args:
+        - format
+        language: system
+        pass_filenames: false
+    -   id: lint
+        name: Run make lint
+        entry: make
+        args:
+        - lint
+        language: system
+        pass_filenames: false
     -   id: build-wizard
         name: Rebuild wizard dist if frontend changed
         entry: bash

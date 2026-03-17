@@ -1,6 +1,7 @@
 package wizard
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -67,7 +68,8 @@ func (s *Server) Start() error {
 		mux.Handle("/", spaHandler(http.FS(sub)))
 	}
 
-	listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", s.port))
+	var lc net.ListenConfig
+	listener, err := lc.Listen(context.Background(), "tcp", fmt.Sprintf("127.0.0.1:%d", s.port))
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
 	}
@@ -120,7 +122,7 @@ func (s *Server) handleDownloadComplete() http.HandlerFunc {
 		sb.WriteString("Next steps:\n")
 		sb.WriteString("  1. Close this wizard with Ctrl+C\n")
 		sb.WriteString("  2. Run your red team scan:\n\n")
-		sb.WriteString(fmt.Sprintf("     snyk redteam --experimental --config %s\n\n", configFile))
+		fmt.Fprintf(&sb, "     snyk redteam --experimental --config %s\n\n", configFile)
 		_ = s.ui.Output(sb.String()) //nolint:errcheck // best-effort display
 	}
 }

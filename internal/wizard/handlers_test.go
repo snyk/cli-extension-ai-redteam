@@ -218,10 +218,10 @@ func TestHandleListStrategies_ClientError(t *testing.T) {
 // --- handleDownloadComplete ---
 
 func TestHandleDownloadComplete_Success(t *testing.T) {
-	ui := &mockUI{}
+	m := &mockUI{}
 	body, _ := json.Marshal(map[string]string{"filename": "my-config.yaml"})
 
-	handler := wizard.HandleDownloadComplete(ui)
+	handler := wizard.HandleDownloadComplete(m)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 
@@ -232,35 +232,35 @@ func TestHandleDownloadComplete_Success(t *testing.T) {
 	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
 	assert.Equal(t, "ok", resp["status"])
 
-	require.Len(t, ui.outputs, 1)
-	assert.Contains(t, ui.outputs[0], "Configuration downloaded successfully!")
-	assert.Contains(t, ui.outputs[0], "snyk redteam --experimental --config my-config.yaml")
+	require.Len(t, m.outputs, 1)
+	assert.Contains(t, m.outputs[0], "Configuration downloaded successfully!")
+	assert.Contains(t, m.outputs[0], "snyk redteam --experimental --config my-config.yaml")
 }
 
 func TestHandleDownloadComplete_DefaultFilename(t *testing.T) {
-	ui := &mockUI{}
+	m := &mockUI{}
 	body, _ := json.Marshal(map[string]string{"filename": ""})
 
-	handler := wizard.HandleDownloadComplete(ui)
+	handler := wizard.HandleDownloadComplete(m)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 
 	handler.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
-	require.Len(t, ui.outputs, 1)
-	assert.Contains(t, ui.outputs[0], "snyk redteam --experimental --config redteam.yaml")
+	require.Len(t, m.outputs, 1)
+	assert.Contains(t, m.outputs[0], "snyk redteam --experimental --config redteam.yaml")
 }
 
 func TestHandleDownloadComplete_InvalidJSON(t *testing.T) {
-	ui := &mockUI{}
+	m := &mockUI{}
 
-	handler := wizard.HandleDownloadComplete(ui)
+	handler := wizard.HandleDownloadComplete(m)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString("{bad"))
 
 	handler.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.Empty(t, ui.outputs)
+	assert.Empty(t, m.outputs)
 }
