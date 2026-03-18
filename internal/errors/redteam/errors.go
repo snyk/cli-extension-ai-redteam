@@ -2,11 +2,29 @@ package redteam
 
 import (
 	"errors"
+	"net/http"
 
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
 	snyk_common_errors "github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 )
+
+// ErrorFromHTTPStatus returns the appropriate RedTeamError for an HTTP status code.
+// Callers should pass a detail string (e.g. "tenants API returned status 401: ...").
+func ErrorFromHTTPStatus(statusCode int, detail string) *RedTeamError {
+	switch {
+	case statusCode == http.StatusUnauthorized:
+		return NewUnauthorizedError(detail)
+	case statusCode == http.StatusForbidden:
+		return NewForbiddenError(detail)
+	case statusCode == http.StatusNotFound:
+		return NewNotFoundError(detail)
+	case statusCode >= 500:
+		return NewServerError(detail)
+	default:
+		return NewHTTPClientError(detail)
+	}
+}
 
 //nolint:revive // RedTeamError is the canonical name; renaming would break the public API
 type RedTeamError struct {

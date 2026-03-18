@@ -47,18 +47,7 @@ func NewClient(logger *zerolog.Logger, httpClient *http.Client, baseURL, tenantI
 
 func httpError(op string, statusCode int, body []byte) error {
 	detail := fmt.Sprintf("%s returned status %d: %s", op, statusCode, utils.TruncateBody(body))
-	switch {
-	case statusCode == http.StatusUnauthorized:
-		return redteam_errors.NewUnauthorizedError(detail)
-	case statusCode == http.StatusForbidden:
-		return redteam_errors.NewForbiddenError(detail)
-	case statusCode == http.StatusNotFound:
-		return redteam_errors.NewNotFoundError(detail)
-	case statusCode >= 500:
-		return redteam_errors.NewServerError(detail)
-	default:
-		return redteam_errors.NewHTTPClientError(detail)
-	}
+	return redteam_errors.ErrorFromHTTPStatus(statusCode, detail)
 }
 
 func (c *ClientImpl) CreateScan(ctx context.Context, req *CreateScanRequest) (string, error) {

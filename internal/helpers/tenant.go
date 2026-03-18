@@ -101,16 +101,7 @@ func fetchTenants(ctx workflow.InvocationContext) ([]tenant, error) {
 			"tenants API returned status %d: %s",
 			resp.StatusCode, utils.TruncateBody(body),
 		)
-		switch {
-		case resp.StatusCode == http.StatusUnauthorized:
-			return nil, redteam_errors.NewUnauthorizedError(detail)
-		case resp.StatusCode == http.StatusForbidden:
-			return nil, redteam_errors.NewForbiddenError(detail)
-		case resp.StatusCode >= 500:
-			return nil, redteam_errors.NewServerError(detail)
-		default:
-			return nil, redteam_errors.NewHTTPClientError(detail)
-		}
+		return nil, redteam_errors.ErrorFromHTTPStatus(resp.StatusCode, detail)
 	}
 
 	var apiResp tenantsAPIResponse
