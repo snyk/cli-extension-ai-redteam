@@ -9,6 +9,8 @@ import (
 	"net/http"
 
 	"github.com/rs/zerolog"
+
+	redteam_errors "github.com/snyk/cli-extension-ai-redteam/internal/errors/redteam"
 )
 
 const APIVersion = "2026-02-20"
@@ -42,6 +44,22 @@ func NewClient(logger *zerolog.Logger, httpClient *http.Client, baseURL, tenantI
 	}
 }
 
+func httpError(op string, statusCode int, body []byte) error {
+	detail := fmt.Sprintf("%s returned status %d: %s", op, statusCode, string(body))
+	switch {
+	case statusCode == http.StatusUnauthorized:
+		return redteam_errors.NewUnauthorizedError(detail)
+	case statusCode == http.StatusForbidden:
+		return redteam_errors.NewForbiddenError(detail)
+	case statusCode == http.StatusNotFound:
+		return redteam_errors.NewNotFoundError(detail)
+	case statusCode >= 500:
+		return redteam_errors.NewServerError(detail)
+	default:
+		return redteam_errors.NewHTTPClientError(detail)
+	}
+}
+
 func (c *ClientImpl) CreateScan(ctx context.Context, req *CreateScanRequest) (string, error) {
 	if req == nil {
 		req = &CreateScanRequest{}
@@ -49,38 +67,38 @@ func (c *ClientImpl) CreateScan(ctx context.Context, req *CreateScanRequest) (st
 	body := *req
 	reqBytes, err := json.Marshal(body)
 	if err != nil {
-		return "", fmt.Errorf("marshal CreateScan request: %w", err)
+		return "", redteam_errors.NewInternalError(fmt.Sprintf("marshal CreateScan request: %s", err))
 	}
 
 	urlStr := fmt.Sprintf("%s/hidden/tenants/%s/red_team_scans?version=%s", c.baseURL, c.tenantID, APIVersion)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, urlStr, bytes.NewReader(reqBytes))
 	if err != nil {
-		return "", fmt.Errorf("build CreateScan request: %w", err)
+		return "", redteam_errors.NewInternalError(fmt.Sprintf("build CreateScan request: %s", err))
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return "", fmt.Errorf("CreateScan request failed: %w", err)
+		return "", redteam_errors.NewHTTPClientError(fmt.Sprintf("CreateScan request failed: %s", err))
 	}
 	defer resp.Body.Close()
 
 	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("read CreateScan response: %w", err)
+		return "", redteam_errors.NewInternalError(fmt.Sprintf("read CreateScan response: %s", err))
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("CreateScan returned status %d: %s", resp.StatusCode, string(respBytes))
+		return "", httpError("CreateScan", resp.StatusCode, respBytes)
 	}
 
 	var result CreateScanResponse
 	if err := json.Unmarshal(respBytes, &result); err != nil {
-		msg := "unmarshal CreateScan response: " + err.Error()
+		msg := fmt.Sprintf("unmarshal CreateScan response: %s", err)
 		if len(respBytes) > 0 && respBytes[0] == '<' {
 			msg += " (server returned an unexpected response; verify configuration and that the service is available)"
 		}
-		return "", fmt.Errorf("%s", msg)
+		return "", redteam_errors.NewInternalError(msg)
 	}
 
 	c.logger.Debug().Str("scanID", result.ScanID).Msg("scan created")
@@ -94,100 +112,98 @@ func (c *ClientImpl) NextChats(ctx context.Context, scanID string, responses []C
 	body := NextChatsRequest{Chats: responses}
 	reqBytes, err := json.Marshal(body)
 	if err != nil {
-		return nil, fmt.Errorf("marshal NextChats request: %w", err)
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("marshal NextChats request: %s", err))
 	}
 
 	url := fmt.Sprintf("%s/hidden/tenants/%s/red_team_scans/%s/next?version=%s", c.baseURL, c.tenantID, scanID, APIVersion)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(reqBytes))
 	if err != nil {
-		return nil, fmt.Errorf("build NextChats request: %w", err)
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("build NextChats request: %s", err))
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("NextChats request failed: %w", err)
+		return nil, redteam_errors.NewHTTPClientError(fmt.Sprintf("NextChats request failed: %s", err))
 	}
 	defer resp.Body.Close()
 
 	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("read NextChats response: %w", err)
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("read NextChats response: %s", err))
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("NextChats returned status %d: %s", resp.StatusCode, string(respBytes))
+		return nil, httpError("NextChats", resp.StatusCode, respBytes)
 	}
 
 	var result NextChatsResponse
 	if err := json.Unmarshal(respBytes, &result); err != nil {
-		return nil, fmt.Errorf("unmarshal NextChats response: %w", err)
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("unmarshal NextChats response: %s", err))
 	}
 
 	return result.Chats, nil
 }
 
-func (c *ClientImpl) GetStatus(ctx context.Context, scanID string) (*ScanStatus, error) {
-	url := fmt.Sprintf("%s/hidden/tenants/%s/red_team_scans/%s/status?version=%s",
-		c.baseURL, c.tenantID, scanID, APIVersion)
+func (c *ClientImpl) doGet(ctx context.Context, op, url string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
-		return nil, fmt.Errorf("build GetStatus request: %w", err)
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("build %s request: %s", op, err))
 	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("GetStatus request failed: %w", err)
+		return nil, redteam_errors.NewHTTPClientError(fmt.Sprintf("%s request failed: %s", op, err))
 	}
 	defer resp.Body.Close()
 
 	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("read GetStatus response: %w", err)
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("read %s response: %s", op, err))
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GetStatus returned status %d: %s", resp.StatusCode, string(respBytes))
+		return nil, httpError(op, resp.StatusCode, respBytes)
+	}
+
+	return respBytes, nil
+}
+
+func (c *ClientImpl) GetStatus(ctx context.Context, scanID string) (*ScanStatus, error) {
+	url := fmt.Sprintf(
+		"%s/hidden/tenants/%s/red_team_scans/%s/status?version=%s",
+		c.baseURL, c.tenantID, scanID, APIVersion,
+	)
+	respBytes, err := c.doGet(ctx, "GetStatus", url)
+	if err != nil {
+		return nil, err
 	}
 
 	var result ScanStatus
 	if err := json.Unmarshal(respBytes, &result); err != nil {
-		return nil, fmt.Errorf("unmarshal GetStatus response: %w", err)
+		return nil, redteam_errors.NewInternalError(
+			fmt.Sprintf("unmarshal GetStatus response: %s", err),
+		)
 	}
-
 	return &result, nil
 }
 
 func (c *ClientImpl) GetResult(ctx context.Context, scanID string) (*ScanResult, error) {
-	url := fmt.Sprintf("%s/hidden/tenants/%s/red_team_scans/%s?version=%s", c.baseURL, c.tenantID, scanID, APIVersion)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
+	url := fmt.Sprintf(
+		"%s/hidden/tenants/%s/red_team_scans/%s?version=%s",
+		c.baseURL, c.tenantID, scanID, APIVersion,
+	)
+	respBytes, err := c.doGet(ctx, "GetResult", url)
 	if err != nil {
-		return nil, fmt.Errorf("build GetResult request: %w", err)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("GetResult request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read GetResult response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode == http.StatusNotFound {
-			return nil, fmt.Errorf("scan %s not found", scanID)
-		}
-		return nil, fmt.Errorf("GetResult returned status %d: %s", resp.StatusCode, string(respBytes))
+		return nil, err
 	}
 
 	var result ScanResult
 	if err := json.Unmarshal(respBytes, &result); err != nil {
-		return nil, fmt.Errorf("unmarshal GetResult response: %w", err)
+		return nil, redteam_errors.NewInternalError(
+			fmt.Sprintf("unmarshal GetResult response: %s", err),
+		)
 	}
-
 	return &result, nil
 }
 
@@ -223,27 +239,27 @@ func (c *ClientImpl) listEnum(ctx context.Context, endpoint string) ([]EnumEntry
 	url := fmt.Sprintf("%s/hidden/%s?version=%s", c.baseURL, endpoint, APIVersion)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
-		return nil, fmt.Errorf("build %s request: %w", endpoint, err)
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("build %s request: %s", endpoint, err))
 	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("%s request failed: %w", endpoint, err)
+		return nil, redteam_errors.NewHTTPClientError(fmt.Sprintf("%s request failed: %s", endpoint, err))
 	}
 	defer resp.Body.Close()
 
 	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("read %s response: %w", endpoint, err)
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("read %s response: %s", endpoint, err))
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%s returned status %d: %s", endpoint, resp.StatusCode, string(respBytes))
+		return nil, httpError(endpoint, resp.StatusCode, respBytes)
 	}
 
 	var entries []EnumEntry
 	if err := json.Unmarshal(respBytes, &entries); err != nil {
-		return nil, fmt.Errorf("unmarshal %s response: %w", endpoint, err)
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("unmarshal %s response: %s", endpoint, err))
 	}
 
 	return entries, nil

@@ -244,7 +244,7 @@ func TestRunRedTeamWorkflow_CreateScanError(t *testing.T) {
 
 	_, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(mockCS), mockTargetFactory(defaultMockTarget()))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "create scan")
+	assert.Contains(t, err.Error(), "connection refused")
 }
 
 func TestRunRedTeamWorkflow_CustomConfigPathDoesNotExist(t *testing.T) {
@@ -467,7 +467,7 @@ func TestRunRedTeamWorkflow_ListEnums(t *testing.T) {
 				m.GoalsErr = err
 			},
 			entryErr: fmt.Errorf("goals returned status 400: bad request"),
-			wantErr:  "failed to list goals",
+			wantErr:  "400",
 		},
 		{
 			name:    "goals/5xx server error",
@@ -478,7 +478,7 @@ func TestRunRedTeamWorkflow_ListEnums(t *testing.T) {
 				m.GoalsErr = err
 			},
 			entryErr: fmt.Errorf("goals returned status 500: internal server error"),
-			wantErr:  "failed to list goals",
+			wantErr:  "500",
 		},
 		{
 			name:    "strategies/happy path",
@@ -507,7 +507,7 @@ func TestRunRedTeamWorkflow_ListEnums(t *testing.T) {
 				m.StrategiesErr = err
 			},
 			entryErr: fmt.Errorf("strategies returned status 404: not found"),
-			wantErr:  "failed to list strategies",
+			wantErr:  "404",
 		},
 		{
 			name:    "strategies/5xx server error",
@@ -518,7 +518,7 @@ func TestRunRedTeamWorkflow_ListEnums(t *testing.T) {
 				m.StrategiesErr = err
 			},
 			entryErr: fmt.Errorf("strategies returned status 502: bad gateway"),
-			wantErr:  "failed to list strategies",
+			wantErr:  "502",
 		},
 	}
 

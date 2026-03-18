@@ -11,6 +11,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	redteam_errors "github.com/snyk/cli-extension-ai-redteam/internal/errors/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/utils"
 )
 
@@ -33,13 +34,13 @@ func ProcessResults(
 		var err error
 		htmlOutput, err = fromResults(jsonResults)
 		if err != nil {
-			return nil, fmt.Errorf("failed generating HTML report: %w", err)
+			return nil, redteam_errors.NewInternalError(fmt.Sprintf("failed generating HTML report: %s", err))
 		}
 	}
 
 	if htmlFileOutput != "" {
 		if err := os.WriteFile(htmlFileOutput, []byte(htmlOutput), 0o600); err != nil {
-			return nil, fmt.Errorf("failed writing HTML report to %s: %w", htmlFileOutput, err)
+			return nil, redteam_errors.NewInternalError(fmt.Sprintf("failed writing HTML report to %s: %s", htmlFileOutput, err))
 		}
 		logger.Info().Msgf("HTML report written to %s", htmlFileOutput)
 	}

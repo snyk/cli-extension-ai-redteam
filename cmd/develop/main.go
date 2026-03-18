@@ -2,12 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/devtools"
@@ -54,7 +56,9 @@ func main() {
 		log.Fatal(err) //nolint:forbidigo // dev harness, no ui available yet
 	}
 	cmd.SilenceUsage = true
+	cmd.SilenceErrors = true
 	if err := cmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, formatError(err))
 		os.Exit(1)
 	}
 }
@@ -93,4 +97,18 @@ func isAuthenticated() bool {
 	}
 
 	return cfg["api"] != "" || cfg["INTERNAL_OAUTH_TOKEN_STORAGE"] != ""
+}
+
+// formatError mimics the Snyk CLI's error display: if the error chain
+// contains a snyk_errors.Error, show its Detail (the user-facing message)
+// rather than just the catalog Title.
+func formatError(err error) string {
+	var snykErr snyk_errors.Error
+	if errors.As(err, &snykErr) {
+		if snykErr.Detail != "" {
+			return fmt.Sprintf("Error: %s", snykErr.Detail)
+		}
+		return fmt.Sprintf("Error: %s", snykErr.Title)
+	}
+	return fmt.Sprintf("Error: %s", err)
 }
