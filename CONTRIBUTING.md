@@ -46,7 +46,7 @@ Then run:
 
 ```bash
 go run cmd/develop/main.go redteam --experimental --config=targets/minimal.yaml \
-  --target-url=http://localhost:8000/scenarios/chatbot_claude_sonnet_4_5
+  --target-url=http://localhost:8001
 ```
 
 ### Target config
