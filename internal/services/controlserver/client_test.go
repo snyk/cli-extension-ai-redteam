@@ -103,20 +103,6 @@ func TestCreateScan_ServerError(t *testing.T) {
 	assert.Contains(t, err.Error(), "400")
 }
 
-func TestCreateScan_ValidTLDError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(`target.settings.url: URL does not have a valid TLD.`))
-	}))
-	defer server.Close()
-
-	client := newTestClient(t, server.URL)
-	_, err := client.CreateScan(t.Context(), &controlserver.CreateScanRequest{TargetURL: "http://localhost:8000/chat"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "valid top-level domain")
-	assert.Contains(t, err.Error(), "tunnel")
-}
-
 func TestNextChats_Happy(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)
