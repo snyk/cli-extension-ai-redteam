@@ -26,5 +26,5 @@ func displayBanner(userInterface ui.UserInterface, cfg *Config, profileName stri
 	fmt.Fprintf(&sb, "  Goals:      %s\n", strings.Join(cfg.UniqueGoals(), ", "))
 	fmt.Fprintf(&sb, "\n")
 
-	_ = userInterface.Output(sb.String())
+	_ = userInterface.Output(sb.String()) //nolint:errcheck // best-effort display
 }

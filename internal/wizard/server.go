@@ -80,10 +80,10 @@ func (s *Server) Start() error {
 
 	addr := listener.Addr().String()
 	wizardURL := fmt.Sprintf("http://%s", addr)
-	_ = s.ui.Output(fmt.Sprintf("Setup wizard running at %s\n", wizardURL))
+	_ = s.ui.Output(fmt.Sprintf("Setup wizard running at %s\n", wizardURL)) //nolint:errcheck // best-effort display
 	if !s.devMode {
 		if err := browser.OpenURL(wizardURL); err != nil {
-			_ = s.ui.Output(fmt.Sprintf("Could not open browser: %v\n", err))
+			_ = s.ui.Output(fmt.Sprintf("Could not open browser: %v\n", err)) //nolint:errcheck // best-effort display
 		}
 	}
 
@@ -127,7 +127,7 @@ func (s *Server) handleDownloadComplete() http.HandlerFunc {
 		sb.WriteString("  1. Close this wizard with Ctrl+C\n")
 		sb.WriteString("  2. Run your red team scan:\n\n")
 		fmt.Fprintf(&sb, "     snyk redteam --experimental --config %s\n\n", configFile)
-		_ = s.ui.Output(sb.String())
+		_ = s.ui.Output(sb.String()) //nolint:errcheck // best-effort display
 	}
 }
 

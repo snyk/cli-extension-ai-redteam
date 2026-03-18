@@ -51,7 +51,7 @@ func main() {
 		return redteam.Init(e)
 	})
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(err) //nolint:forbidigo // dev harness, no ui available yet
 	}
 	cmd.SilenceUsage = true
 	if err := cmd.Execute(); err != nil {
