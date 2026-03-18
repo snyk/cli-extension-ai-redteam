@@ -668,7 +668,9 @@ func renderFooter(data *models.GetAIVulnerabilitiesResponseData) string {
 		" "+valueStyle.Render("--html")+
 		" "+dimStyle.Render("to view in browser, or")+
 		" "+valueStyle.Render("--html-file-output report.html")+
-		" "+dimStyle.Render("to save.")+"\n\n")
+		" "+dimStyle.Render("to save.")+"\n")
+	sb.WriteString("    " + dimStyle.Render("View full report at")+
+		" "+valueStyle.Render("https://evo.snyk.io/report")+"\n\n")
 
 	return sb.String()
 }
