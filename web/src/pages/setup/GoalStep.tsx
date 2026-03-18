@@ -101,7 +101,7 @@ export default function GoalStep() {
           <Space direction="vertical" size="middle">
             {goals.map((g) => (
               <Checkbox key={g.value} value={g.value}>
-                <strong>{g.value}</strong>
+                <strong>{g.value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}</strong>
                 <br />
                 <span style={{ color: "var(--pcl-color-fg-secondary)", fontSize: 13 }}>
                   {g.description}
