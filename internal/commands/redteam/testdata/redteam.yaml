@@ -14,5 +14,3 @@ target:
     request_body_template: '{"message": "{{prompt}}"}'
 goals:
   - "system_prompt_extraction"
-strategies:
-  - "directly_asking"
