@@ -336,7 +336,8 @@ func outputStatus(userInterface ui.UserInterface, logger *zerolog.Logger, status
 		status.Completed, status.TotalChats,
 		red.Render(fmt.Sprintf("%d finding candidates", status.Successful)),
 		green.Render(fmt.Sprintf("%d blocked", status.Failed)))
-	msg += "\n" + dim.Render("Tip: Re-open this report anytime with --report")
+	evoLink := "\033]8;;https://evo.snyk.io/report\033\\https://evo.snyk.io/report\033]8;;\033\\"
+	msg += "\n" + dim.Render("Tip: Re-open this report anytime with --report or view at ") + evoLink
 	if err := userInterface.Output(msg); err != nil {
 		logger.Debug().Err(err).Msg("failed to output status")
 	}
