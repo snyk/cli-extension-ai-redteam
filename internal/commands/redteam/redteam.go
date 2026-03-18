@@ -125,35 +125,9 @@ func RunRedTeamWorkflow(
 
 	controlServerClient := controlServerFactory(logger, controlServerHTTPClient, controlServerURL, tenantID)
 
-	goalsFlag := getGoalsFlag(config)
-	profileID := config.GetString(utils.FlagProfile)
-
-	if len(goalsFlag) > 0 && profileID != "" {
-		return nil, fmt.Errorf("--goals and --profile cannot be used together")
-	}
-
-	var profileName string
-
-	switch {
-	case len(goalsFlag) > 0:
-		rtConfig.Goals = goalsFlag
-		rtConfig.Attacks = nil
-	case profileID != "":
-		name, err := applyProfile(
-			context.Background(), controlServerClient, rtConfig, profileID,
-		)
-		if err != nil {
-			return nil, err
-		}
-		profileName = name
-	case rtConfig.NeedsDefaultProfile():
-		name, err := applyProfile(
-			context.Background(), controlServerClient, rtConfig, defaultProfileID,
-		)
-		if err != nil {
-			return nil, err
-		}
-		profileName = name
+	profileName, err := resolveAttacks(config, controlServerClient, rtConfig)
+	if err != nil {
+		return nil, err
 	}
 
 	userInterface := invocationCtx.GetUserInterface()

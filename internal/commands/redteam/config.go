@@ -224,6 +224,35 @@ func (cfg *Config) NeedsDefaultProfile() bool {
 	return len(cfg.Goals) == 0 && len(cfg.Attacks) == 0
 }
 
+// resolveAttacks determines which attacks to run based on CLI flags and config.
+// Precedence: --goals > --profile > YAML attacks/goals > default "fast" profile.
+// Returns the resolved profile name (empty if goals were used directly).
+func resolveAttacks(
+	config configuration.Configuration,
+	client controlserver.Client,
+	cfg *Config,
+) (string, error) {
+	goalsFlag := getGoalsFlag(config)
+	profileID := config.GetString(utils.FlagProfile)
+
+	if len(goalsFlag) > 0 && profileID != "" {
+		return "", fmt.Errorf("--goals and --profile cannot be used together")
+	}
+
+	switch {
+	case len(goalsFlag) > 0:
+		cfg.Goals = goalsFlag
+		cfg.Attacks = nil
+		return "", nil
+	case profileID != "":
+		return applyProfile(context.Background(), client, cfg, profileID)
+	case cfg.NeedsDefaultProfile():
+		return applyProfile(context.Background(), client, cfg, defaultProfileID)
+	default:
+		return "", nil
+	}
+}
+
 func applyProfile(
 	ctx context.Context,
 	client controlserver.Client,
