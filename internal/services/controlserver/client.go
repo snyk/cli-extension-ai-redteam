@@ -11,6 +11,7 @@ import (
 	"github.com/rs/zerolog"
 
 	redteam_errors "github.com/snyk/cli-extension-ai-redteam/internal/errors/redteam"
+	"github.com/snyk/cli-extension-ai-redteam/internal/utils"
 )
 
 const APIVersion = "2026-02-20"
@@ -45,7 +46,7 @@ func NewClient(logger *zerolog.Logger, httpClient *http.Client, baseURL, tenantI
 }
 
 func httpError(op string, statusCode int, body []byte) error {
-	detail := fmt.Sprintf("%s returned status %d: %s", op, statusCode, string(body))
+	detail := fmt.Sprintf("%s returned status %d: %s", op, statusCode, utils.TruncateBody(body))
 	switch {
 	case statusCode == http.StatusUnauthorized:
 		return redteam_errors.NewUnauthorizedError(detail)

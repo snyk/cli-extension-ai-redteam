@@ -11,6 +11,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	redteam_errors "github.com/snyk/cli-extension-ai-redteam/internal/errors/redteam"
+	"github.com/snyk/cli-extension-ai-redteam/internal/utils"
 )
 
 type tenant struct {
@@ -98,7 +99,7 @@ func fetchTenants(ctx workflow.InvocationContext) ([]tenant, error) {
 	if resp.StatusCode != http.StatusOK {
 		detail := fmt.Sprintf(
 			"tenants API returned status %d: %s",
-			resp.StatusCode, string(body),
+			resp.StatusCode, utils.TruncateBody(body),
 		)
 		switch {
 		case resp.StatusCode == http.StatusUnauthorized:
