@@ -1,11 +1,30 @@
 package redteam
 
 import (
-	"fmt"
+	"errors"
+	"net/http"
 
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
 	snyk_common_errors "github.com/snyk/error-catalog-golang-public/snyk"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 )
+
+// ErrorFromHTTPStatus returns the appropriate RedTeamError for an HTTP status code.
+// Callers should pass a detail string (e.g. "tenants API returned status 401: ...").
+func ErrorFromHTTPStatus(statusCode int, detail string) *RedTeamError {
+	switch {
+	case statusCode == http.StatusUnauthorized:
+		return NewUnauthorizedError(detail)
+	case statusCode == http.StatusForbidden:
+		return NewForbiddenError(detail)
+	case statusCode == http.StatusNotFound:
+		return NewNotFoundError(detail)
+	case statusCode >= 500:
+		return NewServerError(detail)
+	default:
+		return NewHTTPClientError(detail)
+	}
+}
 
 //nolint:revive // RedTeamError is the canonical name; renaming would break the public API
 type RedTeamError struct {
@@ -32,29 +51,20 @@ func NewBadRequestError(msg string) *RedTeamError {
 	return newRedTeamError(snyk_common_errors.NewBadRequestError(msg), msg)
 }
 
-func NewScanError(msg, scanID string) *RedTeamError {
-	return newRedTeamError(cli_errors.NewGeneralCLIFailureError(fmt.Sprintf("Scan ID: %s failed. %s", scanID, msg)), msg)
-}
-
-func NewScanContextError(msg, scanID string) *RedTeamError {
-	errorMsg := fmt.Sprintf("Scan ID: %s failed. %s", scanID, msg)
-	return newRedTeamError(snyk_common_errors.NewBadRequestError(errorMsg), msg)
-}
-
-func NewScanNetworkError(msg, scanID string) *RedTeamError {
-	errorMsg := fmt.Sprintf(
-		"Scan ID: %s failed. We have issues reaching your target. Here are the details: %s",
-		scanID, msg,
-	)
-	return newRedTeamError(snyk_common_errors.NewBadRequestError(errorMsg), msg)
-}
-
 func NewServerError(msg string) *RedTeamError {
 	return newRedTeamError(snyk_common_errors.NewServerError(msg), msg)
 }
 
 func NewForbiddenError(msg string) *RedTeamError {
 	return newRedTeamError(snyk_common_errors.NewUnauthorisedError(msg), msg)
+}
+
+func NewUnauthorizedError(msg string) *RedTeamError {
+	return newRedTeamError(snyk_common_errors.NewUnauthorisedError(msg), msg)
+}
+
+func NewNotFoundError(msg string) *RedTeamError {
+	return newRedTeamError(cli_errors.NewGeneralCLIFailureError(msg), msg)
 }
 
 func NewHTTPClientError(msg string) *RedTeamError {
@@ -66,14 +76,25 @@ func NewPollingTimeoutError() *RedTeamError {
 	return newRedTeamError(snyk_common_errors.NewTimeoutError(msg), msg)
 }
 
+func NewConfigValidationError(msg string) *RedTeamError {
+	return newRedTeamError(cli_errors.NewCommandArgsError(msg), msg)
+}
+
+func NewInternalError(msg string) *RedTeamError {
+	return newRedTeamError(cli_errors.NewGeneralCLIFailureError(msg), msg)
+}
+
+func NewNetworkError(msg string) *RedTeamError {
+	return newRedTeamError(cli_errors.NewConnectionTimeoutError(msg), msg)
+}
+
+// NewGenericRedTeamError wraps an arbitrary error with a user-facing message.
+// If the wrapped error does not already contain a catalog error, it creates one
+// so that the Snyk CLI can always extract a user-visible Detail and exit code.
 func NewGenericRedTeamError(msg string, err error) *RedTeamError {
-	return newRedTeamError(err, msg)
-}
-
-func NewUnauthorizedError(msg string) *RedTeamError {
-	return newRedTeamError(snyk_common_errors.NewUnauthorisedError(msg), msg)
-}
-
-func NewNotFoundError(msg string) *RedTeamError {
+	var snykErr snyk_errors.Error
+	if errors.As(err, &snykErr) {
+		return newRedTeamError(err, msg)
+	}
 	return newRedTeamError(cli_errors.NewGeneralCLIFailureError(msg), msg)
 }

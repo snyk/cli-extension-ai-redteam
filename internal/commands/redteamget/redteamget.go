@@ -66,14 +66,14 @@ func RunRedTeamGetWorkflow(
 	experimental := config.GetBool(utils.FlagExperimental)
 	if !experimental {
 		logger.Debug().Msg("Required experimental flag is not present")
-		return nil, cli_errors.NewCommandIsExperimentalError("")
+		return nil, cli_errors.NewCommandIsExperimentalError("re-run with --experimental to use this command")
 	}
 
 	snykAPIURL := config.GetString(configuration.API_URL)
 
 	tenantID, err := helpers.GetTenantID(invocationCtx, config.GetString(utils.FlagTenantID))
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve tenant: %w", err)
+		return nil, err //nolint:wrapcheck // already a RedTeamError wrapping a catalog error
 	}
 
 	return handleGetScanResults(invocationCtx, controlServerFactory, tenantID, snykAPIURL)

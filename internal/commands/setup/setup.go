@@ -12,6 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam"
+	redteam_errors "github.com/snyk/cli-extension-ai-redteam/internal/errors/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
 	"github.com/snyk/cli-extension-ai-redteam/internal/utils"
 	"github.com/snyk/cli-extension-ai-redteam/internal/wizard"
@@ -43,7 +44,7 @@ func setupWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) 
 
 	experimental := config.GetBool(utils.FlagExperimental)
 	if !experimental {
-		return nil, cli_errors.NewCommandIsExperimentalError("")
+		return nil, cli_errors.NewCommandIsExperimentalError("re-run with --experimental to use this command")
 	}
 
 	port := config.GetInt("port")
@@ -57,12 +58,12 @@ func setupWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) 
 	if data, err := os.ReadFile(configPath); err == nil {
 		var cfg redteam.Config
 		if unmarshalErr := yaml.Unmarshal(data, &cfg); unmarshalErr != nil {
-			return nil, fmt.Errorf("failed to parse %s: %w", configPath, unmarshalErr)
+			return nil, redteam_errors.NewConfigValidationError(fmt.Sprintf("failed to parse %s: %s", configPath, unmarshalErr))
 		}
 		initialConfig = &cfg
 		logger.Info().Str("path", configPath).Msg("loaded existing configuration")
 	} else if config.GetString(utils.FlagConfig) != "" {
-		return nil, fmt.Errorf("failed to read config file %s: %w", configPath, err)
+		return nil, redteam_errors.NewConfigValidationError(fmt.Sprintf("failed to read config file %s: %s", configPath, err))
 	}
 
 	httpClient := invocationCtx.GetNetworkAccess().GetHttpClient()
@@ -72,7 +73,7 @@ func setupWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) 
 	userInterface := invocationCtx.GetUserInterface()
 	server := wizard.NewServer(port, configPath, initialConfig, csClient, userInterface)
 	if err := server.Start(); err != nil {
-		return nil, fmt.Errorf("setup wizard error: %w", err)
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("setup wizard error: %s", err))
 	}
 
 	return nil, nil

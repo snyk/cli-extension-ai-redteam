@@ -26,7 +26,7 @@ func main() {
 			return
 		}
 
-		prompt, _ := body["message"].(string) //nolint:errcheck // type assertion, ok to ignore
+		prompt, _ := body["message"].(string) //nolint:errcheck // test helper, ok if missing
 		resp := map[string]string{"response": fmt.Sprintf("I received your message: %s", prompt)}
 
 		w.Header().Set("Content-Type", "application/json")

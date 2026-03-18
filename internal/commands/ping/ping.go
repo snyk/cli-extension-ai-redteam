@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 
@@ -31,13 +32,13 @@ func pingWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) (
 	config := invocationCtx.GetConfiguration()
 
 	if !config.GetBool(utils.FlagExperimental) {
-		return nil, fmt.Errorf("set the `--experimental` flag to acknowledge that this feature may contain breaking changes")
+		return nil, cli_errors.NewCommandIsExperimentalError("re-run with --experimental to use this command")
 	}
 
 	logger := invocationCtx.GetEnhancedLogger()
 	rtConfig, earlyReturn, err := redteam.LoadAndValidateConfig(logger, config)
 	if err != nil {
-		return nil, fmt.Errorf("config error: %w", err)
+		return nil, err //nolint:wrapcheck // already a RedTeamError wrapping a catalog error
 	}
 	if earlyReturn != nil {
 		return earlyReturn, nil

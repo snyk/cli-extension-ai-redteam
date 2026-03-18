@@ -9,6 +9,9 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+
+	redteam_errors "github.com/snyk/cli-extension-ai-redteam/internal/errors/redteam"
+	"github.com/snyk/cli-extension-ai-redteam/internal/utils"
 )
 
 type tenant struct {
@@ -43,11 +46,11 @@ func GetTenantID(ctx workflow.InvocationContext, tenantID string) (string, error
 	tenants, err := fetchTenants(ctx)
 	if err != nil {
 		logger.Debug().Err(err).Msg("failed to fetch tenants")
-		return "", fmt.Errorf("failed to fetch tenants: %w", err)
+		return "", err
 	}
 
 	if len(tenants) == 0 {
-		return "", fmt.Errorf("no tenants found for your account")
+		return "", redteam_errors.NewBadRequestError("no tenants found for your account")
 	}
 
 	if len(tenants) == 1 {
@@ -61,13 +64,13 @@ func GetTenantID(ctx workflow.InvocationContext, tenantID string) (string, error
 	idx, _, selErr := ui.SelectOptions("Select tenant", labels)
 	if selErr != nil {
 		logger.Debug().Err(selErr).Msg("error selecting tenant")
-		return "", fmt.Errorf("error selecting tenant: %w", selErr)
+		return "", redteam_errors.NewBadRequestError(fmt.Sprintf("error selecting tenant: %s", selErr))
 	}
 	if idx >= 0 && idx < len(tenants) {
 		return tenants[idx].ID, nil
 	}
 
-	return "", fmt.Errorf("invalid tenant selection (index %d)", idx)
+	return "", redteam_errors.NewBadRequestError(fmt.Sprintf("invalid tenant selection (index %d)", idx))
 }
 
 func fetchTenants(ctx workflow.InvocationContext) ([]tenant, error) {
@@ -79,27 +82,31 @@ func fetchTenants(ctx workflow.InvocationContext) ([]tenant, error) {
 
 	req, err := http.NewRequestWithContext(ctx.Context(), http.MethodGet, url, http.NoBody)
 	if err != nil {
-		return nil, fmt.Errorf("build tenants request: %w", err)
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("build tenants request: %s", err))
 	}
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("tenants request failed: %w", err)
+		return nil, redteam_errors.NewHTTPClientError(fmt.Sprintf("tenants request failed: %s", err))
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("read tenants response: %w", err)
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("read tenants response: %s", err))
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("tenants API returned status %d: %s", resp.StatusCode, string(body))
+		detail := fmt.Sprintf(
+			"tenants API returned status %d: %s",
+			resp.StatusCode, utils.TruncateBody(body),
+		)
+		return nil, redteam_errors.ErrorFromHTTPStatus(resp.StatusCode, detail)
 	}
 
 	var apiResp tenantsAPIResponse
 	if err := json.Unmarshal(body, &apiResp); err != nil {
-		return nil, fmt.Errorf("unmarshal tenants response: %w", err)
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("unmarshal tenants response: %s", err))
 	}
 
 	result := make([]tenant, 0, len(apiResp.Data))

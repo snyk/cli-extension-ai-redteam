@@ -18,6 +18,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam/htmlreport"
+	redteam_errors "github.com/snyk/cli-extension-ai-redteam/internal/errors/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/helpers"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/target"
@@ -94,7 +95,7 @@ func RunRedTeamWorkflow(
 	experimental := config.GetBool(utils.FlagExperimental)
 	if !experimental {
 		logger.Debug().Msg("Required experimental flag is not present")
-		return nil, cli_errors.NewCommandIsExperimentalError("")
+		return nil, cli_errors.NewCommandIsExperimentalError("re-run with --experimental to use this command")
 	}
 
 	listGoals := config.GetBool(utils.FlagListGoals)
@@ -115,7 +116,7 @@ func RunRedTeamWorkflow(
 
 	tenantID, err := helpers.GetTenantID(invocationCtx, config.GetString(utils.FlagTenantID))
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve tenant: %w", err)
+		return nil, err //nolint:wrapcheck // already a RedTeamError wrapping a catalog error
 	}
 
 	targetHTTPClient := &http.Client{Timeout: target.DefaultTimeout}
@@ -147,7 +148,7 @@ func RunRedTeamWorkflow(
 
 	output, htmlErr := htmlreport.ProcessResults(logger, config, results)
 	if htmlErr != nil {
-		return nil, fmt.Errorf("HTML report error: %w", htmlErr)
+		return nil, htmlErr //nolint:wrapcheck // already a RedTeamError wrapping a catalog error
 	}
 	return output, nil
 }
@@ -167,7 +168,7 @@ func handleListFlags(
 	if listGoals {
 		goals, err := controlServerClient.ListGoals(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to list goals: %w", err)
+			return nil, err //nolint:wrapcheck // already a RedTeamError wrapping a catalog error
 		}
 		sort.Slice(goals, func(i, j int) bool { return goals[i].DisplayOrder < goals[j].DisplayOrder })
 		lines = append(lines, "Available goals:", "")
@@ -179,7 +180,7 @@ func handleListFlags(
 		}
 		strategies, err := controlServerClient.ListStrategies(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to list strategies: %w", err)
+			return nil, err //nolint:wrapcheck // already a RedTeamError wrapping a catalog error
 		}
 		sort.Slice(strategies, func(i, j int) bool { return strategies[i].DisplayOrder < strategies[j].DisplayOrder })
 		lines = append(lines, "Available strategies:", "")
@@ -265,9 +266,9 @@ func runClientDrivenScan(
 
 	scanID, err := csClient.CreateScan(ctx, rtConfig.ToCreateScanRequest())
 	if err != nil {
-		return nil, fmt.Errorf("failed to create scan: %w", err)
+		return nil, err //nolint:wrapcheck // already a RedTeamError wrapping a catalog error
 	}
-	logger.Info().Str("scanID", scanID).Msg("scan created on Snyk API")
+	logger.Info().Str("scanID", scanID).Msg("scan created successfully")
 
 	progressBar := userInterface.NewProgressBar()
 	progressBar.SetTitle(fmt.Sprintf("Scanning %s...", rtConfig.Target.Name))
@@ -278,7 +279,7 @@ func runClientDrivenScan(
 	for {
 		chats, nextErr := csClient.NextChats(ctx, scanID, responses)
 		if nextErr != nil {
-			return nil, fmt.Errorf("failed to get next chats: %w", nextErr)
+			return nil, nextErr //nolint:wrapcheck // already a RedTeamError wrapping a catalog error
 		}
 		if len(chats) == 0 {
 			break
@@ -289,9 +290,9 @@ func runClientDrivenScan(
 			resp, tgtErr := targetClient.SendPrompt(ctx, chat.Prompt)
 			if tgtErr != nil {
 				if errors.Is(tgtErr, target.ErrCircuitOpen) {
-					return nil, fmt.Errorf("aborting scan: %w", tgtErr)
+					return nil, redteam_errors.NewNetworkError(fmt.Sprintf("aborting scan: %s", tgtErr))
 				}
-				logger.Warn().Err(tgtErr).Str("chatID", chat.ChatID).Msg("target error, using error as response")
+				logger.Warn().Err(tgtErr).Str("scanID", scanID).Str("chatID", chat.ChatID).Msg("The scan target returned an error")
 				resp = fmt.Sprintf("[error: %s]", tgtErr.Error())
 			}
 			responses = append(responses, controlserver.ChatResponse{
@@ -315,7 +316,7 @@ func runClientDrivenScan(
 
 	reportJSON, reportErr := csClient.GetReport(ctx, scanID)
 	if reportErr != nil {
-		return nil, fmt.Errorf("failed to get scan report: %w", reportErr)
+		return nil, reportErr //nolint:wrapcheck // already a RedTeamError wrapping a catalog error
 	}
 
 	return []workflow.Data{newWorkflowData("application/json", reportJSON)}, nil

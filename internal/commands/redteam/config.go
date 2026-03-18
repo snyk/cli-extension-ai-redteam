@@ -14,6 +14,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"gopkg.in/yaml.v3"
 
+	redteam_errors "github.com/snyk/cli-extension-ai-redteam/internal/errors/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
 	"github.com/snyk/cli-extension-ai-redteam/internal/utils"
 )
@@ -208,7 +209,8 @@ func ValidateConfig(cfg *Config) error {
 	if len(errs) == 0 {
 		return nil
 	}
-	return fmt.Errorf("invalid configuration:\n  - %s", strings.Join(errs, "\n  - "))
+	msg := fmt.Sprintf("invalid configuration:\n  - %s", strings.Join(errs, "\n  - "))
+	return redteam_errors.NewConfigValidationError(msg)
 }
 
 func validateURL(rawURL, label string) error {
