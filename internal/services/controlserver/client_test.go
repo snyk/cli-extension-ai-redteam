@@ -209,6 +209,36 @@ func TestGetResult_Happy(t *testing.T) {
 	assert.True(t, result.Attacks[0].Chats[0].Success)
 }
 
+func TestGetReport_Happy(t *testing.T) {
+	reportJSON := `{"id":"scan-123","target_url":"http://example.com","results":[],"passed_types":[]}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "/hidden/tenants/"+testTenantID+"/red_team_scans/"+testScanID+"/report", r.URL.Path)
+		assert.Contains(t, r.URL.RawQuery, "version="+controlserver.APIVersion)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(reportJSON))
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	result, err := client.GetReport(t.Context(), testScanID)
+	require.NoError(t, err)
+	assert.JSONEq(t, reportJSON, string(result))
+}
+
+func TestGetReport_NotFound(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`{"detail": "Scan not found"}`))
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	_, err := client.GetReport(t.Context(), "nonexistent")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
 func TestListEnums_Happy(t *testing.T) {
 	tests := []struct {
 		name     string

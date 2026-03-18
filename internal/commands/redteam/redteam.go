@@ -2,7 +2,6 @@ package redteam
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -21,7 +20,6 @@ import (
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam/htmlreport"
 	"github.com/snyk/cli-extension-ai-redteam/internal/helpers"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
-	"github.com/snyk/cli-extension-ai-redteam/internal/services/normalizer"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/target"
 	"github.com/snyk/cli-extension-ai-redteam/internal/utils"
 )
@@ -114,7 +112,7 @@ func RunRedTeamWorkflow(
 
 	targetHTTPClient := &http.Client{Timeout: target.DefaultTimeout}
 	controlServerHTTPClient := invocationCtx.GetNetworkAccess().GetHttpClient()
-	controlServerHTTPClient.Timeout = 15 * time.Second
+	controlServerHTTPClient.Timeout = 60 * time.Second
 	controlServerURL := config.GetString(configuration.API_URL)
 
 	controlServerClient := controlServerFactory(logger, controlServerHTTPClient, controlServerURL, tenantID)
@@ -250,21 +248,14 @@ func runClientDrivenScan(
 		logger.Debug().Err(statusErr).Msg("failed to get final status")
 	}
 
-	result, resultErr := csClient.GetResult(ctx, scanID)
-	if resultErr != nil {
-		return nil, fmt.Errorf("failed to get scan result: %w", resultErr)
-	}
-
 	outputStatus(userInterface, logger, status)
 
-	normalized := normalizer.Normalize(result, status, rtConfig.Target.Settings.URL)
-
-	resultsBytes, marshalErr := json.Marshal(normalized)
-	if marshalErr != nil {
-		return nil, fmt.Errorf("failed to marshal results: %w", marshalErr)
+	reportJSON, reportErr := csClient.GetReport(ctx, scanID)
+	if reportErr != nil {
+		return nil, fmt.Errorf("failed to get scan report: %w", reportErr)
 	}
 
-	return []workflow.Data{newWorkflowData("application/json", resultsBytes)}, nil
+	return []workflow.Data{newWorkflowData("application/json", reportJSON)}, nil
 }
 
 func updateProgress(

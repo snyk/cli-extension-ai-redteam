@@ -2,7 +2,6 @@ package redteamget
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -17,7 +16,6 @@ import (
 	redteam_errors "github.com/snyk/cli-extension-ai-redteam/internal/errors/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/helpers"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
-	"github.com/snyk/cli-extension-ai-redteam/internal/services/normalizer"
 	"github.com/snyk/cli-extension-ai-redteam/internal/utils"
 )
 
@@ -100,28 +98,15 @@ func handleGetScanResults(
 
 	snykAPIClient := controlServerFactory(logger, httpClient, snykAPIURL, tenantID)
 
-	logger.Debug().Str("scanID", scanID).Msg("Fetching scan results")
+	logger.Debug().Str("scanID", scanID).Msg("Fetching scan report")
 
-	status, statusErr := snykAPIClient.GetStatus(ctx, scanID)
-	if statusErr != nil {
-		logger.Debug().Err(statusErr).Msg("failed to get status, continuing without summary")
+	reportJSON, reportErr := snykAPIClient.GetReport(ctx, scanID)
+	if reportErr != nil {
+		logger.Debug().Err(reportErr).Msg("Error fetching scan report")
+		return nil, redteam_errors.NewGenericRedTeamError(reportErr.Error(), reportErr)
 	}
 
-	result, resultErr := snykAPIClient.GetResult(ctx, scanID)
-	if resultErr != nil {
-		logger.Debug().Err(resultErr).Msg("Error fetching scan result")
-		return nil, redteam_errors.NewGenericRedTeamError(resultErr.Error(), resultErr)
-	}
-
-	normalized := normalizer.Normalize(result, status, "")
-
-	resultsBytes, err := json.Marshal(normalized)
-	if err != nil {
-		logger.Debug().Err(err).Msg("Error marshaling scan results")
-		return nil, redteam_errors.NewGenericRedTeamError("Failed processing scan results", err)
-	}
-
-	jsonResults := []workflow.Data{workflow.NewData(getWorkflowType, "application/json", resultsBytes)}
+	jsonResults := []workflow.Data{workflow.NewData(getWorkflowType, "application/json", []byte(reportJSON))}
 
 	output, htmlErr := htmlreport.ProcessResults(logger, config, jsonResults)
 	if htmlErr != nil {
