@@ -7,7 +7,6 @@ import TargetTypeStep from "./TargetTypeStep";
 import TargetConfigStep from "./TargetConfigStep";
 import AppContextStep from "./AppContextStep";
 import GoalStep from "./GoalStep";
-import StrategiesStep from "./StrategiesStep";
 import TestConnection from "./TestConnection";
 import { configToYaml } from "../../yaml";
 import type { Config } from "../../types";
@@ -24,7 +23,6 @@ const requiredStepFields: Record<string, string[][]> = {
   "target-config": [["target", "settings", "url"], ["target", "settings", "request_body_template"]],
   "app-context": [],
   "goal": [["goals"]],
-  "strategies": [["strategies"]],
   "review": [],
 };
 
@@ -56,8 +54,8 @@ export function buildConfig(values: Record<string, any>): Config {
         request_body_template: settings.request_body_template || "",
       },
     },
-    goals: values?.goals?.length ? values.goals : ["system_prompt_extraction"],
-    strategies: values?.strategies?.length ? values.strategies : ["directly_asking"],
+    goals: [],
+    attacks: values?.attacks || (values?.goals || []).map((g: string) => ({ goal: g })),
   };
 }
 
@@ -75,8 +73,6 @@ function downloadFile(content: string, filename: string) {
 
 const defaultValues = {
   target: { type: "http" },
-  goals: ["system_prompt_extraction"],
-  strategies: ["directly_asking"],
 };
 
 export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded }: SetupPageProps) {
@@ -118,8 +114,7 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
               request_body_template: cfg.target?.settings?.request_body_template,
             },
           },
-          goals: cfg.goals?.length ? cfg.goals : ["system_prompt_extraction"],
-          strategies: cfg.strategies?.length ? cfg.strategies : ["directly_asking"],
+          goals: cfg.goals || [],
         });
       })
       .catch(() => {});
@@ -253,9 +248,6 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
       </div>
       <div style={{ display: activeStep === "goal" ? "block" : "none" }}>
         <GoalStep />
-      </div>
-      <div style={{ display: activeStep === "strategies" ? "block" : "none" }}>
-        <StrategiesStep />
       </div>
 
       {isReview && (

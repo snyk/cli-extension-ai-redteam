@@ -21,6 +21,7 @@ type Client interface {
 	GetReport(ctx context.Context, scanID string) (json.RawMessage, error)
 	ListGoals(ctx context.Context) ([]EnumEntry, error)
 	ListStrategies(ctx context.Context) ([]EnumEntry, error)
+	ListProfiles(ctx context.Context) ([]ProfileResponse, error)
 }
 
 type ClientImpl struct {
@@ -127,7 +128,8 @@ func (c *ClientImpl) NextChats(ctx context.Context, scanID string, responses []C
 }
 
 func (c *ClientImpl) GetStatus(ctx context.Context, scanID string) (*ScanStatus, error) {
-	url := fmt.Sprintf("%s/hidden/tenants/%s/red_team_scans/%s/status?version=%s", c.baseURL, c.tenantID, scanID, APIVersion)
+	url := fmt.Sprintf("%s/hidden/tenants/%s/red_team_scans/%s/status?version=%s",
+		c.baseURL, c.tenantID, scanID, APIVersion)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("build GetStatus request: %w", err)
@@ -253,4 +255,34 @@ func (c *ClientImpl) ListGoals(ctx context.Context) ([]EnumEntry, error) {
 
 func (c *ClientImpl) ListStrategies(ctx context.Context) ([]EnumEntry, error) {
 	return c.listEnum(ctx, "strategies")
+}
+
+func (c *ClientImpl) ListProfiles(ctx context.Context) ([]ProfileResponse, error) {
+	url := fmt.Sprintf("%s/hidden/profiles?version=%s", c.baseURL, APIVersion)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("build ListProfiles request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("ListProfiles request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read ListProfiles response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("ListProfiles returned status %d: %s", resp.StatusCode, string(respBytes))
+	}
+
+	var profiles []ProfileResponse
+	if err := json.Unmarshal(respBytes, &profiles); err != nil {
+		return nil, fmt.Errorf("unmarshal ListProfiles response: %w", err)
+	}
+
+	return profiles, nil
 }

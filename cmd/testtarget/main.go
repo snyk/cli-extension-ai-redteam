@@ -26,7 +26,7 @@ func main() {
 			return
 		}
 
-		prompt, _ := body["message"].(string) //nolint:errcheck // test helper
+		prompt, _ := body["message"].(string) //nolint:errcheck // type assertion, ok to ignore
 		resp := map[string]string{"response": fmt.Sprintf("I received your message: %s", prompt)}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -34,6 +34,6 @@ func main() {
 	})
 
 	addr := "127.0.0.1:" + port
-	log.Printf("Test target listening on http://%s", addr) //nolint:forbidigo,gosec // standalone test helper
-	log.Fatal(http.ListenAndServe(addr, nil))              //nolint:forbidigo,gosec // standalone test helper, no need for timeouts
+	log.Printf("Test target listening on http://%s", addr) //nolint:gosec,forbidigo // test helper
+	log.Fatal(http.ListenAndServe(addr, nil))              //nolint:gosec,forbidigo // test helper
 }

@@ -11,11 +11,15 @@ describe("Sidebar", () => {
     configPath: null as string | null,
   };
 
-  it("renders all 6 step labels", () => {
+  it("renders all step labels", () => {
     const { container } = render(<Sidebar {...defaultProps} />);
     for (const step of steps) {
       expect(within(container).getByText(step.label)).toBeInTheDocument();
     }
+  });
+
+  it("does not include a strategies step", () => {
+    expect(steps.find((s) => s.key === "strategies")).toBeUndefined();
   });
 
   it("applies active class to the current step", () => {
@@ -35,8 +39,8 @@ describe("Sidebar", () => {
   it("calls onStepClick with correct key on click", () => {
     const onStepClick = vi.fn();
     const { container } = render(<Sidebar {...defaultProps} onStepClick={onStepClick} />);
-    fireEvent.click(within(container).getByText("Strategies"));
-    expect(onStepClick).toHaveBeenCalledWith("strategies");
+    fireEvent.click(within(container).getByText("Goals"));
+    expect(onStepClick).toHaveBeenCalledWith("goal");
   });
 
   it('shows "New Configuration" when configPath is null', () => {

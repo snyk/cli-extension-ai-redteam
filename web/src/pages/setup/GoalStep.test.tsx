@@ -13,6 +13,43 @@ const mockGoals = [
   { value: "Compliance Testing", description: "Meet regulatory needs", display_order: 2 },
 ];
 
+const mockProfiles = [
+  {
+    id: "fast",
+    name: "Fast",
+    description: "Quick baseline check",
+    entries: [
+      { goal: "Vulnerability Discovery", strategy: "direct" },
+      { goal: "Compliance Testing", strategy: "indirect" },
+    ],
+  },
+  {
+    id: "security",
+    name: "Security",
+    description: "Deep security scan",
+    entries: [{ goal: "Vulnerability Discovery", strategy: "advanced" }],
+  },
+];
+
+function mockFetch(goals: any[] = mockGoals, profiles: any[] = mockProfiles) {
+  vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+    const url = typeof input === "string" ? input : (input as Request).url;
+    if (url === "/api/goals") {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(goals),
+      } as Response);
+    }
+    if (url === "/api/profiles") {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(profiles),
+      } as Response);
+    }
+    return Promise.reject(new Error(`Unmocked fetch: ${url}`));
+  });
+}
+
 function renderInForm() {
   return render(
     <Form>
@@ -29,11 +66,7 @@ describe("GoalStep", () => {
   });
 
   it("renders goal checkboxes after successful fetch", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockGoals),
-    } as Response);
-
+    mockFetch();
     renderInForm();
 
     await waitFor(() => {
@@ -42,6 +75,28 @@ describe("GoalStep", () => {
     expect(screen.getByText("Compliance Testing")).toBeInTheDocument();
     expect(screen.getByText("Find security holes")).toBeInTheDocument();
     expect(screen.getByText("Meet regulatory needs")).toBeInTheDocument();
+  });
+
+  it("renders profile cards", async () => {
+    mockFetch();
+    renderInForm();
+
+    await waitFor(() => {
+      expect(screen.getByText("Fast")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Quick baseline check")).toBeInTheDocument();
+    expect(screen.getByText("Security")).toBeInTheDocument();
+    expect(screen.getByText("Deep security scan")).toBeInTheDocument();
+  });
+
+  it("does not render profile cards when no profiles", async () => {
+    mockFetch(mockGoals, []);
+    renderInForm();
+
+    await waitFor(() => {
+      expect(screen.getByText("Vulnerability Discovery")).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId("profile-card-fast")).not.toBeInTheDocument();
   });
 
   it("shows error alert when fetch rejects", async () => {

@@ -23,7 +23,8 @@ func RegisterSetupWorkflow(e workflow.Engine) error {
 	flagset := pflag.NewFlagSet("snyk-cli-extension-ai-redteam-setup", pflag.ExitOnError)
 	const flagPort = "port"
 
-	flagset.Bool(utils.FlagExperimental, false, "This is an experimental feature that will contain breaking changes in future revisions")
+	flagset.Bool(utils.FlagExperimental, false,
+		"This is an experimental feature that will contain breaking changes in future revisions")
 	flagset.String(utils.FlagConfig, "", "Load an existing configuration file to edit")
 	flagset.Int(flagPort, 8484, "Port for the setup wizard web server")
 

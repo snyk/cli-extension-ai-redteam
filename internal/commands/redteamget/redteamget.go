@@ -28,11 +28,14 @@ var (
 	getWorkflowType = workflow.NewTypeIdentifier(GetWorkflowID, getWorkflowName)
 )
 
-type ControlServerFactory func(logger *zerolog.Logger, httpClient *http.Client, url, tenantID string) controlserver.Client
+type ControlServerFactory func(
+	logger *zerolog.Logger, httpClient *http.Client, url, tenantID string,
+) controlserver.Client
 
 func RegisterRedTeamGetWorkflow(e workflow.Engine) error {
 	flagset := pflag.NewFlagSet("snyk-cli-extension-ai-redteam-get", pflag.ExitOnError)
-	flagset.Bool(utils.FlagExperimental, false, "This is an experimental feature that will contain breaking changes in future revisions")
+	flagset.Bool(utils.FlagExperimental, false,
+		"This is an experimental feature that will contain breaking changes in future revisions")
 	flagset.String(utils.FlagScanID, "", "Scan ID to retrieve results for")
 	flagset.Bool(utils.FlagHTML, false, "Output the red team report in HTML format instead of JSON")
 	flagset.String(utils.FlagHTMLFileOutput, "", "Write the HTML report to the specified file path")
@@ -46,9 +49,10 @@ func RegisterRedTeamGetWorkflow(e workflow.Engine) error {
 }
 
 func redTeamGetWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
-	factory := ControlServerFactory(func(logger *zerolog.Logger, httpClient *http.Client, url, tenantID string) controlserver.Client {
-		return controlserver.NewClient(logger, httpClient, url, tenantID)
-	})
+	factory := ControlServerFactory(
+		func(logger *zerolog.Logger, httpClient *http.Client, url, tenantID string) controlserver.Client {
+			return controlserver.NewClient(logger, httpClient, url, tenantID)
+		})
 	return RunRedTeamGetWorkflow(invocationCtx, factory)
 }
 

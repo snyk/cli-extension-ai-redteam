@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam"
+	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
 	"github.com/snyk/cli-extension-ai-redteam/internal/utils"
 )
 
@@ -20,7 +21,7 @@ const (
 	baseTargetYAML = `
 target:
   name: test
-  type: api
+  type: http
   settings:
     url: "https://example.com"
     response_selector: "response"
@@ -38,9 +39,7 @@ func validConfig() *redteam.Config {
 				RequestBodyTemplate: `{"message": "{{prompt}}"}`,
 			},
 		},
-		ControlServerURL: "http://localhost:8085",
-		Goals:            []string{"system_prompt_extraction"},
-		Strategies:       []string{"directly_asking"},
+		Goals: []string{"system_prompt_extraction"},
 	}
 }
 
@@ -211,6 +210,47 @@ func TestHeadersMap_DuplicateKeysLastWins(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// ToCreateScanRequest
+// ---------------------------------------------------------------------------
+
+func TestToCreateScanRequest_WithAttacks(t *testing.T) {
+	cfg := validConfig()
+	cfg.Attacks = []controlserver.AttackEntry{
+		{Goal: "harmful_content", Strategy: "role_play"},
+		{Goal: "system_prompt_extraction"},
+	}
+	req := cfg.ToCreateScanRequest()
+	require.Len(t, req.Attacks, 2)
+	assert.Equal(t, "harmful_content", req.Attacks[0].Goal)
+	assert.Equal(t, "role_play", req.Attacks[0].Strategy)
+	assert.Equal(t, "system_prompt_extraction", req.Attacks[1].Goal)
+	assert.Empty(t, req.Attacks[1].Strategy)
+}
+
+func TestToCreateScanRequest_GoalsConvertedToAttacks(t *testing.T) {
+	cfg := validConfig()
+	cfg.Goals = []string{"system_prompt_extraction", "harmful_content"}
+	cfg.Attacks = nil
+	req := cfg.ToCreateScanRequest()
+	require.Len(t, req.Attacks, 2)
+	assert.Equal(t, "system_prompt_extraction", req.Attacks[0].Goal)
+	assert.Empty(t, req.Attacks[0].Strategy)
+	assert.Equal(t, "harmful_content", req.Attacks[1].Goal)
+	assert.Empty(t, req.Attacks[1].Strategy)
+}
+
+func TestToCreateScanRequest_AttacksOverrideGoals(t *testing.T) {
+	cfg := validConfig()
+	cfg.Goals = []string{"should_be_ignored"}
+	cfg.Attacks = []controlserver.AttackEntry{
+		{Goal: "used_instead", Strategy: "my_strategy"},
+	}
+	req := cfg.ToCreateScanRequest()
+	require.Len(t, req.Attacks, 1)
+	assert.Equal(t, "used_instead", req.Attacks[0].Goal)
+}
+
+// ---------------------------------------------------------------------------
 // LoadAndValidateConfig — YAML loading
 // ---------------------------------------------------------------------------
 
@@ -224,7 +264,7 @@ func writeTestConfig(t *testing.T, content string) string {
 	return f.Name()
 }
 
-func TestLoadAndValidateConfig_AppliesDefaultGoal(t *testing.T) {
+func TestLoadAndValidateConfig_NeedsDefaultProfileWhenNoGoals(t *testing.T) {
 	path := writeTestConfig(t, baseTargetYAML)
 	cfg := configuration.New()
 	cfg.Set(utils.FlagConfig, path)
@@ -232,24 +272,14 @@ func TestLoadAndValidateConfig_AppliesDefaultGoal(t *testing.T) {
 	rtCfg, data, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
 	require.NoError(t, err)
 	assert.Nil(t, data)
-	assert.Equal(t, []string{"system_prompt_extraction"}, rtCfg.Goals)
-}
-
-func TestLoadAndValidateConfig_AppliesDefaultStrategies(t *testing.T) {
-	path := writeTestConfig(t, baseTargetYAML)
-	cfg := configuration.New()
-	cfg.Set(utils.FlagConfig, path)
-
-	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
-	require.NoError(t, err)
-	assert.Equal(t, []string{"directly_asking"}, rtCfg.Strategies)
+	assert.True(t, rtCfg.NeedsDefaultProfile())
 }
 
 func TestLoadAndValidateConfig_AppliesDefaultResponseSelector(t *testing.T) {
 	path := writeTestConfig(t, `
 target:
   name: test
-  type: api
+  type: http
   settings:
     url: "https://example.com"
     request_body_template: '{"message": "{{prompt}}"}'
@@ -266,7 +296,7 @@ func TestLoadAndValidateConfig_AppliesDefaultRequestBodyTemplate(t *testing.T) {
 	path := writeTestConfig(t, `
 target:
   name: test
-  type: api
+  type: http
   settings:
     url: "https://example.com"
     response_selector: "response"
@@ -283,16 +313,13 @@ func TestLoadAndValidateConfig_ExplicitValuesNotOverriddenByDefaults(t *testing.
 	path := writeTestConfig(t, `
 target:
   name: test
-  type: api
+  type: http
   settings:
     url: "https://example.com"
     response_selector: "data.reply"
     request_body_template: '{"text": "{{prompt}}", "stream": false}'
 goals:
   - "harmful_content"
-strategies:
-  - "role_play"
-  - "directly_asking"
 `)
 	cfg := configuration.New()
 	cfg.Set(utils.FlagConfig, path)
@@ -300,7 +327,6 @@ strategies:
 	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"harmful_content"}, rtCfg.Goals)
-	assert.Equal(t, []string{"role_play", "directly_asking"}, rtCfg.Strategies)
 	assert.Equal(t, "data.reply", rtCfg.Target.Settings.ResponseSelector)
 	assert.Contains(t, rtCfg.Target.Settings.RequestBodyTemplate, `"stream": false`)
 }
@@ -313,7 +339,7 @@ func TestLoadAndValidateConfig_TargetURLFlagOverridesConfig(t *testing.T) {
 	path := writeTestConfig(t, `
 target:
   name: test
-  type: api
+  type: http
   settings:
     url: "https://original.com"
     response_selector: "response"
@@ -360,7 +386,7 @@ func TestLoadAndValidateConfig_TargetURLFlagDoesNotOverrideExistingNameAndType(t
 	path := writeTestConfig(t, `
 target:
   name: "My Chatbot"
-  type: socket_io
+  type: http
   settings:
     response_selector: "response"
     request_body_template: '{"message": "{{prompt}}"}'
@@ -372,7 +398,7 @@ target:
 	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
 	require.NoError(t, err)
 	assert.Equal(t, "My Chatbot", rtCfg.Target.Name)
-	assert.Equal(t, "socket_io", rtCfg.Target.Type)
+	assert.Equal(t, "http", rtCfg.Target.Type)
 }
 
 func TestLoadAndValidateConfig_RequestBodyTemplateFlagOverride(t *testing.T) {
@@ -401,7 +427,7 @@ func TestLoadAndValidateConfig_HeaderFlagsAppended(t *testing.T) {
 	path := writeTestConfig(t, `
 target:
   name: test
-  type: api
+  type: http
   settings:
     url: "https://example.com"
     response_selector: "response"
@@ -412,7 +438,7 @@ target:
 `)
 	cfg := configuration.New()
 	cfg.Set(utils.FlagConfig, path)
-	cfg.Set(utils.FlagHeaders, []string{"Authorization: Bearer tok123", "X-Custom: hello"})
+	cfg.Set(utils.FlagHeader, []string{"Authorization: Bearer tok123", "X-Custom: hello"})
 
 	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
 	require.NoError(t, err)
@@ -427,7 +453,7 @@ func TestLoadAndValidateConfig_HeaderFlagMalformedIgnored(t *testing.T) {
 	path := writeTestConfig(t, baseTargetYAML)
 	cfg := configuration.New()
 	cfg.Set(utils.FlagConfig, path)
-	cfg.Set(utils.FlagHeaders, []string{"no-colon-here", "Good: header"})
+	cfg.Set(utils.FlagHeader, []string{"no-colon-here", "Good: header"})
 
 	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
 	require.NoError(t, err)
@@ -439,7 +465,7 @@ func TestLoadAndValidateConfig_HeaderFlagValueWithColons(t *testing.T) {
 	path := writeTestConfig(t, baseTargetYAML)
 	cfg := configuration.New()
 	cfg.Set(utils.FlagConfig, path)
-	cfg.Set(utils.FlagHeaders, []string{"Authorization: Bearer eyJ0:abc:def"})
+	cfg.Set(utils.FlagHeader, []string{"Authorization: Bearer eyJ0:abc:def"})
 
 	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
 	require.NoError(t, err)
@@ -452,7 +478,7 @@ func TestLoadAndValidateConfig_YAMLHeadersWithColonsInValue(t *testing.T) {
 	path := writeTestConfig(t, `
 target:
   name: test
-  type: api
+  type: http
   settings:
     url: "https://example.com"
     response_selector: "response"
@@ -512,7 +538,7 @@ func TestLoadAndValidateConfig_ValidationError(t *testing.T) {
 	path := writeTestConfig(t, `
 target:
   name: test
-  type: api
+  type: http
   settings:
     url: ""
 `)

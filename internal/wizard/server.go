@@ -32,7 +32,10 @@ type Server struct {
 	shutdown      chan struct{}
 }
 
-func NewServer(port int, configPath string, initialConfig *redteam.Config, csClient controlserver.Client, userInterface ui.UserInterface) *Server {
+func NewServer(
+	port int, configPath string, initialConfig *redteam.Config,
+	csClient controlserver.Client, userInterface ui.UserInterface,
+) *Server {
 	return &Server{
 		port:          port,
 		configPath:    configPath,
@@ -51,6 +54,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("POST /api/ping", handlePing())
 	mux.HandleFunc("GET /api/goals", handleListGoals(s.csClient))
 	mux.HandleFunc("GET /api/strategies", handleListStrategies(s.csClient))
+	mux.HandleFunc("GET /api/profiles", handleListProfiles(s.csClient))
 	mux.HandleFunc("POST /api/download-complete", s.handleDownloadComplete())
 
 	if s.devMode {

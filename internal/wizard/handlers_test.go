@@ -215,6 +215,52 @@ func TestHandleListStrategies_ClientError(t *testing.T) {
 	assert.Equal(t, http.StatusBadGateway, rec.Code)
 }
 
+// --- handleListProfiles ---
+
+func TestHandleListProfiles_Success(t *testing.T) {
+	mock := &controlservermock.MockClient{
+		Profiles: []controlserver.ProfileResponse{
+			{
+				ID:          "prof-1",
+				Name:        "OWASP LLM Top 10",
+				Description: "Tests based on the OWASP LLM Top 10",
+				Entries: []controlserver.AttackEntry{
+					{Goal: "harmful_content", Strategy: "role_play"},
+					{Goal: "system_prompt_extraction"},
+				},
+			},
+		},
+	}
+
+	handler := wizard.HandleListProfiles(mock)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	var profiles []controlserver.ProfileResponse
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&profiles))
+	require.Len(t, profiles, 1)
+	assert.Equal(t, "prof-1", profiles[0].ID)
+	assert.Equal(t, "OWASP LLM Top 10", profiles[0].Name)
+	assert.Len(t, profiles[0].Entries, 2)
+}
+
+func TestHandleListProfiles_ClientError(t *testing.T) {
+	mock := &controlservermock.MockClient{
+		ProfilesErr: errors.New("connection failed"),
+	}
+
+	handler := wizard.HandleListProfiles(mock)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadGateway, rec.Code)
+}
+
 // --- handleDownloadComplete ---
 
 func TestHandleDownloadComplete_Success(t *testing.T) {

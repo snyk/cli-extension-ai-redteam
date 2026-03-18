@@ -76,6 +76,17 @@ func handleListStrategies(client controlserver.Client) http.HandlerFunc {
 	}
 }
 
+func handleListProfiles(client controlserver.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		profiles, err := client.ListProfiles(r.Context())
+		if err != nil {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, profiles)
+	}
+}
+
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

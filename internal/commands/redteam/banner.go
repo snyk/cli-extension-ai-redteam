@@ -13,15 +13,17 @@ const (
 	reset = "\033[0m"
 )
 
-func displayBanner(userInterface ui.UserInterface, cfg *Config) {
+func displayBanner(userInterface ui.UserInterface, cfg *Config, profileName string) {
 	var sb strings.Builder
 
 	fmt.Fprintf(&sb, "\n")
 	fmt.Fprintf(&sb, "  %s%sSnyk Agent Red Teaming%s\n", bold, bred, reset)
 	fmt.Fprintf(&sb, "\n")
 	fmt.Fprintf(&sb, "  Target:     %s\n", cfg.Target.Settings.URL)
-	fmt.Fprintf(&sb, "  Goals:      %s\n", strings.Join(cfg.Goals, ", "))
-	fmt.Fprintf(&sb, "  Strategies: %s\n", strings.Join(cfg.Strategies, ", "))
+	if profileName != "" {
+		fmt.Fprintf(&sb, "  Profile:    %s\n", profileName)
+	}
+	fmt.Fprintf(&sb, "  Goals:      %s\n", strings.Join(cfg.UniqueGoals(), ", "))
 	fmt.Fprintf(&sb, "\n")
 
 	_ = userInterface.Output(sb.String()) //nolint:errcheck // best-effort display
