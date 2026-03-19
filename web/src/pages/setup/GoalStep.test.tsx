@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup, screen, waitFor } from "@testing-library/react";
+import { render, cleanup, screen, waitFor, fireEvent, act } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { Form } from "antd";
 import GoalStep from "./GoalStep";
 
@@ -9,8 +10,9 @@ afterEach(() => {
 });
 
 const mockGoals = [
-  { value: "Vulnerability Discovery", description: "Find security holes", display_order: 1 },
-  { value: "Compliance Testing", description: "Meet regulatory needs", display_order: 2 },
+  { value: "Vulnerability Discovery", description: "Find security holes", display_order: 1, strategies: ["direct", "advanced"] },
+  { value: "Compliance Testing", description: "Meet regulatory needs", display_order: 2, strategies: ["indirect"] },
+  { value: "Basic Scan", description: "Simple scan", display_order: 3 },
 ];
 
 const mockProfiles = [
@@ -31,6 +33,12 @@ const mockProfiles = [
   },
 ];
 
+const mockStrategies = [
+  { value: "direct", description: "Send the request directly" },
+  { value: "advanced", description: "Use advanced techniques" },
+  { value: "indirect", description: "Use indirect approaches" },
+];
+
 function mockFetch(goals: any[] = mockGoals, profiles: any[] = mockProfiles) {
   vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     const url = typeof input === "string" ? input : (input as Request).url;
@@ -38,6 +46,12 @@ function mockFetch(goals: any[] = mockGoals, profiles: any[] = mockProfiles) {
       return Promise.resolve({
         ok: true,
         json: () => Promise.resolve(goals),
+      } as Response);
+    }
+    if (url === "/api/strategies") {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(mockStrategies),
       } as Response);
     }
     if (url === "/api/profiles") {
@@ -56,6 +70,12 @@ function renderInForm() {
       <GoalStep />
     </Form>,
   );
+}
+
+/** Click the checkbox for a given goal by its value attribute. */
+async function clickGoalCheckbox(goalValue: string) {
+  const input = document.querySelector(`input[type="checkbox"][value="${goalValue}"]`) as HTMLElement;
+  await userEvent.click(input);
 }
 
 describe("GoalStep", () => {
@@ -87,6 +107,123 @@ describe("GoalStep", () => {
     expect(screen.getByText("Quick baseline check")).toBeInTheDocument();
     expect(screen.getByText("Security")).toBeInTheDocument();
     expect(screen.getByText("Deep security scan")).toBeInTheDocument();
+  });
+
+  it("shows strategy tags for all goals but unchecked by default", async () => {
+    mockFetch();
+    renderInForm();
+
+    await waitFor(() => {
+      expect(screen.getByText("Vulnerability Discovery")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Direct")).toBeInTheDocument();
+    expect(screen.getByText("Advanced")).toBeInTheDocument();
+    expect(screen.getByText("Indirect")).toBeInTheDocument();
+    expect(screen.getByText("Direct").closest(".ant-tag")).not.toHaveClass("ant-tag-checkable-checked");
+    expect(screen.getByText("Advanced").closest(".ant-tag")).not.toHaveClass("ant-tag-checkable-checked");
+    expect(screen.getByText("Indirect").closest(".ant-tag")).not.toHaveClass("ant-tag-checkable-checked");
+  });
+
+  it("checking a goal pre-selects all its strategies", async () => {
+    mockFetch();
+    renderInForm();
+
+    await waitFor(() => {
+      expect(screen.getByText("Vulnerability Discovery")).toBeInTheDocument();
+    });
+
+    await clickGoalCheckbox("Vulnerability Discovery");
+
+    await waitFor(() => {
+      expect(screen.getByText("Direct")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Advanced")).toBeInTheDocument();
+
+    expect(screen.getByText("Direct").closest(".ant-tag")).toHaveClass("ant-tag-checkable-checked");
+    expect(screen.getByText("Advanced").closest(".ant-tag")).toHaveClass("ant-tag-checkable-checked");
+  });
+
+  it("unchecking a goal unchecks its strategies", async () => {
+    mockFetch();
+    renderInForm();
+
+    await waitFor(() => {
+      expect(screen.getByText("Security")).toBeInTheDocument();
+    });
+
+    // Use profile click to reliably set initial checked state
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("profile-card-security"));
+    });
+    await waitFor(() => {
+      expect(screen.getByText("Advanced").closest(".ant-tag")).toHaveClass("ant-tag-checkable-checked");
+    });
+
+    // Now uncheck the goal
+    await clickGoalCheckbox("Vulnerability Discovery");
+    await waitFor(() => {
+      expect(screen.getByText("Advanced").closest(".ant-tag")).not.toHaveClass("ant-tag-checkable-checked");
+    });
+    expect(screen.getByText("Direct").closest(".ant-tag")).not.toHaveClass("ant-tag-checkable-checked");
+  });
+
+  it("profile click selects only profile strategies", async () => {
+    mockFetch();
+    renderInForm();
+
+    await waitFor(() => {
+      expect(screen.getByText("Fast")).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("profile-card-security"));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Advanced")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Advanced").closest(".ant-tag")).toHaveClass("ant-tag-checkable-checked");
+    expect(screen.getByText("Direct").closest(".ant-tag")).not.toHaveClass("ant-tag-checkable-checked");
+  });
+
+  it("toggling a strategy tag clears profile selection", async () => {
+    mockFetch();
+    renderInForm();
+
+    await waitFor(() => {
+      expect(screen.getByText("Fast")).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("profile-card-fast"));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("profile-card-fast")).toHaveClass("profile-card-selected");
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Direct"));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("profile-card-fast")).not.toHaveClass("profile-card-selected");
+    });
+  });
+
+  it("goals without strategies render without tags", async () => {
+    mockFetch(
+      [{ value: "Basic Scan", description: "Simple scan", display_order: 1 }],
+      [],
+    );
+    renderInForm();
+
+    await waitFor(() => {
+      expect(screen.getByText("Basic Scan")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Simple scan")).toBeInTheDocument();
+    expect(document.querySelector(".ant-tag-checkable")).not.toBeInTheDocument();
   });
 
   it("does not render profile cards when no profiles", async () => {

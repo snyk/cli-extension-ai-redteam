@@ -79,6 +79,11 @@ code {
 .yaml-colon { color: var(--pcl-color-fg-secondary); }
 .yaml-dash { color: var(--pcl-color-fg-secondary); }
 
+.ant-checkbox-checked .ant-checkbox-inner {
+  background-color: #1677ff !important;
+  border-color: #1677ff !important;
+}
+
 .profile-card {
   background-color: var(--pcl-color-bg-fill-secondary);
   border: 1px solid var(--pcl-color-border);
@@ -86,6 +91,7 @@ code {
   padding: 16px;
   cursor: pointer;
   transition: all 0.2s;
+  user-select: none;
 
   &:hover {
     background-color: var(--pcl-color-bg-surface);

@@ -55,6 +55,9 @@ func (s *Server) Start() error {
 	mux.HandleFunc("GET /api/goals", handleListGoals(s.csClient))
 	mux.HandleFunc("GET /api/strategies", handleListStrategies(s.csClient))
 	mux.HandleFunc("GET /api/profiles", handleListProfiles(s.csClient))
+	mux.HandleFunc("POST /api/save", handleSaveConfig(func(msg string) {
+		_ = s.ui.Output(msg) //nolint:errcheck // best-effort output
+	}))
 	mux.HandleFunc("POST /api/download-complete", s.handleDownloadComplete())
 
 	if s.devMode {
@@ -120,14 +123,7 @@ func (s *Server) handleDownloadComplete() http.HandlerFunc {
 		if configFile == "" {
 			configFile = "redteam.yaml"
 		}
-
-		var sb strings.Builder
-		sb.WriteString("\nConfiguration downloaded successfully!\n\n")
-		sb.WriteString("Next steps:\n")
-		sb.WriteString("  1. Close this wizard with Ctrl+C\n")
-		sb.WriteString("  2. Run your red team scan:\n\n")
-		fmt.Fprintf(&sb, "     snyk redteam --experimental --config %s\n\n", configFile)
-		_ = s.ui.Output(sb.String()) //nolint:errcheck // best-effort output
+		_ = s.ui.Output(fmt.Sprintf("\nConfiguration downloaded as %s\n", configFile)) //nolint:errcheck // best-effort output
 	}
 }
 

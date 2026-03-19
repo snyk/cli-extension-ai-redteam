@@ -25,6 +25,15 @@ func ProcessResults(
 	config configuration.Configuration,
 	jsonResults []workflow.Data,
 ) ([]workflow.Data, error) {
+	if jsonFilePath := config.GetString(utils.FlagJSONFileOutput); jsonFilePath != "" && len(jsonResults) > 0 {
+		if payload, ok := jsonResults[0].GetPayload().([]byte); ok {
+			if err := os.WriteFile(jsonFilePath, payload, 0o600); err != nil {
+				return nil, redteam_errors.NewInternalError(fmt.Sprintf("failed writing JSON report to %s: %s", jsonFilePath, err))
+			}
+			logger.Info().Msgf("JSON report written to %s", jsonFilePath)
+		}
+	}
+
 	returnHTML := config.GetBool(utils.FlagHTML)
 	htmlFileOutput := config.GetString(utils.FlagHTMLFileOutput)
 	needsHTML := returnHTML || htmlFileOutput != ""

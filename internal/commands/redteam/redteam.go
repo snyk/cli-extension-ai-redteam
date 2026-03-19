@@ -62,6 +62,7 @@ func RegisterRedTeamWorkflow(e workflow.Engine) error {
 	utils.AddTargetFlags(flagset)
 	flagset.Bool(utils.FlagHTML, false, "Output the red team report in HTML format instead of JSON")
 	flagset.String(utils.FlagHTMLFileOutput, "", "Write the HTML report to the specified file path")
+	flagset.String(utils.FlagJSONFileOutput, "", "Write the JSON report to the specified file path")
 	flagset.Bool(utils.FlagListGoals, false, "List all available attack goals and exit")
 	flagset.Bool(utils.FlagListStrategies, false, "List all available attack strategies and exit")
 	flagset.Bool(utils.FlagListProfiles, false, "List all available attack profiles and exit")

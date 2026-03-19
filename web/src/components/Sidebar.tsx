@@ -9,7 +9,7 @@ export interface Step {
 }
 
 export const steps: Step[] = [
-  { key: "target-type", label: "Target Type", description: "Name your target and choose how it communicates.", icon: <AimOutlined /> },
+  { key: "target-definition", label: "Target Definition", description: "Name your target and choose how it communicates.", icon: <AimOutlined /> },
   { key: "target-config", label: "Target Configuration", description: "Configure the endpoint URL, headers, and request/response format.", icon: <SettingOutlined /> },
   { key: "app-context", label: "Application Context", description: "Describe the application's purpose and provide ground truth for scoring.", icon: <FileTextOutlined /> },
   { key: "goal", label: "Goals", description: "Select what Agent Red Teaming should try to achieve.", icon: <FlagOutlined /> },
