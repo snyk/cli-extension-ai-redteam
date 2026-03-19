@@ -12,7 +12,6 @@ import (
 
 	"github.com/rs/zerolog"
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
-	snyk_common_errors "github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -100,13 +99,9 @@ func RunRedTeamWorkflow(
 		return nil, cli_errors.NewCommandIsExperimentalError("re-run with --experimental to use this command")
 	}
 
-	// check if an orgID is set to ensure that the user is logged in
-	// this may not be the canonical way of doing this and should be considered
-	// a temporary workaround
-	orgID := config.GetString(configuration.ORGANIZATION)
-	if orgID == "" {
+	if err := utils.RequireAuth(config); err != nil {
 		logger.Debug().Msg("No organization id is found.")
-		return nil, snyk_common_errors.NewUnauthorisedError("")
+		return nil, err //nolint:wrapcheck // already a catalog error
 	}
 
 	listGoals := config.GetBool(utils.FlagListGoals)

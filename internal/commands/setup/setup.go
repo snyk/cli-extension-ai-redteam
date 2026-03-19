@@ -42,6 +42,10 @@ func RegisterSetupWorkflow(e workflow.Engine) error {
 func setupWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
 	config := invocationCtx.GetConfiguration()
 
+	if err := utils.RequireAuth(config); err != nil {
+		return nil, err //nolint:wrapcheck // already a catalog error
+	}
+
 	experimental := config.GetBool(utils.FlagExperimental)
 	if !experimental {
 		return nil, cli_errors.NewCommandIsExperimentalError("re-run with --experimental to use this command")
