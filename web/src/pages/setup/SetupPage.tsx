@@ -276,6 +276,22 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
         {steps[currentIndex]?.description}
       </Typography.Text>
 
+      {isReview && missingFields.length > 0 && (
+        <Alert
+          type="warning"
+          message="Missing required fields"
+          description={
+            <ul style={{ margin: 0, paddingLeft: 20 }}>
+              {missingFields.map((f) => (
+                <li key={f}>{f}</li>
+              ))}
+            </ul>
+          }
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+      )}
+
       <div style={{ display: activeStep === "target-type" ? "block" : "none" }}>
         <TargetTypeStep />
       </div>
@@ -291,21 +307,6 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
 
       {isReview && (
         <>
-          {missingFields.length > 0 && (
-            <Alert
-              type="warning"
-              message="Missing required fields"
-              description={
-                <ul style={{ margin: 0, paddingLeft: 20 }}>
-                  {missingFields.map((f) => (
-                    <li key={f}>{f}</li>
-                  ))}
-                </ul>
-              }
-              showIcon
-              style={{ marginBottom: 16 }}
-            />
-          )}
           {yamlContent && <YamlHighlight content={yamlContent} />}
           <div style={{ marginTop: 16, marginBottom: 16 }}>
             <TestConnection />
