@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { Form, Button, Alert, Typography, Space, Modal, Input } from "antd";
-import { DownloadOutlined } from "@ant-design/icons";
+import { Form, Button, Alert, Typography, Space, Tooltip } from "antd";
+import { DownloadOutlined, CopyOutlined, CheckOutlined, SaveOutlined } from "@ant-design/icons";
 import { steps } from "../../components/Sidebar";
 import YamlHighlight from "../../components/YamlHighlight";
 import TargetTypeStep from "./TargetTypeStep";
@@ -81,8 +81,7 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
   const [yamlContent, setYamlContent] = useState<string | null>(null);
   const [missingFields, setMissingFields] = useState<string[]>([]);
   const [validationError, setValidationError] = useState<{ step: string; message: string } | null>(null);
-  const [filenameModalOpen, setFilenameModalOpen] = useState(false);
-  const [filename, setFilename] = useState("redteam.yaml");
+  const [copied, setCopied] = useState(false);
   const watchedValues = Form.useWatch([], form);
 
   useEffect(() => {
@@ -212,24 +211,36 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
     }
   };
 
-  const handleDownloadConfirm = () => {
+  const handleDownload = () => {
     if (yamlContent) {
-      downloadFile(yamlContent, filename);
+      downloadFile(yamlContent, "redteam.yaml");
       fetch("/api/download-complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename }),
+        body: JSON.stringify({ filename: "redteam.yaml" }),
       }).catch(() => {});
     }
   };
 
-  const handleDownload = () => {
-    setFilenameModalOpen(true);
-  };
-
-  const confirmDownload = () => {
-    setFilenameModalOpen(false);
-    handleDownloadConfirm();
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const handleSave = () => {
+    if (!yamlContent) return;
+    setSaving(true);
+    fetch("/api/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: "redteam.yaml", content: yamlContent }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Save failed");
+        setSaved(true);
+        setSaveMessage("Saved! Close this wizard and run: snyk redteam --experimental --config redteam.yaml");
+        setTimeout(() => setSaved(false), 2000);
+      })
+      .catch(() => setError("Failed to save configuration"))
+      .finally(() => setSaving(false));
   };
 
   return (
@@ -297,6 +308,16 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
           <div style={{ marginTop: 16, marginBottom: 16 }}>
             <TestConnection />
           </div>
+          {saveMessage && (
+            <Alert
+              type="success"
+              message={saveMessage}
+              showIcon
+              closable
+              onClose={() => setSaveMessage(null)}
+              style={{ marginTop: 16 }}
+            />
+          )}
         </>
       )}
 
@@ -320,13 +341,38 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
             <Button onClick={goBack}>Back</Button>
           )}
           {isReview ? (
-            <Button
-              type="primary"
-              icon={<DownloadOutlined />}
-              onClick={handleDownload}
-            >
-              Download Configuration
-            </Button>
+            <>
+              <Button
+                icon={copied ? <CheckOutlined /> : <CopyOutlined />}
+                onClick={() => {
+                  if (yamlContent) {
+                    navigator.clipboard.writeText(yamlContent);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }
+                }}
+              >
+                {copied ? "Copied" : "Copy"}
+              </Button>
+              <Tooltip title="Download redteam.yaml to your browser">
+                <Button
+                  icon={<DownloadOutlined />}
+                  onClick={handleDownload}
+                >
+                  Download
+                </Button>
+              </Tooltip>
+              <Tooltip title="Saves redteam.yaml to the current directory">
+                <Button
+                  type="primary"
+                  icon={saved ? <CheckOutlined /> : <SaveOutlined />}
+                  onClick={handleSave}
+                  loading={saving}
+                >
+                  {saved ? "Saved" : "Save"}
+                </Button>
+              </Tooltip>
+            </>
           ) : (
             <Button type="primary" onClick={goNext}>
               {currentIndex === steps.length - 2 ? "Review Configuration" : "Next"}
@@ -338,27 +384,6 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
         </Space>
       </div>
 
-      <Modal
-        title="Save as"
-        open={filenameModalOpen}
-        onOk={confirmDownload}
-        onCancel={() => setFilenameModalOpen(false)}
-        okText="Download"
-      >
-        {missingFields.length > 0 && (
-          <Alert
-            type="warning"
-            showIcon
-            message="Some required fields have not been filled in. The configuration may not work correctly."
-            style={{ marginBottom: 16 }}
-          />
-        )}
-        <Input
-          value={filename}
-          onChange={(e) => setFilename(e.target.value)}
-          onPressEnter={confirmDownload}
-        />
-      </Modal>
     </Form>
   );
 }

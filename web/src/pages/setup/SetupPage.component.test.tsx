@@ -98,9 +98,10 @@ describe("SetupPage", () => {
     expect(onStepChange).toHaveBeenCalledWith("target-type");
   });
 
-  it("renders Download Configuration button on review step", () => {
+  it("renders Download and Save buttons on review step", () => {
     render(<SetupPage {...defaultProps} activeStep="review" />);
-    expect(screen.getByRole("button", { name: /download configuration/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /download/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /save/i })).toBeInTheDocument();
   });
 
   it("renders Review Configuration text on goal step (last before review)", () => {
@@ -156,12 +157,10 @@ describe("SetupPage", () => {
     });
   });
 
-  it("shows download modal when Download Configuration is clicked", async () => {
+  it("downloads redteam.yaml when Download is clicked", async () => {
     render(<SetupPage {...defaultProps} activeStep="review" />);
-    fireEvent.click(screen.getByRole("button", { name: /download configuration/i }));
-    await waitFor(() => {
-      expect(screen.getByText("Save as")).toBeInTheDocument();
-    });
+    const downloadBtn = screen.getByRole("button", { name: /download/i });
+    expect(downloadBtn).toBeInTheDocument();
   });
 
   it("shows validation error when clicking Review Configuration without goals", async () => {
