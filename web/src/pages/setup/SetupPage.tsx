@@ -81,6 +81,7 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
   const [yamlContent, setYamlContent] = useState<string | null>(null);
   const [missingFields, setMissingFields] = useState<string[]>([]);
   const [validationError, setValidationError] = useState<{ step: string; message: string } | null>(null);
+  const [configFilename, setConfigFilename] = useState("redteam.yaml");
   const [copied, setCopied] = useState(false);
   const watchedValues = Form.useWatch([], form);
 
@@ -108,6 +109,7 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
         if (cancelled || !data) return;
         const cfg = data.config;
         onConfigPathLoaded(data.config_path || null);
+        if (data.config_path) setConfigFilename(data.config_path);
         if (!cfg) return;
         form.setFieldsValue({
           target: {
@@ -213,11 +215,11 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
 
   const handleDownload = () => {
     if (yamlContent) {
-      downloadFile(yamlContent, "redteam.yaml");
+      downloadFile(yamlContent, configFilename);
       fetch("/api/download-complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename: "redteam.yaml" }),
+        body: JSON.stringify({ filename: configFilename }),
       }).catch(() => {});
     }
   };
@@ -231,12 +233,12 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
     fetch("/api/save", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ filename: "redteam.yaml", content: yamlContent }),
+      body: JSON.stringify({ filename: configFilename, content: yamlContent }),
     })
       .then((res) => {
         if (!res.ok) throw new Error("Save failed");
         setSaved(true);
-        setSaveMessage("Saved! Close this wizard and run: snyk redteam --experimental --config redteam.yaml");
+        setSaveMessage(`Saved! Close this wizard and run: snyk redteam --experimental --config ${configFilename}`);
         setTimeout(() => setSaved(false), 2000);
       })
       .catch(() => setError("Failed to save configuration"))
@@ -354,7 +356,7 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
               >
                 {copied ? "Copied" : "Copy"}
               </Button>
-              <Tooltip title="Download redteam.yaml to your browser">
+              <Tooltip title={`Download ${configFilename} to your browser`}>
                 <Button
                   icon={<DownloadOutlined />}
                   onClick={handleDownload}
@@ -362,7 +364,7 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
                   Download
                 </Button>
               </Tooltip>
-              <Tooltip title="Saves redteam.yaml to the current directory">
+              <Tooltip title={`Save ${configFilename} to the current directory`}>
                 <Button
                   type="primary"
                   icon={saved ? <CheckOutlined /> : <SaveOutlined />}
