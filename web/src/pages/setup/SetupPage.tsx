@@ -314,7 +314,8 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
           {saveMessage && (
             <Alert
               type="success"
-              message={saveMessage}
+              message="Configuration Saved"
+              description={saveMessage}
               showIcon
               closable
               onClose={() => setSaveMessage(null)}

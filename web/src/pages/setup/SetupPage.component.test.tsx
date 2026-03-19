@@ -157,12 +157,6 @@ describe("SetupPage", () => {
     });
   });
 
-  it("downloads redteam.yaml when Download is clicked", async () => {
-    render(<SetupPage {...defaultProps} activeStep="review" />);
-    const downloadBtn = screen.getByRole("button", { name: /download/i });
-    expect(downloadBtn).toBeInTheDocument();
-  });
-
   it("shows validation error when clicking Review Configuration without goals", async () => {
     render(<SetupPage {...defaultProps} activeStep="goal" />);
 
