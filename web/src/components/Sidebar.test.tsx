@@ -6,7 +6,7 @@ afterEach(cleanup);
 
 describe("Sidebar", () => {
   const defaultProps = {
-    activeStep: "target-type",
+    activeStep: "target-definition",
     onStepClick: vi.fn(),
     configPath: null as string | null,
   };
@@ -32,7 +32,7 @@ describe("Sidebar", () => {
   it("does not apply active class to non-active steps", () => {
     const { container } = render(<Sidebar {...defaultProps} activeStep="goal" />);
     const buttons = container.querySelectorAll("button");
-    const targetButton = Array.from(buttons).find((b) => b.textContent?.includes("Target Type"));
+    const targetButton = Array.from(buttons).find((b) => b.textContent?.includes("Target Definition"));
     expect(targetButton?.className).not.toMatch(/active/);
   });
 

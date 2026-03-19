@@ -3,7 +3,7 @@ import Sidebar from "./components/Sidebar";
 import SetupPage from "./pages/setup/SetupPage";
 
 export default function App() {
-  const [activeStep, setActiveStep] = useState("target-type");
+  const [activeStep, setActiveStep] = useState("target-definition");
   const [configPath, setConfigPath] = useState<string | null>(null);
 
   return (

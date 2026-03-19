@@ -1,19 +1,19 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { render, cleanup, screen } from "@testing-library/react";
 import { Form } from "antd";
-import TargetTypeStep from "./TargetTypeStep";
+import TargetDefinitionStep from "./TargetDefinitionStep";
 
 afterEach(cleanup);
 
 function renderInForm() {
   return render(
     <Form>
-      <TargetTypeStep />
+      <TargetDefinitionStep />
     </Form>,
   );
 }
 
-describe("TargetTypeStep", () => {
+describe("TargetDefinitionStep", () => {
   it("renders target name input", () => {
     renderInForm();
     expect(screen.getByText("Target Name")).toBeInTheDocument();
