@@ -275,7 +275,7 @@ func TestLoadAndValidateConfig_NeedsDefaultProfileWhenNoGoals(t *testing.T) {
 	assert.True(t, rtCfg.NeedsDefaultProfile())
 }
 
-func TestLoadAndValidateConfig_AppliesDefaultResponseSelector(t *testing.T) {
+func TestLoadAndValidateConfig_EmptyResponseSelectorMeansPlainText(t *testing.T) {
 	path := writeTestConfig(t, `
 target:
   name: test
@@ -289,7 +289,7 @@ target:
 
 	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
 	require.NoError(t, err)
-	assert.Equal(t, "response", rtCfg.Target.Settings.ResponseSelector)
+	assert.Equal(t, "", rtCfg.Target.Settings.ResponseSelector)
 }
 
 func TestLoadAndValidateConfig_AppliesDefaultRequestBodyTemplate(t *testing.T) {

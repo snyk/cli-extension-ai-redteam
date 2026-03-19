@@ -179,6 +179,10 @@ func buildRequestBody(template, prompt string) ([]byte, error) {
 }
 
 func extractResponse(respBytes []byte, selector string) (string, error) {
+	if selector == "" {
+		return string(respBytes), nil
+	}
+
 	var data any
 	if err := json.Unmarshal(respBytes, &data); err != nil {
 		return "", fmt.Errorf("parse target response JSON: %w", err)

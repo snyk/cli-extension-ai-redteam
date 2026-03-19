@@ -20,7 +20,6 @@ import (
 )
 
 const (
-	defaultResponseSelector    = "response"
 	defaultRequestBodyTemplate = `{"message": "{{prompt}}"}`
 	defaultTargetType          = "http"
 	contentTypePlain           = "text/plain"
@@ -202,8 +201,10 @@ func ValidateConfig(cfg *Config) error {
 		errs = append(errs, "request_body_template is not valid JSON")
 	}
 
-	if _, err := jmespath.Compile(cfg.Target.Settings.ResponseSelector); err != nil {
-		errs = append(errs, fmt.Sprintf("response_selector is not a valid JMESPath expression: %v", err))
+	if cfg.Target.Settings.ResponseSelector != "" {
+		if _, err := jmespath.Compile(cfg.Target.Settings.ResponseSelector); err != nil {
+			errs = append(errs, fmt.Sprintf("response_selector is not a valid JMESPath expression: %v", err))
+		}
 	}
 
 	if len(errs) == 0 {
@@ -278,9 +279,7 @@ func applyDefaults(cfg *Config) {
 	if cfg.Target.Type == "" {
 		cfg.Target.Type = defaultTargetType
 	}
-	if cfg.Target.Settings.ResponseSelector == "" {
-		cfg.Target.Settings.ResponseSelector = defaultResponseSelector
-	}
+	// Empty response_selector means "use raw response body as-is" (plain text targets).
 	if cfg.Target.Settings.RequestBodyTemplate == "" {
 		cfg.Target.Settings.RequestBodyTemplate = defaultRequestBodyTemplate
 	}
@@ -371,7 +370,7 @@ func getInvalidConfigMessage() string {
 			headers:
 				- name: '<optional, e.g. Authorization>'
 				  value: '<optional, e.g. Bearer TOKEN>'
-			response_selector: '<optional, default: response>'
+			response_selector: '<optional, JMESPath expression; omit for plain text>'
 			request_body_template: '<optional, default: {"message": "{{prompt}}"}'
 	goals:
 		- '<optional, default: system_prompt_extraction>'

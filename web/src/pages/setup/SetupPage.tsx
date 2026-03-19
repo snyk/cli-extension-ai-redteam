@@ -72,7 +72,12 @@ function downloadFile(content: string, filename: string) {
 }
 
 const defaultValues = {
-  target: { type: "http" },
+  target: {
+    type: "http",
+    settings: {
+      request_body_template: '{"message": "{{prompt}}"}',
+    },
+  },
 };
 
 export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded }: SetupPageProps) {
