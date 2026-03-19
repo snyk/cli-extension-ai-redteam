@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
 	controlservermock "github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver/mock"
@@ -178,6 +180,40 @@ func TestRunRedTeamWorkflow_ReportPassedTypes(t *testing.T) {
 	jsonStr := string(payload)
 	assert.Contains(t, jsonStr, "passed_types")
 	assert.Contains(t, jsonStr, "System Prompt Extraction (Direct)")
+}
+
+func TestRunRedTeamWorkflow_NoOrgReturnsUnauthorised(t *testing.T) {
+	ictx := frameworkmock.NewMockInvocationContext(t)
+	ictx.GetConfiguration().Set(experimentalKey, true)
+	ictx.GetConfiguration().Set(configuration.ORGANIZATION, "")
+
+	originalArgs := os.Args
+	os.Args = []string{"snyk", "redteam"}
+	defer func() { os.Args = originalArgs }()
+
+	_, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Authentication error")
+}
+
+func TestRunRedTeamWorkflow_WithOrgProceedsPastAuthCheck(t *testing.T) {
+	ictx := frameworkmock.NewMockInvocationContext(t)
+	ictx.GetConfiguration().Set(experimentalKey, true)
+	// org is already set by the mock; explicitly confirm it's non-empty
+	assert.NotEmpty(t, ictx.GetConfiguration().GetString(configuration.ORGANIZATION))
+
+	// Without a config file the workflow returns a "not found" data payload, not an auth error.
+	ictx.GetConfiguration().Set(configFlag, "nonexistent.yaml")
+
+	originalArgs := os.Args
+	os.Args = []string{"snyk", "redteam"}
+	defer func() { os.Args = originalArgs }()
+
+	results, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
+	require.NoError(t, err)
+	assert.Len(t, results, 1)
+	payload, _ := results[0].GetPayload().([]byte)
+	assert.Contains(t, string(payload), "Configuration file not found")
 }
 
 func TestRunRedTeamWorkflow_ExperimentalFlagRequired(t *testing.T) {
