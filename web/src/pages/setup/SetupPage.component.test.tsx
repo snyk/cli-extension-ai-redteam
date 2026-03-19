@@ -17,6 +17,13 @@ beforeEach(() => {
       } as Response);
     }
 
+    if (url === "/api/strategies") {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve([]),
+      } as Response);
+    }
+
     if (url === "/api/profiles") {
       return Promise.resolve({
         ok: true,
@@ -155,5 +162,47 @@ describe("SetupPage", () => {
     await waitFor(() => {
       expect(screen.getByText("Save as")).toBeInTheDocument();
     });
+  });
+
+  it("shows validation error when clicking Review Configuration without goals", async () => {
+    render(<SetupPage {...defaultProps} activeStep="goal" />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /review configuration/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /review configuration/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/select at least one goal/i)).toBeInTheDocument();
+    });
+  });
+
+  it("shows validation error when clicking Next without target name", async () => {
+    render(<SetupPage {...defaultProps} activeStep="target-type" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/select target name/i)).toBeInTheDocument();
+    });
+  });
+
+  it("validation error does not show on a different step", async () => {
+    const { rerender } = render(<SetupPage {...defaultProps} activeStep="goal" />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /review configuration/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /review configuration/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/select at least one goal/i)).toBeInTheDocument();
+    });
+
+    rerender(<SetupPage {...defaultProps} activeStep="target-type" />);
+
+    expect(screen.queryByText(/select at least one goal/i)).not.toBeInTheDocument();
   });
 });

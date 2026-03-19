@@ -195,7 +195,7 @@ export default function GoalStep() {
       <Form.Item name="attacks" hidden><input type="hidden" /></Form.Item>
       <Form.Item
         name="goals"
-        rules={[{ required: true, message: "Please select at least one goal" }]}
+        rules={[{ required: true }]}
       >
         <Checkbox.Group onChange={(vals) => handleGoalsChange(vals as string[])}>
           <Space direction="vertical" size="middle">

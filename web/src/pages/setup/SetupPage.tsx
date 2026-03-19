@@ -80,8 +80,22 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
   const [error, setError] = useState<string | null>(null);
   const [yamlContent, setYamlContent] = useState<string | null>(null);
   const [missingFields, setMissingFields] = useState<string[]>([]);
+  const [validationError, setValidationError] = useState<{ step: string; message: string } | null>(null);
   const [filenameModalOpen, setFilenameModalOpen] = useState(false);
   const [filename, setFilename] = useState("redteam.yaml");
+  const watchedValues = Form.useWatch([], form);
+
+  useEffect(() => {
+    if (!validationError) return;
+    const fields = requiredStepFields[validationError.step] ?? [];
+    for (const path of fields) {
+      const val = path.reduce((obj: any, k) => obj?.[k], watchedValues);
+      if (!val || (typeof val === "string" && !val.trim()) || (Array.isArray(val) && val.length === 0)) {
+        return;
+      }
+    }
+    setValidationError(null);
+  }, [watchedValues]);
 
   useEffect(() => {
     let cancelled = false;
@@ -156,9 +170,21 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
   }, [activeStep]);
 
   const goNext = async () => {
+    setValidationError(null);
     const fields = requiredStepFields[activeStep] ?? [];
     if (fields.length > 0) {
-      await form.validateFields(fields);
+      try {
+        await form.validateFields(fields);
+      } catch {
+        const stepLabels: Record<string, string> = {
+          "target-type": "target name",
+          "target-config": "target URL and request template",
+          "goal": "at least one goal",
+        };
+        const msg = stepLabels[activeStep] ? `Select ${stepLabels[activeStep]}` : "Missing required fields";
+        setValidationError({ step: activeStep, message: msg });
+        return;
+      }
     }
 
     const next = steps[currentIndex + 1];
@@ -305,6 +331,9 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
             <Button type="primary" onClick={goNext}>
               {currentIndex === steps.length - 2 ? "Review Configuration" : "Next"}
             </Button>
+          )}
+          {validationError && validationError.step === activeStep && (
+            <span style={{ color: "#ff4d4f", fontSize: 13 }}>{validationError.message}</span>
           )}
         </Space>
       </div>
