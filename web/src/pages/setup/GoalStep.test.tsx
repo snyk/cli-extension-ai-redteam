@@ -97,16 +97,19 @@ describe("GoalStep", () => {
     expect(screen.getByText("Deep security scan")).toBeInTheDocument();
   });
 
-  it("does not show strategy tags for unchecked goals", async () => {
+  it("shows strategy tags for all goals but unchecked by default", async () => {
     mockFetch();
     renderInForm();
 
     await waitFor(() => {
       expect(screen.getByText("Vulnerability Discovery")).toBeInTheDocument();
     });
-    expect(screen.queryByText("direct")).not.toBeInTheDocument();
-    expect(screen.queryByText("advanced")).not.toBeInTheDocument();
-    expect(screen.queryByText("indirect")).not.toBeInTheDocument();
+    expect(screen.getByText("Direct")).toBeInTheDocument();
+    expect(screen.getByText("Advanced")).toBeInTheDocument();
+    expect(screen.getByText("Indirect")).toBeInTheDocument();
+    expect(screen.getByText("Direct").closest(".ant-tag")).not.toHaveClass("ant-tag-checkable-checked");
+    expect(screen.getByText("Advanced").closest(".ant-tag")).not.toHaveClass("ant-tag-checkable-checked");
+    expect(screen.getByText("Indirect").closest(".ant-tag")).not.toHaveClass("ant-tag-checkable-checked");
   });
 
   it("checking a goal pre-selects all its strategies", async () => {
@@ -120,15 +123,15 @@ describe("GoalStep", () => {
     await clickGoalCheckbox("Vulnerability Discovery");
 
     await waitFor(() => {
-      expect(screen.getByText("direct")).toBeInTheDocument();
+      expect(screen.getByText("Direct")).toBeInTheDocument();
     });
-    expect(screen.getByText("advanced")).toBeInTheDocument();
+    expect(screen.getByText("Advanced")).toBeInTheDocument();
 
-    expect(screen.getByText("direct").closest(".ant-tag")).toHaveClass("ant-tag-checkable-checked");
-    expect(screen.getByText("advanced").closest(".ant-tag")).toHaveClass("ant-tag-checkable-checked");
+    expect(screen.getByText("Direct").closest(".ant-tag")).toHaveClass("ant-tag-checkable-checked");
+    expect(screen.getByText("Advanced").closest(".ant-tag")).toHaveClass("ant-tag-checkable-checked");
   });
 
-  it("unchecking a goal removes its strategies", async () => {
+  it("unchecking a goal unchecks its strategies", async () => {
     mockFetch();
     renderInForm();
 
@@ -141,15 +144,15 @@ describe("GoalStep", () => {
       fireEvent.click(screen.getByTestId("profile-card-security"));
     });
     await waitFor(() => {
-      expect(screen.getByText("advanced")).toBeInTheDocument();
+      expect(screen.getByText("Advanced").closest(".ant-tag")).toHaveClass("ant-tag-checkable-checked");
     });
 
     // Now uncheck the goal
     await clickGoalCheckbox("Vulnerability Discovery");
     await waitFor(() => {
-      expect(screen.queryByText("direct")).not.toBeInTheDocument();
+      expect(screen.getByText("Advanced").closest(".ant-tag")).not.toHaveClass("ant-tag-checkable-checked");
     });
-    expect(screen.queryByText("advanced")).not.toBeInTheDocument();
+    expect(screen.getByText("Direct").closest(".ant-tag")).not.toHaveClass("ant-tag-checkable-checked");
   });
 
   it("profile click selects only profile strategies", async () => {
@@ -165,10 +168,10 @@ describe("GoalStep", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText("advanced")).toBeInTheDocument();
+      expect(screen.getByText("Advanced")).toBeInTheDocument();
     });
-    expect(screen.getByText("advanced").closest(".ant-tag")).toHaveClass("ant-tag-checkable-checked");
-    expect(screen.getByText("direct").closest(".ant-tag")).not.toHaveClass("ant-tag-checkable-checked");
+    expect(screen.getByText("Advanced").closest(".ant-tag")).toHaveClass("ant-tag-checkable-checked");
+    expect(screen.getByText("Direct").closest(".ant-tag")).not.toHaveClass("ant-tag-checkable-checked");
   });
 
   it("toggling a strategy tag clears profile selection", async () => {
@@ -188,7 +191,7 @@ describe("GoalStep", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByText("direct"));
+      fireEvent.click(screen.getByText("Direct"));
     });
 
     await waitFor(() => {
@@ -197,14 +200,15 @@ describe("GoalStep", () => {
   });
 
   it("goals without strategies render without tags", async () => {
-    mockFetch();
+    mockFetch(
+      [{ value: "Basic Scan", description: "Simple scan", display_order: 1 }],
+      [],
+    );
     renderInForm();
 
     await waitFor(() => {
       expect(screen.getByText("Basic Scan")).toBeInTheDocument();
     });
-
-    await clickGoalCheckbox("Basic Scan");
 
     expect(screen.getByText("Simple scan")).toBeInTheDocument();
     expect(document.querySelector(".ant-tag-checkable")).not.toBeInTheDocument();

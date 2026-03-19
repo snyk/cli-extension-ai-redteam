@@ -134,13 +134,20 @@ export default function GoalStep() {
       goalStrategies.delete(strategy);
     }
 
+    let newChecked = checkedGoals;
     if (goalStrategies.size > 0) {
       newStrategies.set(goal, goalStrategies);
+      if (!checkedGoals.includes(goal)) {
+        newChecked = [...checkedGoals, goal];
+      }
     } else {
       newStrategies.delete(goal);
+      newChecked = checkedGoals.filter((g) => g !== goal);
     }
 
     setSelectedStrategies(newStrategies);
+    setCheckedGoals(newChecked);
+    form.setFieldsValue({ goals: newChecked });
 
     if (selectedProfile) {
       setSelectedProfile(null);
@@ -180,24 +187,33 @@ export default function GoalStep() {
           <Space direction="vertical" size="middle">
             {goals.map((g) => (
               <Checkbox key={g.value} value={g.value}>
-                <strong>{g.value}</strong>
-                {checkedGoals.includes(g.value) && g.strategies && g.strategies.length > 0 && (
-                  <div onClick={(e) => e.stopPropagation()} style={{ display: "inline", marginLeft: 8 }}>
-                    {g.strategies.map((s) => (
-                      <Tag.CheckableTag
-                        key={s}
-                        checked={selectedStrategies.get(g.value)?.has(s) ?? false}
-                        onChange={(checked) => handleStrategyToggle(g.value, s, checked)}
-                        style={{ fontSize: 11, lineHeight: "18px" }}
-                      >
-                        {s}
-                      </Tag.CheckableTag>
-                    ))}
-                  </div>
-                )}
-                <br />
-                <span style={{ color: "var(--pcl-color-fg-secondary)", fontSize: 13 }}>
-                  {g.description}
+                <span style={{ userSelect: "none" }}>
+                  <strong>{g.value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}</strong>
+                  {g.strategies && g.strategies.length > 0 && (
+                    <span onClick={(e) => { e.stopPropagation(); e.preventDefault(); }} onMouseDown={(e) => e.preventDefault()} style={{ marginLeft: 8 }}>
+                      {g.strategies.map((s) => {
+                        const isChecked = selectedStrategies.get(g.value)?.has(s) ?? false;
+                        return (
+                          <Tag.CheckableTag
+                            key={s}
+                            checked={isChecked}
+                            onChange={(checked) => handleStrategyToggle(g.value, s, checked)}
+                            style={{
+                              fontSize: 11,
+                              lineHeight: "18px",
+                              ...(!isChecked ? { border: "1px solid #434343", color: "#8c8c8c" } : {}),
+                            }}
+                          >
+                            {s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+                          </Tag.CheckableTag>
+                        );
+                      })}
+                    </span>
+                  )}
+                  <br />
+                  <span style={{ color: "var(--pcl-color-fg-secondary)", fontSize: 13 }}>
+                    {g.description}
+                  </span>
                 </span>
               </Checkbox>
             ))}
