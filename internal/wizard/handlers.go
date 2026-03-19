@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sort"
 
 	"github.com/rs/zerolog/log"
@@ -103,8 +104,8 @@ func handleSaveConfig(userOutput func(string)) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "content is required"})
 			return
 		}
-		filename := req.Filename
-		if filename == "" {
+		filename := filepath.Base(req.Filename)
+		if filename == "" || filename == "." {
 			filename = "redteam.yaml"
 		}
 		if err := os.WriteFile(filename, []byte(req.Content), 0o600); err != nil {
