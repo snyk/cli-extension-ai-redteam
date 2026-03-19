@@ -848,7 +848,7 @@ func TestRunRedTeamWorkflow_ListProfilesError(t *testing.T) {
 
 	_, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(mockCS), mockTargetFactory(defaultMockTarget()))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to list profiles")
+	assert.Contains(t, err.Error(), "profiles returned status 500")
 }
 
 func TestRunRedTeamWorkflow_ProfileFlag(t *testing.T) {
