@@ -274,24 +274,40 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
         </>
       )}
 
-      <Space style={{ marginTop: 24 }}>
-        {!isFirst && (
-          <Button onClick={goBack}>Back</Button>
-        )}
-        {isReview ? (
-          <Button
-            type="primary"
-            icon={<DownloadOutlined />}
-            onClick={handleDownload}
-          >
-            Download Configuration
-          </Button>
-        ) : (
-          <Button type="primary" onClick={goNext}>
-            {currentIndex === steps.length - 2 ? "Review Configuration" : "Next"}
-          </Button>
-        )}
-      </Space>
+      <div style={{
+        position: "sticky",
+        bottom: -24,
+        paddingTop: 16,
+        paddingBottom: 24,
+        background: "#27272a",
+        borderTop: "1px solid var(--pcl-color-border)",
+        marginTop: 24,
+        marginLeft: -24,
+        marginRight: -24,
+        marginBottom: -24,
+        paddingLeft: 24,
+        paddingRight: 24,
+        zIndex: 10,
+      }}>
+        <Space>
+          {!isFirst && (
+            <Button onClick={goBack}>Back</Button>
+          )}
+          {isReview ? (
+            <Button
+              type="primary"
+              icon={<DownloadOutlined />}
+              onClick={handleDownload}
+            >
+              Download Configuration
+            </Button>
+          ) : (
+            <Button type="primary" onClick={goNext}>
+              {currentIndex === steps.length - 2 ? "Review Configuration" : "Next"}
+            </Button>
+          )}
+        </Space>
+      </div>
 
       <Modal
         title="Save as"
