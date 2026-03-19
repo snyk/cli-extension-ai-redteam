@@ -78,6 +78,7 @@ export default function TestConnection() {
             </>
           }
           showIcon
+          closable
           style={{ marginTop: 16 }}
         />
       )}

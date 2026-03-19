@@ -279,8 +279,7 @@ func TestHandleDownloadComplete_Success(t *testing.T) {
 	assert.Equal(t, "ok", resp["status"])
 
 	require.Len(t, m.outputs, 1)
-	assert.Contains(t, m.outputs[0], "Configuration downloaded successfully!")
-	assert.Contains(t, m.outputs[0], "snyk redteam --experimental --config my-config.yaml")
+	assert.Contains(t, m.outputs[0], "Configuration downloaded as my-config.yaml")
 }
 
 func TestHandleDownloadComplete_DefaultFilename(t *testing.T) {
@@ -295,7 +294,7 @@ func TestHandleDownloadComplete_DefaultFilename(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	require.Len(t, m.outputs, 1)
-	assert.Contains(t, m.outputs[0], "snyk redteam --experimental --config redteam.yaml")
+	assert.Contains(t, m.outputs[0], "Configuration downloaded as redteam.yaml")
 }
 
 func TestHandleDownloadComplete_InvalidJSON(t *testing.T) {

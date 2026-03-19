@@ -7,6 +7,7 @@ const (
 	FlagHTML             = "html"
 	FlagConfig           = "config"
 	FlagHTMLFileOutput   = "html-file-output"
+	FlagJSONFileOutput   = "json-file-output"
 	FlagScanID           = "id"
 	FlagTenantID         = "tenant-id"
 	FlagTargetURL        = "target-url"

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { Form, Button, Alert, Typography, Space, Modal, Input } from "antd";
-import { DownloadOutlined } from "@ant-design/icons";
+import { Form, Button, Alert, Typography, Space, Tooltip } from "antd";
+import { DownloadOutlined, CopyOutlined, CheckOutlined, SaveOutlined } from "@ant-design/icons";
 import { steps } from "../../components/Sidebar";
 import YamlHighlight from "../../components/YamlHighlight";
 import TargetTypeStep from "./TargetTypeStep";
@@ -80,8 +80,22 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
   const [error, setError] = useState<string | null>(null);
   const [yamlContent, setYamlContent] = useState<string | null>(null);
   const [missingFields, setMissingFields] = useState<string[]>([]);
-  const [filenameModalOpen, setFilenameModalOpen] = useState(false);
-  const [filename, setFilename] = useState("redteam.yaml");
+  const [validationError, setValidationError] = useState<{ step: string; message: string } | null>(null);
+  const [configFilename, setConfigFilename] = useState("redteam.yaml");
+  const [copied, setCopied] = useState(false);
+  const watchedValues = Form.useWatch([], form);
+
+  useEffect(() => {
+    if (!validationError) return;
+    const fields = requiredStepFields[validationError.step] ?? [];
+    for (const path of fields) {
+      const val = path.reduce((obj: any, k) => obj?.[k], watchedValues);
+      if (!val || (typeof val === "string" && !val.trim()) || (Array.isArray(val) && val.length === 0)) {
+        return;
+      }
+    }
+    setValidationError(null);
+  }, [watchedValues]);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,6 +109,7 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
         if (cancelled || !data) return;
         const cfg = data.config;
         onConfigPathLoaded(data.config_path || null);
+        if (data.config_path) setConfigFilename(data.config_path);
         if (!cfg) return;
         form.setFieldsValue({
           target: {
@@ -156,9 +171,21 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
   }, [activeStep]);
 
   const goNext = async () => {
+    setValidationError(null);
     const fields = requiredStepFields[activeStep] ?? [];
     if (fields.length > 0) {
-      await form.validateFields(fields);
+      try {
+        await form.validateFields(fields);
+      } catch {
+        const stepLabels: Record<string, string> = {
+          "target-type": "target name",
+          "target-config": "target URL and request template",
+          "goal": "at least one goal",
+        };
+        const msg = stepLabels[activeStep] ? `Select ${stepLabels[activeStep]}` : "Missing required fields";
+        setValidationError({ step: activeStep, message: msg });
+        return;
+      }
     }
 
     const next = steps[currentIndex + 1];
@@ -186,24 +213,36 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
     }
   };
 
-  const handleDownloadConfirm = () => {
+  const handleDownload = () => {
     if (yamlContent) {
-      downloadFile(yamlContent, filename);
+      downloadFile(yamlContent, configFilename);
       fetch("/api/download-complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename }),
+        body: JSON.stringify({ filename: configFilename }),
       }).catch(() => {});
     }
   };
 
-  const handleDownload = () => {
-    setFilenameModalOpen(true);
-  };
-
-  const confirmDownload = () => {
-    setFilenameModalOpen(false);
-    handleDownloadConfirm();
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const handleSave = () => {
+    if (!yamlContent) return;
+    setSaving(true);
+    fetch("/api/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: configFilename, content: yamlContent }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Save failed");
+        setSaved(true);
+        setSaveMessage(`Saved! Close this wizard and run: snyk redteam --experimental --config ${configFilename}`);
+        setTimeout(() => setSaved(false), 2000);
+      })
+      .catch(() => setError("Failed to save configuration"))
+      .finally(() => setSaving(false));
   };
 
   return (
@@ -237,6 +276,22 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
         {steps[currentIndex]?.description}
       </Typography.Text>
 
+      {isReview && missingFields.length > 0 && (
+        <Alert
+          type="warning"
+          message="Missing required fields"
+          description={
+            <ul style={{ margin: 0, paddingLeft: 20 }}>
+              {missingFields.map((f) => (
+                <li key={f}>{f}</li>
+              ))}
+            </ul>
+          }
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+      )}
+
       <div style={{ display: activeStep === "target-type" ? "block" : "none" }}>
         <TargetTypeStep />
       </div>
@@ -252,68 +307,87 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
 
       {isReview && (
         <>
-          {missingFields.length > 0 && (
-            <Alert
-              type="warning"
-              message="Missing required fields"
-              description={
-                <ul style={{ margin: 0, paddingLeft: 20 }}>
-                  {missingFields.map((f) => (
-                    <li key={f}>{f}</li>
-                  ))}
-                </ul>
-              }
-              showIcon
-              style={{ marginBottom: 16 }}
-            />
-          )}
           {yamlContent && <YamlHighlight content={yamlContent} />}
           <div style={{ marginTop: 16, marginBottom: 16 }}>
             <TestConnection />
           </div>
+          {saveMessage && (
+            <Alert
+              type="success"
+              message="Configuration Saved"
+              description={saveMessage}
+              showIcon
+              closable
+              onClose={() => setSaveMessage(null)}
+              style={{ marginTop: 16 }}
+            />
+          )}
         </>
       )}
 
-      <Space style={{ marginTop: 24 }}>
-        {!isFirst && (
-          <Button onClick={goBack}>Back</Button>
-        )}
-        {isReview ? (
-          <Button
-            type="primary"
-            icon={<DownloadOutlined />}
-            onClick={handleDownload}
-          >
-            Download Configuration
-          </Button>
-        ) : (
-          <Button type="primary" onClick={goNext}>
-            {currentIndex === steps.length - 2 ? "Review Configuration" : "Next"}
-          </Button>
-        )}
-      </Space>
+      <div style={{
+        position: "sticky",
+        bottom: -24,
+        paddingTop: 16,
+        paddingBottom: 24,
+        background: "#27272a",
+        borderTop: "1px solid var(--pcl-color-border)",
+        marginTop: 24,
+        marginLeft: -24,
+        marginRight: -24,
+        marginBottom: -24,
+        paddingLeft: 24,
+        paddingRight: 24,
+        zIndex: 10,
+      }}>
+        <Space>
+          {!isFirst && (
+            <Button onClick={goBack}>Back</Button>
+          )}
+          {isReview ? (
+            <>
+              <Button
+                icon={copied ? <CheckOutlined /> : <CopyOutlined />}
+                onClick={() => {
+                  if (yamlContent) {
+                    navigator.clipboard.writeText(yamlContent);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }
+                }}
+              >
+                {copied ? "Copied" : "Copy"}
+              </Button>
+              <Tooltip title={`Download ${configFilename} to your browser`}>
+                <Button
+                  icon={<DownloadOutlined />}
+                  onClick={handleDownload}
+                >
+                  Download
+                </Button>
+              </Tooltip>
+              <Tooltip title={`Save ${configFilename} to the current directory`}>
+                <Button
+                  type="primary"
+                  icon={saved ? <CheckOutlined /> : <SaveOutlined />}
+                  onClick={handleSave}
+                  loading={saving}
+                >
+                  {saved ? "Saved" : "Save"}
+                </Button>
+              </Tooltip>
+            </>
+          ) : (
+            <Button type="primary" onClick={goNext}>
+              {currentIndex === steps.length - 2 ? "Review Configuration" : "Next"}
+            </Button>
+          )}
+          {validationError && validationError.step === activeStep && (
+            <span style={{ color: "#ff4d4f", fontSize: 13 }}>{validationError.message}</span>
+          )}
+        </Space>
+      </div>
 
-      <Modal
-        title="Save as"
-        open={filenameModalOpen}
-        onOk={confirmDownload}
-        onCancel={() => setFilenameModalOpen(false)}
-        okText="Download"
-      >
-        {missingFields.length > 0 && (
-          <Alert
-            type="warning"
-            showIcon
-            message="Some required fields have not been filled in. The configuration may not work correctly."
-            style={{ marginBottom: 16 }}
-          />
-        )}
-        <Input
-          value={filename}
-          onChange={(e) => setFilename(e.target.value)}
-          onPressEnter={confirmDownload}
-        />
-      </Modal>
     </Form>
   );
 }
