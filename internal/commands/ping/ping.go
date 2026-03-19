@@ -31,6 +31,10 @@ func RegisterPingWorkflow(e workflow.Engine) error {
 func pingWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
 	config := invocationCtx.GetConfiguration()
 
+	if err := utils.RequireAuth(config); err != nil {
+		return nil, err //nolint:wrapcheck // already a catalog error
+	}
+
 	if !config.GetBool(utils.FlagExperimental) {
 		return nil, cli_errors.NewCommandIsExperimentalError("re-run with --experimental to use this command")
 	}

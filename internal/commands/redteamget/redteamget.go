@@ -64,6 +64,11 @@ func RunRedTeamGetWorkflow(
 	logger := invocationCtx.GetEnhancedLogger()
 	config := invocationCtx.GetConfiguration()
 
+	if err := utils.RequireAuth(config); err != nil {
+		logger.Debug().Msg("No organization id is found.")
+		return nil, err //nolint:wrapcheck // already a catalog error
+	}
+
 	experimental := config.GetBool(utils.FlagExperimental)
 	if !experimental {
 		logger.Debug().Msg("Required experimental flag is not present")
