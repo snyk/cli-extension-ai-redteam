@@ -1,7 +1,0 @@
-target:
-  name: ""
-  type: http
-  settings:
-    url: ""
-    request_body_template: ""
-    response_selector: ""
