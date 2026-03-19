@@ -10,8 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+
+	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
 	controlservermock "github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver/mock"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/target"

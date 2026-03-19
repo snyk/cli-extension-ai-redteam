@@ -99,7 +99,6 @@ func RunRedTeamWorkflow(
 		return nil, cli_errors.NewCommandIsExperimentalError("re-run with --experimental to use this command")
 	}
 
-
 	// check if an orgID is set to ensure that the user is logged in
 	// this may not be the canonical way of doing this and should be considered
 	// a temporary workaround
