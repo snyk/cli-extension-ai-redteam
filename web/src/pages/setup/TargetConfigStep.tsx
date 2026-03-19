@@ -66,7 +66,7 @@ export default function TargetConfigStep() {
       <Form.Item
         label="Response Selector"
         name={["target", "settings", "response_selector"]}
-        tooltip={<>JMESPath expression to extract the response from a JSON body (e.g. <code>data.choices[0].message.content</code>). Leave empty to use the raw response body as-is (plain text targets). <a href="https://jmespath.org/specification.html" target="_blank" rel="noopener noreferrer">JMESPath reference</a></>}
+        tooltip={<>JMESPath expression to extract the response from a JSON body (e.g. <code>data.choices[0].message.content</code>). Leave empty if the target returns plain text. <a href="https://jmespath.org/specification.html" target="_blank" rel="noopener noreferrer">JMESPath reference</a></>}
       >
         <Input style={{ fontFamily: "var(--pcl-font-family-mono)" }} />
       </Form.Item>
