@@ -40,9 +40,14 @@ func (xerr RedTeamError) Unwrap() error {
 	return xerr.err
 }
 
-func newRedTeamError(err error, userMsg string) *RedTeamError {
+// newRedTeamError requires a snyk_errors.Error so the compiler enforces that
+// every RedTeamError wraps a catalog error. Without this the CLI falls back
+// to "Unspecified Error (SNYK-CLI-0000)".
+//
+//nolint:gocritic // hugeParam: value type is intentional — enforces compile-time catalog error requirement
+func newRedTeamError(catalogErr snyk_errors.Error, userMsg string) *RedTeamError {
 	return &RedTeamError{
-		err:     err,
+		err:     catalogErr,
 		userMsg: userMsg,
 	}
 }
@@ -89,12 +94,13 @@ func NewNetworkError(msg string) *RedTeamError {
 }
 
 // NewGenericRedTeamError wraps an arbitrary error with a user-facing message.
-// If the wrapped error does not already contain a catalog error, it creates one
-// so that the Snyk CLI can always extract a user-visible Detail and exit code.
+// If the wrapped error already contains a catalog error, it is preserved in the
+// chain. Otherwise a NewGeneralCLIFailureError is created as a fallback.
 func NewGenericRedTeamError(msg string, err error) *RedTeamError {
 	var snykErr snyk_errors.Error
 	if errors.As(err, &snykErr) {
-		return newRedTeamError(err, msg)
+		// Preserve the original catalog error in the chain.
+		return &RedTeamError{err: err, userMsg: msg}
 	}
 	return newRedTeamError(cli_errors.NewGeneralCLIFailureError(msg), msg)
 }

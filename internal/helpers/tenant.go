@@ -87,7 +87,7 @@ func fetchTenants(ctx workflow.InvocationContext) ([]tenant, error) {
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return nil, redteam_errors.NewHTTPClientError(fmt.Sprintf("tenants request failed: %s", err))
+		return nil, utils.ErrorFromHTTPClient("tenants", err)
 	}
 	defer resp.Body.Close()
 

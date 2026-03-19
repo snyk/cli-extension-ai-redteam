@@ -69,7 +69,7 @@ func (c *ClientImpl) CreateScan(ctx context.Context, req *CreateScanRequest) (st
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return "", redteam_errors.NewHTTPClientError(fmt.Sprintf("CreateScan request failed: %s", err))
+		return "", utils.ErrorFromHTTPClient("CreateScan", err)
 	}
 	defer resp.Body.Close()
 
@@ -114,7 +114,7 @@ func (c *ClientImpl) NextChats(ctx context.Context, scanID string, responses []C
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, redteam_errors.NewHTTPClientError(fmt.Sprintf("NextChats request failed: %s", err))
+		return nil, utils.ErrorFromHTTPClient("NextChats", err)
 	}
 	defer resp.Body.Close()
 
@@ -143,7 +143,7 @@ func (c *ClientImpl) doGet(ctx context.Context, op, url string) ([]byte, error) 
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, redteam_errors.NewHTTPClientError(fmt.Sprintf("%s request failed: %s", op, err))
+		return nil, utils.ErrorFromHTTPClient(op, err)
 	}
 	defer resp.Body.Close()
 
@@ -199,27 +199,9 @@ func (c *ClientImpl) GetResult(ctx context.Context, scanID string) (*ScanResult,
 
 func (c *ClientImpl) GetReport(ctx context.Context, scanID string) (json.RawMessage, error) {
 	url := fmt.Sprintf("%s/hidden/tenants/%s/red_team_scans/%s/report?version=%s", c.baseURL, c.tenantID, scanID, APIVersion)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
+	respBytes, err := c.doGet(ctx, "GetReport", url)
 	if err != nil {
-		return nil, fmt.Errorf("build GetReport request: %w", err)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("GetReport request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read GetReport response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode == http.StatusNotFound {
-			return nil, fmt.Errorf("scan %s not found", scanID)
-		}
-		return nil, fmt.Errorf("GetReport returned status %d: %s", resp.StatusCode, string(respBytes))
+		return nil, err
 	}
 
 	return json.RawMessage(respBytes), nil
@@ -227,24 +209,9 @@ func (c *ClientImpl) GetReport(ctx context.Context, scanID string) (json.RawMess
 
 func (c *ClientImpl) listEnum(ctx context.Context, endpoint string) ([]EnumEntry, error) {
 	url := fmt.Sprintf("%s/hidden/%s?version=%s", c.baseURL, endpoint, APIVersion)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
+	respBytes, err := c.doGet(ctx, endpoint, url)
 	if err != nil {
-		return nil, redteam_errors.NewInternalError(fmt.Sprintf("build %s request: %s", endpoint, err))
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, redteam_errors.NewHTTPClientError(fmt.Sprintf("%s request failed: %s", endpoint, err))
-	}
-	defer resp.Body.Close()
-
-	respBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, redteam_errors.NewInternalError(fmt.Sprintf("read %s response: %s", endpoint, err))
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, httpError(endpoint, resp.StatusCode, respBytes)
+		return nil, err
 	}
 
 	var entries []EnumEntry
@@ -265,29 +232,14 @@ func (c *ClientImpl) ListStrategies(ctx context.Context) ([]EnumEntry, error) {
 
 func (c *ClientImpl) ListProfiles(ctx context.Context) ([]ProfileResponse, error) {
 	url := fmt.Sprintf("%s/hidden/profiles?version=%s", c.baseURL, APIVersion)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
+	respBytes, err := c.doGet(ctx, "ListProfiles", url)
 	if err != nil {
-		return nil, fmt.Errorf("build ListProfiles request: %w", err)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("ListProfiles request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read ListProfiles response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ListProfiles returned status %d: %s", resp.StatusCode, string(respBytes))
+		return nil, err
 	}
 
 	var profiles []ProfileResponse
 	if err := json.Unmarshal(respBytes, &profiles); err != nil {
-		return nil, fmt.Errorf("unmarshal ListProfiles response: %w", err)
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("unmarshal ListProfiles response: %s", err))
 	}
 
 	return profiles, nil
