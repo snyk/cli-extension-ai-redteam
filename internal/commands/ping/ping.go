@@ -42,7 +42,7 @@ func pingWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) (
 	logger := invocationCtx.GetEnhancedLogger()
 	rtConfig, earlyReturn, err := redteam.LoadAndValidateConfig(logger, config)
 	if err != nil {
-		return nil, err //nolint:wrapcheck
+		return nil, err //nolint:wrapcheck // returned by helpers.GetTenantID
 	}
 	if earlyReturn != nil {
 		return earlyReturn, nil

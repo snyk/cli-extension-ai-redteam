@@ -79,7 +79,7 @@ func RunRedTeamGetWorkflow(
 
 	tenantID, err := helpers.GetTenantID(invocationCtx, config.GetString(utils.FlagTenantID))
 	if err != nil {
-		return nil, err //nolint:wrapcheck
+		return nil, err //nolint:wrapcheck // returned by helpers.GetTenantID
 	}
 
 	return handleGetScanResults(invocationCtx, controlServerFactory, tenantID, snykAPIURL)

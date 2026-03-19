@@ -43,6 +43,8 @@ func (xerr RedTeamError) Unwrap() error {
 // newRedTeamError requires a snyk_errors.Error so the compiler enforces that
 // every RedTeamError wraps a catalog error. Without this the CLI falls back
 // to "Unspecified Error (SNYK-CLI-0000)".
+//
+//nolint:gocritic // hugeParam: value type is intentional — enforces compile-time catalog error requirement
 func newRedTeamError(catalogErr snyk_errors.Error, userMsg string) *RedTeamError {
 	return &RedTeamError{
 		err:     catalogErr,

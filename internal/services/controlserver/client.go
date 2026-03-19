@@ -201,7 +201,8 @@ func (c *ClientImpl) GetReport(ctx context.Context, scanID string) (json.RawMess
 	url := fmt.Sprintf("%s/hidden/tenants/%s/red_team_scans/%s/report?version=%s", c.baseURL, c.tenantID, scanID, APIVersion)
 	respBytes, err := c.doGet(ctx, "GetReport", url)
 	if err != nil {
-		return nil, err	}
+		return nil, err
+	}
 
 	return json.RawMessage(respBytes), nil
 }
@@ -233,7 +234,8 @@ func (c *ClientImpl) ListProfiles(ctx context.Context) ([]ProfileResponse, error
 	url := fmt.Sprintf("%s/hidden/profiles?version=%s", c.baseURL, APIVersion)
 	respBytes, err := c.doGet(ctx, "ListProfiles", url)
 	if err != nil {
-		return nil, err	}
+		return nil, err
+	}
 
 	var profiles []ProfileResponse
 	if err := json.Unmarshal(respBytes, &profiles); err != nil {

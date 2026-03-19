@@ -122,7 +122,8 @@ func RunRedTeamWorkflow(
 
 	tenantID, err := helpers.GetTenantID(invocationCtx, config.GetString(utils.FlagTenantID))
 	if err != nil {
-		return nil, err	}
+		return nil, err //nolint:wrapcheck // RedTeamError from helpers
+	}
 
 	targetHTTPClient := &http.Client{Timeout: target.DefaultTimeout}
 	controlServerHTTPClient := invocationCtx.GetNetworkAccess().GetHttpClient()
@@ -153,7 +154,8 @@ func RunRedTeamWorkflow(
 
 	output, htmlErr := htmlreport.ProcessResults(logger, config, results)
 	if htmlErr != nil {
-		return nil, htmlErr	}
+		return nil, htmlErr //nolint:wrapcheck // RedTeamError from htmlreport
+	}
 	return output, nil
 }
 
@@ -172,7 +174,8 @@ func handleListFlags(
 	if listGoals {
 		goals, err := controlServerClient.ListGoals(ctx)
 		if err != nil {
-			return nil, err		}
+			return nil, err //nolint:wrapcheck // RedTeamError from controlserver
+		}
 		sort.Slice(goals, func(i, j int) bool { return goals[i].DisplayOrder < goals[j].DisplayOrder })
 		lines = append(lines, "Available goals:", "")
 		lines = appendEnumTable(lines, goals)
@@ -183,7 +186,8 @@ func handleListFlags(
 		}
 		strategies, err := controlServerClient.ListStrategies(ctx)
 		if err != nil {
-			return nil, err		}
+			return nil, err //nolint:wrapcheck // RedTeamError from controlserver
+		}
 		sort.Slice(strategies, func(i, j int) bool { return strategies[i].DisplayOrder < strategies[j].DisplayOrder })
 		lines = append(lines, "Available strategies:", "")
 		lines = appendEnumTable(lines, strategies)
@@ -194,7 +198,8 @@ func handleListFlags(
 		}
 		profiles, err := controlServerClient.ListProfiles(ctx)
 		if err != nil {
-			return nil, err		}
+			return nil, err //nolint:wrapcheck // RedTeamError from controlserver
+		}
 		lines = append(lines, "Available profiles:", "")
 		lines = appendProfileTable(lines, profiles)
 	}
@@ -267,7 +272,8 @@ func runClientDrivenScan(
 
 	scanID, err := csClient.CreateScan(ctx, rtConfig.ToCreateScanRequest())
 	if err != nil {
-		return nil, err	}
+		return nil, err //nolint:wrapcheck // RedTeamError from controlserver
+	}
 	logger.Info().Str("scanID", scanID).Msg("scan created successfully")
 
 	progressBar := userInterface.NewProgressBar()
@@ -279,7 +285,8 @@ func runClientDrivenScan(
 	for {
 		chats, nextErr := csClient.NextChats(ctx, scanID, responses)
 		if nextErr != nil {
-			return nil, nextErr		}
+			return nil, nextErr //nolint:wrapcheck // RedTeamError from controlserver
+		}
 		if len(chats) == 0 {
 			break
 		}
@@ -315,7 +322,8 @@ func runClientDrivenScan(
 
 	reportJSON, reportErr := csClient.GetReport(ctx, scanID)
 	if reportErr != nil {
-		return nil, reportErr	}
+		return nil, reportErr //nolint:wrapcheck // RedTeamError from controlserver
+	}
 
 	return []workflow.Data{newWorkflowData("application/json", reportJSON)}, nil
 }
