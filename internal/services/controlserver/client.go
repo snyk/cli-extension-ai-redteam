@@ -206,27 +206,34 @@ func (c *ClientImpl) GetReport(ctx context.Context, scanID string) (json.RawMess
 	return json.RawMessage(respBytes), nil
 }
 
-func (c *ClientImpl) listEnum(ctx context.Context, endpoint string) ([]EnumEntry, error) {
-	url := fmt.Sprintf("%s/hidden/%s?version=%s", c.baseURL, endpoint, APIVersion)
-	respBytes, err := c.doGet(ctx, endpoint, url)
+func (c *ClientImpl) ListGoals(ctx context.Context) ([]EnumEntry, error) {
+	url := fmt.Sprintf("%s/hidden/goals?version=%s", c.baseURL, APIVersion)
+	respBytes, err := c.doGet(ctx, "ListGoals", url)
 	if err != nil {
 		return nil, err
 	}
 
 	var entries []EnumEntry
 	if err := json.Unmarshal(respBytes, &entries); err != nil {
-		return nil, redteam_errors.NewInternalError(fmt.Sprintf("unmarshal %s response: %s", endpoint, err))
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("unmarshal ListGoals response: %s", err))
 	}
 
 	return entries, nil
 }
 
-func (c *ClientImpl) ListGoals(ctx context.Context) ([]EnumEntry, error) {
-	return c.listEnum(ctx, "goals")
-}
-
 func (c *ClientImpl) ListStrategies(ctx context.Context) ([]EnumEntry, error) {
-	return c.listEnum(ctx, "strategies")
+	url := fmt.Sprintf("%s/hidden/strategies?version=%s", c.baseURL, APIVersion)
+	respBytes, err := c.doGet(ctx, "ListStrategies", url)
+	if err != nil {
+		return nil, err
+	}
+
+	var entries []EnumEntry
+	if err := json.Unmarshal(respBytes, &entries); err != nil {
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("unmarshal ListStrategies response: %s", err))
+	}
+
+	return entries, nil
 }
 
 func (c *ClientImpl) ListProfiles(ctx context.Context) ([]ProfileResponse, error) {
