@@ -33,6 +33,12 @@ const mockProfiles = [
   },
 ];
 
+const mockStrategies = [
+  { value: "direct", description: "Send the request directly" },
+  { value: "advanced", description: "Use advanced techniques" },
+  { value: "indirect", description: "Use indirect approaches" },
+];
+
 function mockFetch(goals: any[] = mockGoals, profiles: any[] = mockProfiles) {
   vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     const url = typeof input === "string" ? input : (input as Request).url;
@@ -40,6 +46,12 @@ function mockFetch(goals: any[] = mockGoals, profiles: any[] = mockProfiles) {
       return Promise.resolve({
         ok: true,
         json: () => Promise.resolve(goals),
+      } as Response);
+    }
+    if (url === "/api/strategies") {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(mockStrategies),
       } as Response);
     }
     if (url === "/api/profiles") {

@@ -1,11 +1,16 @@
 import { useEffect, useState } from "react";
-import { Form, Checkbox, Space, Spin, Alert, Row, Col, Tag } from "antd";
+import { Form, Checkbox, Space, Spin, Alert, Row, Col, Tag, Tooltip } from "antd";
 
 interface EnumEntry {
   value: string;
   description: string;
   display_order: number;
   strategies?: string[];
+}
+
+interface StrategyEntry {
+  value: string;
+  description: string;
 }
 
 interface ProfileEntry {
@@ -22,6 +27,7 @@ interface Profile {
 
 export default function GoalStep() {
   const [goals, setGoals] = useState<EnumEntry[]>([]);
+  const [strategyDescriptions, setStrategyDescriptions] = useState<Map<string, string>>(new Map());
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [selectedProfile, setSelectedProfile] = useState<string | null>(null);
   const [selectedStrategies, setSelectedStrategies] = useState<Map<string, Set<string>>>(new Map());
@@ -36,13 +42,18 @@ export default function GoalStep() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       }),
+      fetch("/api/strategies").then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      }),
       fetch("/api/profiles").then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       }),
     ])
-      .then(([goalsData, profilesData]: [EnumEntry[], Profile[]]) => {
+      .then(([goalsData, strategiesData, profilesData]: [EnumEntry[], StrategyEntry[], Profile[]]) => {
         setGoals(goalsData);
+        setStrategyDescriptions(new Map(strategiesData.map((s) => [s.value, s.description])));
         setProfiles(profilesData);
         setLoading(false);
       })
@@ -160,6 +171,8 @@ export default function GoalStep() {
   return (
     <>
       {profiles.length > 0 && (
+        <>
+        <div style={{ marginBottom: 12, fontWeight: 600 }}>Profiles</div>
         <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
           {profiles.map((p) => (
             <Col key={p.id} xs={24} sm={8}>
@@ -177,6 +190,7 @@ export default function GoalStep() {
             </Col>
           ))}
         </Row>
+        </>
       )}
       <Form.Item name="attacks" hidden><input type="hidden" /></Form.Item>
       <Form.Item
@@ -193,7 +207,8 @@ export default function GoalStep() {
                     <span onClick={(e) => { e.stopPropagation(); e.preventDefault(); }} onMouseDown={(e) => e.preventDefault()} style={{ marginLeft: 8 }}>
                       {g.strategies.map((s) => {
                         const isChecked = selectedStrategies.get(g.value)?.has(s) ?? false;
-                        return (
+                        const desc = strategyDescriptions.get(s);
+                        const tag = (
                           <Tag.CheckableTag
                             key={s}
                             checked={isChecked}
@@ -207,6 +222,7 @@ export default function GoalStep() {
                             {s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
                           </Tag.CheckableTag>
                         );
+                        return desc ? <Tooltip key={s} title={desc}>{tag}</Tooltip> : tag;
                       })}
                     </span>
                   )}
