@@ -63,7 +63,7 @@ afterEach(() => {
 });
 
 const defaultProps = {
-  activeStep: "target-type",
+  activeStep: "target-definition",
   onStepChange: vi.fn(),
   onConfigPathLoaded: vi.fn(),
 };
@@ -72,7 +72,7 @@ describe("SetupPage", () => {
   it("renders step title for target-type", async () => {
     render(<SetupPage {...defaultProps} />);
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Target Type" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Target Definition" })).toBeInTheDocument();
     });
   });
 
@@ -95,7 +95,7 @@ describe("SetupPage", () => {
     const onStepChange = vi.fn();
     render(<SetupPage {...defaultProps} activeStep="target-config" onStepChange={onStepChange} />);
     fireEvent.click(screen.getByRole("button", { name: /^back$/i }));
-    expect(onStepChange).toHaveBeenCalledWith("target-type");
+    expect(onStepChange).toHaveBeenCalledWith("target-definition");
   });
 
   it("renders Download and Save buttons on review step", () => {
@@ -172,7 +172,7 @@ describe("SetupPage", () => {
   });
 
   it("shows validation error when clicking Next without target name", async () => {
-    render(<SetupPage {...defaultProps} activeStep="target-type" />);
+    render(<SetupPage {...defaultProps} activeStep="target-definition" />);
 
     fireEvent.click(screen.getByRole("button", { name: /next/i }));
 

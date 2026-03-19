@@ -1,6 +1,6 @@
 import { Form, Input, Select } from "antd";
 
-export default function TargetTypeStep() {
+export default function TargetDefinitionStep() {
   return (
     <>
       <Form.Item

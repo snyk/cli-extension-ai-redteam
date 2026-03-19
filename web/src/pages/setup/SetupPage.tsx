@@ -3,7 +3,7 @@ import { Form, Button, Alert, Typography, Space, Tooltip } from "antd";
 import { DownloadOutlined, CopyOutlined, CheckOutlined, SaveOutlined } from "@ant-design/icons";
 import { steps } from "../../components/Sidebar";
 import YamlHighlight from "../../components/YamlHighlight";
-import TargetTypeStep from "./TargetTypeStep";
+import TargetDefinitionStep from "./TargetDefinitionStep";
 import TargetConfigStep from "./TargetConfigStep";
 import AppContextStep from "./AppContextStep";
 import GoalStep from "./GoalStep";
@@ -19,7 +19,7 @@ interface SetupPageProps {
 
 // Required fields per step — validated on "Next" and flagged as missing on the review step.
 const requiredStepFields: Record<string, string[][]> = {
-  "target-type": [["target", "name"], ["target", "type"]],
+  "target-definition": [["target", "name"], ["target", "type"]],
   "target-config": [["target", "settings", "url"], ["target", "settings", "request_body_template"]],
   "app-context": [],
   "goal": [["goals"]],
@@ -178,7 +178,7 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
         await form.validateFields(fields);
       } catch {
         const stepLabels: Record<string, string> = {
-          "target-type": "target name",
+          "target-definition": "target name",
           "target-config": "target URL and request template",
           "goal": "at least one goal",
         };
@@ -292,8 +292,8 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
         />
       )}
 
-      <div style={{ display: activeStep === "target-type" ? "block" : "none" }}>
-        <TargetTypeStep />
+      <div style={{ display: activeStep === "target-definition" ? "block" : "none" }}>
+        <TargetDefinitionStep />
       </div>
       <div style={{ display: activeStep === "target-config" ? "block" : "none" }}>
         <TargetConfigStep />
