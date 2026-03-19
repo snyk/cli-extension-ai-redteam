@@ -426,6 +426,56 @@ func TestRunRedTeamWorkflow_HTMLFileOutput(t *testing.T) {
 	assert.Contains(t, html, testScanID)
 }
 
+func TestRunRedTeamWorkflow_JSONFileOutput(t *testing.T) {
+	ictx := frameworkmock.NewMockInvocationContext(t)
+	ictx.GetConfiguration().Set(experimentalKey, true)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
+	ictx.GetConfiguration().Set(configFlag, redteamTestConfigFile)
+
+	tmpFile := t.TempDir() + "/report.json"
+	ictx.GetConfiguration().Set("json-file-output", tmpFile)
+
+	originalArgs := os.Args
+	os.Args = []string{"snyk", "redteam", "--json-file-output", tmpFile}
+	defer func() { os.Args = originalArgs }()
+
+	results, err := redteam.RunRedTeamWorkflow(
+		ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
+	require.NoError(t, err)
+	assert.Len(t, results, 1)
+	assert.Equal(t, "application/json", results[0].GetContentType())
+
+	fileContent, readErr := os.ReadFile(tmpFile)
+	require.NoError(t, readErr)
+	assert.Contains(t, string(fileContent), testScanID)
+	assert.Contains(t, string(fileContent), "directly_asking")
+}
+
+func TestRunRedTeamWorkflow_JSONFileOutputWithHTMLFlag(t *testing.T) {
+	ictx := frameworkmock.NewMockInvocationContext(t)
+	ictx.GetConfiguration().Set(experimentalKey, true)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
+	ictx.GetConfiguration().Set(configFlag, redteamTestConfigFile)
+
+	jsonFile := t.TempDir() + "/report.json"
+	ictx.GetConfiguration().Set("json-file-output", jsonFile)
+	ictx.GetConfiguration().Set("html", true)
+
+	originalArgs := os.Args
+	os.Args = []string{"snyk", "redteam", "--html", "--json-file-output", jsonFile}
+	defer func() { os.Args = originalArgs }()
+
+	results, err := redteam.RunRedTeamWorkflow(
+		ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
+	require.NoError(t, err)
+	assert.Len(t, results, 1)
+	assert.Equal(t, "text/html", results[0].GetContentType())
+
+	fileContent, readErr := os.ReadFile(jsonFile)
+	require.NoError(t, readErr)
+	assert.Contains(t, string(fileContent), testScanID)
+}
+
 func TestRunRedTeamWorkflow_HTMLFileOutputWithHTMLFlag(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)

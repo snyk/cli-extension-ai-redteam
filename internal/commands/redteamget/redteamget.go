@@ -39,6 +39,7 @@ func RegisterRedTeamGetWorkflow(e workflow.Engine) error {
 	flagset.String(utils.FlagScanID, "", "Scan ID to retrieve results for")
 	flagset.Bool(utils.FlagHTML, false, "Output the red team report in HTML format instead of JSON")
 	flagset.String(utils.FlagHTMLFileOutput, "", "Write the HTML report to the specified file path")
+	flagset.String(utils.FlagJSONFileOutput, "", "Write the JSON report to the specified file path")
 	flagset.String(utils.FlagTenantID, "", "Tenant ID (auto-discovered if not provided)")
 
 	cfg := workflow.ConfigurationOptionsFromFlagset(flagset)
