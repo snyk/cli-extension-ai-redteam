@@ -172,7 +172,7 @@ describe("SetupPage", () => {
   });
 
   it("shows validation error when clicking Next without target name", async () => {
-    render(<SetupPage {...defaultProps} activeStep="target-type" />);
+    render(<SetupPage {...defaultProps} activeStep="target-definition" />);
 
     fireEvent.click(screen.getByRole("button", { name: /next/i }));
 
