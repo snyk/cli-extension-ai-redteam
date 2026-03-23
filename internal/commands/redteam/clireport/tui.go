@@ -2,10 +2,12 @@ package clireport
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/mattn/go-isatty"
 
 	"github.com/snyk/cli-extension-ai-redteam/internal/models"
 )
@@ -13,6 +15,9 @@ import (
 // RunInteractive launches the interactive TUI report viewer.
 // It returns the final static report string for piping when stdout is not a TTY.
 func RunInteractive(data *models.GetAIVulnerabilitiesResponseData, meta ScanMeta) error {
+	if !isatty.IsTerminal(os.Stdout.Fd()) && !isatty.IsCygwinTerminal(os.Stdout.Fd()) {
+		return fmt.Errorf("not a terminal")
+	}
 	m := newModel(data, meta)
 	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	_, err := p.Run()
