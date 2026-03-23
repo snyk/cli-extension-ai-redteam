@@ -18,13 +18,13 @@ func displayBanner(userInterface ui.UserInterface, cfg *Config, profileName stri
 	var sb strings.Builder
 
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("  %s\n", bannerTitle.Render("SNYK AGENT RED TEAMING")))
+	fmt.Fprintf(&sb, "  %s\n", bannerTitle.Render("SNYK AGENT RED TEAMING"))
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("  %s %s\n", bannerLabel.Render("Target:    "), bannerValue.Render(cfg.Target.Settings.URL)))
+	fmt.Fprintf(&sb, "  %s %s\n", bannerLabel.Render("Target:    "), bannerValue.Render(cfg.Target.Settings.URL))
 	if profileName != "" {
-		sb.WriteString(fmt.Sprintf("  %s %s\n", bannerLabel.Render("Profile:   "), bannerValue.Render(profileName)))
+		fmt.Fprintf(&sb, "  %s %s\n", bannerLabel.Render("Profile:   "), bannerValue.Render(profileName))
 	}
-	sb.WriteString(fmt.Sprintf("  %s %s\n", bannerLabel.Render("Goals:     "), bannerValue.Render(strings.Join(cfg.UniqueGoals(), ", "))))
+	fmt.Fprintf(&sb, "  %s %s\n", bannerLabel.Render("Goals:     "), bannerValue.Render(strings.Join(cfg.UniqueGoals(), ", ")))
 	sb.WriteString("\n")
 
 	_ = userInterface.Output(sb.String()) //nolint:errcheck // best-effort banner output

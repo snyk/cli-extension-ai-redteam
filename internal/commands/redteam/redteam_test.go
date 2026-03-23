@@ -29,6 +29,7 @@ const (
 	configFlag            = "config"
 	redteamTestConfigFile = "testdata/redteam.yaml"
 	testScanID            = "test-scan-id"
+	testContentTypePlain  = "text/plain"
 )
 
 func mockCSFactory(mock *controlservermock.MockClient) redteam.ControlServerFactory {
@@ -130,9 +131,9 @@ func TestRunRedTeamWorkflow_HappyPath(t *testing.T) {
 		ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
 	require.NoError(t, err)
 	assert.Len(t, results, 1)
-	assert.Equal(t, "text/plain", results[0].GetContentType())
+	assert.Equal(t, testContentTypePlain, results[0].GetContentType())
 	payload, _ := results[0].GetPayload().([]byte)
-	assert.Contains(t, string(payload), "directly asking")
+	assert.Contains(t, string(payload), "System Prompt Extraction (Direct)")
 	assert.Contains(t, string(payload), "Findings")
 }
 
@@ -193,12 +194,12 @@ func TestRunRedTeamWorkflow_ReportPassedTypes(t *testing.T) {
 	results, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(mockCS), mockTargetFactory(defaultMockTarget()))
 	require.NoError(t, err)
 	require.Len(t, results, 1)
-	assert.Equal(t, "text/plain", results[0].GetContentType())
+	assert.Equal(t, testContentTypePlain, results[0].GetContentType())
 
 	payload, ok := results[0].GetPayload().([]byte)
 	require.True(t, ok)
 	jsonStr := string(payload)
-	assert.Contains(t, jsonStr, "passed_types")
+	assert.Contains(t, jsonStr, "Passed Types")
 	assert.Contains(t, jsonStr, "System Prompt Extraction (Direct)")
 }
 
@@ -263,7 +264,7 @@ func TestRunRedTeamWorkflow_ConfigFileNotFound(t *testing.T) {
 		ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
 	require.NoError(t, err)
 	assert.Len(t, results, 1)
-	assert.Equal(t, "text/plain", results[0].GetContentType())
+	assert.Equal(t, testContentTypePlain, results[0].GetContentType())
 
 	payload, ok := results[0].GetPayload().([]byte)
 	require.True(t, ok)
@@ -473,7 +474,7 @@ func TestRunRedTeamWorkflow_HTMLFileOutput(t *testing.T) {
 		ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
 	require.NoError(t, err)
 	assert.Len(t, results, 1)
-	assert.Equal(t, "text/plain", results[0].GetContentType())
+	assert.Equal(t, testContentTypePlain, results[0].GetContentType())
 
 	fileContent, readErr := os.ReadFile(tmpFile)
 	require.NoError(t, readErr)
@@ -699,7 +700,7 @@ func TestRunRedTeamWorkflow_ListEnums(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Len(t, results, 1)
-			assert.Equal(t, "text/plain", results[0].GetContentType())
+			assert.Equal(t, testContentTypePlain, results[0].GetContentType())
 
 			payload, ok := results[0].GetPayload().([]byte)
 			require.True(t, ok)
@@ -838,7 +839,7 @@ func TestRunRedTeamWorkflow_ListProfiles(t *testing.T) {
 	results, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(mockCS), mockTargetFactory(defaultMockTarget()))
 	require.NoError(t, err)
 	require.Len(t, results, 1)
-	assert.Equal(t, "text/plain", results[0].GetContentType())
+	assert.Equal(t, testContentTypePlain, results[0].GetContentType())
 
 	payload, ok := results[0].GetPayload().([]byte)
 	require.True(t, ok)

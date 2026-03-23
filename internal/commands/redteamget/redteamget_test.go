@@ -56,7 +56,7 @@ func TestRunRedTeamGetWorkflow_HappyPath(t *testing.T) {
 
 	payload, ok := results[0].GetPayload().([]byte)
 	require.True(t, ok)
-	assert.Contains(t, string(payload), "directly asking")
+	assert.Contains(t, string(payload), "System Prompt Extraction (Direct)")
 	assert.Contains(t, string(payload), "Findings")
 }
 
@@ -97,7 +97,7 @@ func TestRunRedTeamGetWorkflow_PassedTypesPropagated(t *testing.T) {
 
 	payload, ok := results[0].GetPayload().([]byte)
 	require.True(t, ok)
-	assert.Contains(t, string(payload), "passed_types")
+	assert.Contains(t, string(payload), "Passed Types")
 	assert.Contains(t, string(payload), "System Prompt Extraction (Direct)")
 }
 

@@ -2,6 +2,7 @@ package redteamget
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam/htmlreport"
 	redteam_errors "github.com/snyk/cli-extension-ai-redteam/internal/errors/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/helpers"
+	"github.com/snyk/cli-extension-ai-redteam/internal/models"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
 	"github.com/snyk/cli-extension-ai-redteam/internal/utils"
 )
@@ -128,12 +130,11 @@ func handleGetScanResults(
 	returnJSON := config.GetBool(utils.FlagJSON)
 	returnHTML := config.GetBool(utils.FlagHTML)
 	if !returnJSON && !returnHTML {
-		report := clireport.Render(normalized, clireport.ScanMeta{
-			TargetURL:  "",
-			Goals:      status.Goals,
-			Strategies: []string{},
-		})
-		return []workflow.Data{workflow.NewData(getWorkflowType, "text/plain", []byte(report))}, nil
+		var data models.GetAIVulnerabilitiesResponseData
+		if err := json.Unmarshal(reportJSON, &data); err == nil {
+			report := clireport.Render(&data, clireport.ScanMeta{})
+			return []workflow.Data{workflow.NewData(getWorkflowType, "text/plain", []byte(report))}, nil
+		}
 	}
 
 	return output, nil

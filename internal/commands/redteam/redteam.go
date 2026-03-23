@@ -90,6 +90,7 @@ func redTeamWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data
 	return RunRedTeamWorkflow(invocationCtx, DefaultSnykAPIFactory, DefaultTargetFactory)
 }
 
+//nolint:gocyclo // inherent complexity of workflow orchestration
 func RunRedTeamWorkflow(
 	invocationCtx workflow.InvocationContext,
 	controlServerFactory ControlServerFactory,
@@ -118,7 +119,7 @@ func RunRedTeamWorkflow(
 		}
 		if err := clireport.RunInteractive(data, meta); err != nil {
 			report := clireport.Render(data, meta)
-			return []workflow.Data{newWorkflowData(contentTypePlain, []byte(report))}, nil
+			return []workflow.Data{newWorkflowData(contentTypePlain, []byte(report))}, nil //nolint:nilerr // TUI failure is expected, fall back to static render
 		}
 		return []workflow.Data{newWorkflowData(contentTypePlain, []byte(""))}, nil
 	}
@@ -176,8 +177,9 @@ func RunRedTeamWorkflow(
 		return nil, htmlErr //nolint:wrapcheck // RedTeamError from htmlreport
 	}
 
-	returnJSON := config.GetBool(utils.FlagJSON)
+	returnJSON := config.GetBool(utils.FlagJSON) || config.GetString(utils.FlagJSONFileOutput) != ""
 	returnHTML := config.GetBool(utils.FlagHTML)
+	//nolint:nestif // sequential branching for TUI/static report fallback
 	if !returnJSON && !returnHTML && len(results) > 0 {
 		reportData, parseErr := parseReportForTUI(results, config)
 		if parseErr == nil && reportData != nil {
@@ -186,16 +188,16 @@ func RunRedTeamWorkflow(
 				Goals:            rtConfig.UniqueGoals(),
 				FullConversation: config.GetBool(utils.FlagFullConversation),
 			}
+			// Save report for later re-display via --report.
+			if saveErr := clireport.SaveReport(reportData, meta); saveErr != nil {
+				logger.Debug().Err(saveErr).Msg("failed to save report for --report flag")
+			}
 			if err := clireport.RunInteractive(reportData, meta); err != nil {
 				// Fallback to static report if TUI fails (e.g. piped output).
 				report := clireport.Render(reportData, meta)
-				return []workflow.Data{newWorkflowData(contentTypePlain, []byte(report))}, nil
+				return []workflow.Data{newWorkflowData(contentTypePlain, []byte(report))}, nil //nolint:nilerr // TUI failure is expected, fall back to static render
 			}
 			return []workflow.Data{newWorkflowData(contentTypePlain, []byte(""))}, nil
-		}
-		// Save report for later re-display via --report.
-		if saveErr := clireport.SaveReport(reportData, meta); saveErr != nil {
-			logger.Debug().Err(saveErr).Msg("failed to save report for --report flag")
 		}
 	}
 
