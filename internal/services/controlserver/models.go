@@ -1,8 +1,12 @@
 package controlserver
 
+type Attack struct {
+	Goal     string `json:"goal"`
+	Strategy string `json:"strategy"`
+}
+
 type CreateScanRequest struct {
-	Goals       []string     `json:"goals,omitempty"`
-	Strategies  []string     `json:"strategies,omitempty"`
+	Attacks     []Attack     `json:"attacks"`
 	TargetURL   string       `json:"target_url"`
 	Purpose     string       `json:"purpose,omitempty"`
 	GroundTruth *GroundTruth `json:"ground_truth,omitempty"`

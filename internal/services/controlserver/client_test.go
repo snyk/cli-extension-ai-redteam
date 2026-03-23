@@ -33,8 +33,9 @@ func TestCreateScan_Happy(t *testing.T) {
 		var req controlserver.CreateScanRequest
 		body, _ := io.ReadAll(r.Body)
 		require.NoError(t, json.Unmarshal(body, &req))
-		assert.Equal(t, []string{"system_prompt_extraction"}, req.Goals)
-		assert.Equal(t, []string{"directly_asking"}, req.Strategies)
+		require.Len(t, req.Attacks, 1)
+		assert.Equal(t, "system_prompt_extraction", req.Attacks[0].Goal)
+		assert.Equal(t, "directly_asking", req.Attacks[0].Strategy)
 		assert.Equal(t, "https://example.com/chat", req.TargetURL)
 
 		w.WriteHeader(http.StatusOK)
@@ -43,7 +44,7 @@ func TestCreateScan_Happy(t *testing.T) {
 	defer server.Close()
 
 	client := newTestClient(t, server.URL)
-	req := &controlserver.CreateScanRequest{Goals: []string{"system_prompt_extraction"}, Strategies: []string{"directly_asking"}, TargetURL: "https://example.com/chat"}
+	req := &controlserver.CreateScanRequest{Attacks: []controlserver.Attack{{Goal: "system_prompt_extraction", Strategy: "directly_asking"}}, TargetURL: "https://example.com/chat"}
 	scanID, err := client.CreateScan(t.Context(), req)
 	require.NoError(t, err)
 	assert.Equal(t, testScanID, scanID)
@@ -62,8 +63,9 @@ func TestCreateScan_WithGroundTruth(t *testing.T) {
 		var req controlserver.CreateScanRequest
 		body, _ := io.ReadAll(r.Body)
 		require.NoError(t, json.Unmarshal(body, &req))
-		assert.Equal(t, []string{"system_prompt_extraction"}, req.Goals)
-		assert.Equal(t, []string{"directly_asking"}, req.Strategies)
+		require.Len(t, req.Attacks, 1)
+		assert.Equal(t, "system_prompt_extraction", req.Attacks[0].Goal)
+		assert.Equal(t, "directly_asking", req.Attacks[0].Strategy)
 		assert.Equal(t, "https://example.com/chat", req.TargetURL)
 		assert.Equal(t, purpose, req.Purpose)
 		require.NotNil(t, req.GroundTruth)
@@ -77,10 +79,9 @@ func TestCreateScan_WithGroundTruth(t *testing.T) {
 
 	client := newTestClient(t, server.URL)
 	req := &controlserver.CreateScanRequest{
-		Goals:      []string{"system_prompt_extraction"},
-		Strategies: []string{"directly_asking"},
-		TargetURL:  "https://example.com/chat",
-		Purpose:    purpose,
+		Attacks:   []controlserver.Attack{{Goal: "system_prompt_extraction", Strategy: "directly_asking"}},
+		TargetURL: "https://example.com/chat",
+		Purpose:   purpose,
 		GroundTruth: &controlserver.GroundTruth{
 			SystemPrompt: systemPrompt,
 			Tools:        toolsStr,
@@ -99,7 +100,7 @@ func TestCreateScan_ServerError(t *testing.T) {
 	defer server.Close()
 
 	client := newTestClient(t, server.URL)
-	_, err := client.CreateScan(t.Context(), &controlserver.CreateScanRequest{Goals: []string{"test"}, TargetURL: "https://example.com"})
+	_, err := client.CreateScan(t.Context(), &controlserver.CreateScanRequest{Attacks: []controlserver.Attack{{Goal: "test", Strategy: "directly_asking"}}, TargetURL: "https://example.com"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "400")
 }
