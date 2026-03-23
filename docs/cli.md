@@ -15,7 +15,7 @@ By default the CLI looks for `redteam.yaml` in the current directory. Use `--con
 | **target.context.ground_truth.tools** | No | List of tool names (ground truth for the judge). |
 | **target.settings.url** | Yes | URL of the target to scan (e.g. chat/completions endpoint). |
 | **target.settings.headers** | No | List of `name`/`value` request headers. |
-| **target.settings.response_selector** | No | JMESPath to extract the response from target JSON (default: `response`). |
+| **target.settings.response_selector** | No | JMESPath to extract the response from target JSON. Omit for plain text targets (raw body used as-is). |
 | **target.settings.request_body_template** | No | JSON template with `{{prompt}}` placeholder (default: `{"message": "{{prompt}}"}`). |
 | **goals** | No | List of attack goals. Each goal runs with all registered strategies. Ignored when `attacks` is present. |
 | **attacks** | No | Explicit list of `{goal, strategy?}` entries. Overrides `goals` when present. Strategy is optional; omitting it runs all registered strategies for that goal. |
@@ -100,9 +100,12 @@ Flags override values from the config file when set.
 | `--goals` | Comma-separated attack goals. Overrides profile and config file goals. |
 | `--profile` | Named profile to use (e.g. `fast`, `security`, `safety`). Cannot be combined with `--goals`. |
 | `--list-goals` | List available goals and exit. |
+| `--list-strategies` | List available strategies and exit. |
 | `--list-profiles` | List available profiles and exit. |
+| `--tenant-id` | Tenant ID (auto-discovered if not provided). |
 | `--html` | Output report as HTML instead of JSON. |
 | `--html-file-output` | Write HTML report to this path. |
+| `--json-file-output` | Write JSON report to this path. |
 
 ## Additional commands
 
@@ -124,14 +127,17 @@ Fetches results for a previously submitted scan by its scan ID.
 snyk redteam get --experimental --id <scan-uuid>
 snyk redteam get --experimental --id <scan-uuid> --html
 snyk redteam get --experimental --id <scan-uuid> --html-file-output report.html
+snyk redteam get --experimental --id <scan-uuid> --json-file-output report.json
 ```
 
 | Flag | Description |
 |------|-------------|
 | `--id` | Scan ID (UUID) to retrieve results for. |
 | `--experimental` | Required; acknowledges experimental feature. |
+| `--tenant-id` | Tenant ID (auto-discovered if not provided). |
 | `--html` | Output the report in HTML format instead of JSON. |
 | `--html-file-output` | Write the HTML report to the specified file path. |
+| `--json-file-output` | Write the JSON report to the specified file path. |
 
 ### `snyk redteam ping`
 

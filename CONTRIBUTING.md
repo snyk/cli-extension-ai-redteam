@@ -6,7 +6,7 @@ This repo is intended for internal (Snyk) contributions only at this time.
 
 ### Prerequisites
 
-- Go 1.22+
+- Go 1.24+
 - Python 3.x (for pre-commit hooks)
 
 ### Install tools
@@ -76,7 +76,7 @@ attacks:
     strategy: "crescendo"
 ```
 
-Secrets (auth headers, tokens) should be passed via `--headers` on the command line, not in config files.
+Secrets (auth headers, tokens) should be passed via `--header` on the command line, not in config files.
 
 ### Common tasks
 
