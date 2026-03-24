@@ -18,6 +18,22 @@ import (
 	"github.com/snyk/cli-extension-ai-redteam/internal/utils"
 )
 
+// ClientOption configures optional behavior of an HTTPClient.
+type ClientOption func(*HTTPClient)
+
+// WithRequestCommand configures an external command that builds the request
+// body from the prompt (stdin=prompt, stdout=body), replacing the template.
+func WithRequestCommand(cmd *utils.ExternalCommand) ClientOption {
+	return func(c *HTTPClient) { c.requestCommand = cmd }
+}
+
+// WithResponseCommand configures an external command that extracts the
+// response text from the raw HTTP body (stdin=body, stdout=text), replacing
+// the JMESPath selector.
+func WithResponseCommand(cmd *utils.ExternalCommand) ClientOption {
+	return func(c *HTTPClient) { c.responseCommand = cmd }
+}
+
 const (
 	DefaultTimeout        = 60 * time.Second
 	maxRetries            = 3
@@ -41,6 +57,8 @@ type HTTPClient struct {
 	httpClient          *http.Client
 	consecutiveFailures int
 	lastErr             error
+	requestCommand      *utils.ExternalCommand
+	responseCommand     *utils.ExternalCommand
 }
 
 var _ Client = (*HTTPClient)(nil)
@@ -51,17 +69,22 @@ func NewHTTPClient(
 	headers map[string]string,
 	requestBodyTemplate string,
 	responseSelector string,
+	opts ...ClientOption,
 ) *HTTPClient {
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: DefaultTimeout}
 	}
-	return &HTTPClient{
+	c := &HTTPClient{
 		url:                 url,
 		headers:             headers,
 		requestBodyTemplate: requestBodyTemplate,
 		responseSelector:    responseSelector,
 		httpClient:          httpClient,
 	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
 }
 
 func (c *HTTPClient) SendPrompt(ctx context.Context, prompt string) (string, error) {
@@ -69,7 +92,7 @@ func (c *HTTPClient) SendPrompt(ctx context.Context, prompt string) (string, err
 		return "", fmt.Errorf("%w: last error: %w", ErrCircuitOpen, c.lastErr)
 	}
 
-	body, err := buildRequestBody(c.requestBodyTemplate, prompt)
+	body, err := c.buildBody(ctx, prompt)
 	if err != nil {
 		return "", fmt.Errorf("build request body: %w", err)
 	}
@@ -129,7 +152,7 @@ func (c *HTTPClient) doRequest(ctx context.Context, body []byte) (string, error)
 		return "", &serverError{statusCode: resp.StatusCode, body: utils.TruncateBody(respBytes)}
 	}
 
-	return extractResponse(respBytes, c.responseSelector)
+	return c.extractBody(ctx, respBytes)
 }
 
 type serverError struct {
@@ -160,6 +183,28 @@ func retryDelay(attempt int) time.Duration {
 	}
 	jitter := time.Duration(rand.Int64N(int64(delay / 2))) //nolint:gosec // jitter doesn't need crypto rand
 	return delay + jitter
+}
+
+func (c *HTTPClient) buildBody(ctx context.Context, prompt string) ([]byte, error) {
+	if c.requestCommand != nil {
+		out, err := c.requestCommand.Run(ctx, prompt)
+		if err != nil {
+			return nil, fmt.Errorf("request_command: %w", err)
+		}
+		return []byte(out), nil
+	}
+	return buildRequestBody(c.requestBodyTemplate, prompt)
+}
+
+func (c *HTTPClient) extractBody(ctx context.Context, respBytes []byte) (string, error) {
+	if c.responseCommand != nil {
+		out, err := c.responseCommand.Run(ctx, string(respBytes))
+		if err != nil {
+			return "", fmt.Errorf("response_command: %w", err)
+		}
+		return out, nil
+	}
+	return extractResponse(respBytes, c.responseSelector)
 }
 
 func buildRequestBody(template, prompt string) ([]byte, error) {

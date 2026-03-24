@@ -22,6 +22,7 @@ const (
 	FlagPurpose          = "purpose"
 	FlagSystemPrompt     = "system-prompt"
 	FlagTools            = "tools"
+	FlagConcurrency      = "concurrency"
 )
 
 // AddTargetFlags registers the common target-related flags shared by commands

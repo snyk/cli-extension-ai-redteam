@@ -38,7 +38,7 @@ func mockCSFactory(mock *controlservermock.MockClient) redteam.ControlServerFact
 }
 
 func mockTargetFactory(mock *targetmock.MockClient) redteam.TargetFactory {
-	return func(_ *http.Client, _ string, _ map[string]string, _, _ string) target.Client {
+	return func(_ *http.Client, _ string, _ map[string]string, _, _ string, _ ...target.ClientOption) target.Client {
 		return mock
 	}
 }
@@ -928,4 +928,127 @@ func TestRunRedTeamWorkflow_ProfileNotFound(t *testing.T) {
 	_, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `profile "nonexistent" not found`)
+}
+
+func TestRunRedTeamWorkflow_ConcurrencyFromConfig(t *testing.T) {
+	ictx := frameworkmock.NewMockInvocationContext(t)
+	ictx.GetConfiguration().Set(experimentalKey, true)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
+	ictx.GetConfiguration().Set(configFlag, "testdata/redteam_concurrency.yaml")
+
+	originalArgs := os.Args
+	os.Args = []string{"snyk", "redteam"}
+	defer func() { os.Args = originalArgs }()
+
+	mockCS := defaultMockCS()
+	_, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(mockCS), mockTargetFactory(defaultMockTarget()))
+	require.NoError(t, err)
+
+	require.NotNil(t, mockCS.CreateScanRequest)
+	assert.Equal(t, 3, mockCS.CreateScanRequest.Concurrency)
+}
+
+func TestRunRedTeamWorkflow_ConcurrencyFromFlag(t *testing.T) {
+	ictx := frameworkmock.NewMockInvocationContext(t)
+	ictx.GetConfiguration().Set(experimentalKey, true)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
+	ictx.GetConfiguration().Set(configFlag, redteamTestConfigFile)
+	ictx.GetConfiguration().Set("concurrency", 5)
+
+	originalArgs := os.Args
+	os.Args = []string{"snyk", "redteam", "--concurrency", "5"}
+	defer func() { os.Args = originalArgs }()
+
+	mockCS := defaultMockCS()
+	_, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(mockCS), mockTargetFactory(defaultMockTarget()))
+	require.NoError(t, err)
+
+	require.NotNil(t, mockCS.CreateScanRequest)
+	assert.Equal(t, 5, mockCS.CreateScanRequest.Concurrency)
+}
+
+func TestRunRedTeamWorkflow_ConcurrentBatch(t *testing.T) {
+	ictx := frameworkmock.NewMockInvocationContext(t)
+	ictx.GetConfiguration().Set(experimentalKey, true)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
+	ictx.GetConfiguration().Set(configFlag, "testdata/redteam_concurrency.yaml")
+
+	originalArgs := os.Args
+	os.Args = []string{"snyk", "redteam"}
+	defer func() { os.Args = originalArgs }()
+
+	mockCS := defaultMockCS()
+	mockCS.ChatSeqs = [][]controlserver.ChatPrompt{
+		{
+			{Seq: 1, Prompt: "prompt-a", ChatID: "chat-a"},
+			{Seq: 1, Prompt: "prompt-b", ChatID: "chat-b"},
+			{Seq: 1, Prompt: "prompt-c", ChatID: "chat-c"},
+		},
+		{},
+	}
+
+	mockTarget := defaultMockTarget()
+	mockTarget.Responses["prompt-a"] = "response-a"
+	mockTarget.Responses["prompt-b"] = "response-b"
+	mockTarget.Responses["prompt-c"] = "response-c"
+
+	_, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(mockCS), mockTargetFactory(mockTarget))
+	require.NoError(t, err)
+
+	assert.Len(t, mockTarget.Calls, 3)
+	assert.Contains(t, mockTarget.Calls, "prompt-a")
+	assert.Contains(t, mockTarget.Calls, "prompt-b")
+	assert.Contains(t, mockTarget.Calls, "prompt-c")
+}
+
+// trackingTargetFactory returns a TargetFactory that records URLs used to create clients.
+func trackingTargetFactory(urls *[]string, mock *targetmock.MockClient) redteam.TargetFactory {
+	return func(_ *http.Client, url string, _ map[string]string, _, _ string, _ ...target.ClientOption) target.Client {
+		*urls = append(*urls, url)
+		return mock
+	}
+}
+
+func TestRunRedTeamWorkflow_URLCommandPerChat(t *testing.T) {
+	ictx := frameworkmock.NewMockInvocationContext(t)
+	ictx.GetConfiguration().Set(experimentalKey, true)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
+	ictx.GetConfiguration().Set(configFlag, "testdata/redteam_url_command.yaml")
+
+	originalArgs := os.Args
+	os.Args = []string{"snyk", "redteam"}
+	defer func() { os.Args = originalArgs }()
+
+	mockCS := defaultMockCS()
+	// Two rounds: round 1 has chat-a and chat-b, round 2 has chat-a only (chat-b closed).
+	mockCS.ChatSeqs = [][]controlserver.ChatPrompt{
+		{
+			{Seq: 1, Prompt: "prompt-a", ChatID: "chat-a"},
+			{Seq: 1, Prompt: "prompt-b", ChatID: "chat-b"},
+		},
+		{
+			{Seq: 2, Prompt: "followup-a", ChatID: "chat-a"},
+		},
+		{},
+	}
+
+	var createdURLs []string
+	mockTarget := defaultMockTarget()
+	factory := trackingTargetFactory(&createdURLs, mockTarget)
+
+	_, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(mockCS), factory)
+	require.NoError(t, err)
+
+	// url_command runs once at startup (resolveURLCommand), then once per new chat_id:
+	// chat-a and chat-b in round 1, no new chats in round 2 (chat-a already has a session).
+	// The factory should be called for chat-a, chat-b (2 times in the scan loop).
+	// Note: resolveURLCommand sets cfg.Target.Settings.URL but with url_command set,
+	// runClientDrivenScan uses url_command per-chat, not the static URL.
+	assert.Equal(t, 2, len(createdURLs), "factory should be called once per unique chat")
+	for _, u := range createdURLs {
+		assert.Equal(t, "https://session.example.com", u)
+	}
+
+	// All 3 prompts should have been sent.
+	assert.Len(t, mockTarget.Calls, 3)
 }

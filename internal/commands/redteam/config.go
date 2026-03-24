@@ -28,9 +28,10 @@ const (
 const defaultProfileID = "fast"
 
 type Config struct {
-	Target  ConfigTarget                `yaml:"target" json:"target"`
-	Goals   []string                    `yaml:"goals" json:"goals"`
-	Attacks []controlserver.AttackEntry `yaml:"attacks" json:"attacks,omitempty"`
+	Target      ConfigTarget                `yaml:"target" json:"target"`
+	Goals       []string                    `yaml:"goals" json:"goals"`
+	Attacks     []controlserver.AttackEntry `yaml:"attacks" json:"attacks,omitempty"`
+	Concurrency int                         `yaml:"concurrency,omitempty" json:"concurrency,omitempty"`
 }
 
 type ConfigTarget struct {
@@ -51,10 +52,13 @@ type ConfigGroundTruth struct {
 }
 
 type ConfigSettings struct {
-	URL                 string         `yaml:"url" json:"url"`
-	Headers             []ConfigHeader `yaml:"headers,omitempty" json:"headers,omitempty"`
-	ResponseSelector    string         `yaml:"response_selector" json:"response_selector"`
-	RequestBodyTemplate string         `yaml:"request_body_template" json:"request_body_template"`
+	URL                 string                 `yaml:"url" json:"url"`
+	URLCommand          *utils.ExternalCommand `yaml:"url_command,omitempty" json:"url_command,omitempty"`
+	Headers             []ConfigHeader         `yaml:"headers,omitempty" json:"headers,omitempty"`
+	ResponseSelector    string                 `yaml:"response_selector" json:"response_selector"`
+	ResponseCommand     *utils.ExternalCommand `yaml:"response_command,omitempty" json:"response_command,omitempty"`
+	RequestBodyTemplate string                 `yaml:"request_body_template" json:"request_body_template"`
+	RequestCommand      *utils.ExternalCommand `yaml:"request_command,omitempty" json:"request_command,omitempty"`
 }
 
 type ConfigHeader struct {
@@ -72,6 +76,11 @@ func LoadAndValidateConfig(
 
 	applyTargetURLOverride(config, rtConfig)
 	applyFlagOverrides(config, rtConfig)
+
+	if err := resolveURLCommand(logger, rtConfig); err != nil {
+		return nil, nil, err
+	}
+
 	applyDefaults(rtConfig)
 
 	if err := ValidateConfig(rtConfig); err != nil {
@@ -124,6 +133,33 @@ func loadConfigFromFile(logger *zerolog.Logger, config configuration.Configurati
 	return &rtConfig, nil
 }
 
+func resolveURLCommand(logger *zerolog.Logger, cfg *Config) error {
+	cmd := cfg.Target.Settings.URLCommand
+	if cmd == nil {
+		return nil
+	}
+	if err := cmd.Validate("url_command"); err != nil {
+		return redteam_errors.NewConfigValidationError(fmt.Sprintf("invalid configuration:\n  - %s", err.Error()))
+	}
+
+	logger.Debug().Str("binary", cmd.Binary).Msg("resolving target URL via url_command")
+
+	resolved, err := cmd.Run(context.Background(), "")
+	if err != nil {
+		return redteam_errors.NewNetworkError(fmt.Sprintf("url_command failed: %s", err))
+	}
+	if resolved == "" {
+		return redteam_errors.NewConfigValidationError("url_command returned empty output; expected a target URL")
+	}
+
+	logger.Debug().Str("resolved_url", resolved).Msg("resolved target URL from url_command")
+	cfg.Target.Settings.URL = resolved
+	if cfg.Target.Name == "" {
+		cfg.Target.Name = resolved
+	}
+	return nil
+}
+
 func applyTargetURLOverride(config configuration.Configuration, rtConfig *Config) {
 	targetURL := config.GetString(utils.FlagTargetURL)
 	if targetURL == "" {
@@ -136,6 +172,9 @@ func applyTargetURLOverride(config configuration.Configuration, rtConfig *Config
 }
 
 func applyFlagOverrides(config configuration.Configuration, rtConfig *Config) {
+	if v := config.GetInt(utils.FlagConcurrency); v > 0 {
+		rtConfig.Concurrency = v
+	}
 	if v := config.GetString(utils.FlagRequestBodyTmpl); v != "" {
 		rtConfig.Target.Settings.RequestBodyTemplate = v
 	}
@@ -170,6 +209,7 @@ func (cfg *Config) ToCreateScanRequest() *controlserver.CreateScanRequest {
 		Purpose:     cfg.Target.Context.Purpose,
 		GroundTruth: buildGroundTruthFromConfig(&cfg.Target.Context.GroundTruth),
 		TargetURL:   cfg.Target.Settings.URL,
+		Concurrency: cfg.Concurrency,
 	}
 	return req
 }
@@ -193,17 +233,35 @@ func ValidateConfig(cfg *Config) error {
 		errs = append(errs, err.Error())
 	}
 
-	if !strings.Contains(cfg.Target.Settings.RequestBodyTemplate, "{{prompt}}") {
-		errs = append(errs, "request_body_template must contain the {{prompt}} placeholder")
-	}
-	replaced := strings.ReplaceAll(cfg.Target.Settings.RequestBodyTemplate, "{{prompt}}", "test")
-	if !json.Valid([]byte(replaced)) {
-		errs = append(errs, "request_body_template is not valid JSON")
+	// Skip request body template validation when request_command handles body building.
+	if cfg.Target.Settings.RequestCommand != nil {
+		if err := cfg.Target.Settings.RequestCommand.Validate("request_command"); err != nil {
+			errs = append(errs, err.Error())
+		}
+	} else {
+		if !strings.Contains(cfg.Target.Settings.RequestBodyTemplate, "{{prompt}}") {
+			errs = append(errs, "request_body_template must contain the {{prompt}} placeholder")
+		}
+		replaced := strings.ReplaceAll(cfg.Target.Settings.RequestBodyTemplate, "{{prompt}}", "test")
+		if !json.Valid([]byte(replaced)) {
+			errs = append(errs, "request_body_template is not valid JSON")
+		}
 	}
 
-	if cfg.Target.Settings.ResponseSelector != "" {
+	// Skip JMESPath validation when response_command handles response parsing.
+	if cfg.Target.Settings.ResponseCommand != nil {
+		if err := cfg.Target.Settings.ResponseCommand.Validate("response_command"); err != nil {
+			errs = append(errs, err.Error())
+		}
+	} else if cfg.Target.Settings.ResponseSelector != "" {
 		if _, err := jmespath.Compile(cfg.Target.Settings.ResponseSelector); err != nil {
 			errs = append(errs, fmt.Sprintf("response_selector is not a valid JMESPath expression: %v", err))
+		}
+	}
+
+	if cfg.Target.Settings.URLCommand != nil {
+		if err := cfg.Target.Settings.URLCommand.Validate("url_command"); err != nil {
+			errs = append(errs, err.Error())
 		}
 	}
 
@@ -280,8 +338,12 @@ func applyDefaults(cfg *Config) {
 		cfg.Target.Type = defaultTargetType
 	}
 	// Empty response_selector means "use raw response body as-is" (plain text targets).
-	if cfg.Target.Settings.RequestBodyTemplate == "" {
+	// Skip default template when request_command handles body building.
+	if cfg.Target.Settings.RequestBodyTemplate == "" && cfg.Target.Settings.RequestCommand == nil {
 		cfg.Target.Settings.RequestBodyTemplate = defaultRequestBodyTemplate
+	}
+	if cfg.Concurrency < 1 {
+		cfg.Concurrency = 1
 	}
 }
 

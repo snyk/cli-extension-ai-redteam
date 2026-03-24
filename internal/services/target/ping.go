@@ -29,16 +29,16 @@ type PingResult struct {
 }
 
 func (c *HTTPClient) Ping(ctx context.Context) PingResult {
-	body, err := buildRequestBody(c.requestBodyTemplate, PingMessage)
+	ctx, cancel := context.WithTimeout(ctx, PingTimeout)
+	defer cancel()
+
+	body, err := c.buildBody(ctx, PingMessage)
 	if err != nil {
 		return PingResult{
 			Error:      err.Error(),
 			Suggestion: "Request body template is invalid.",
 		}
 	}
-
-	ctx, cancel := context.WithTimeout(ctx, PingTimeout)
-	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url, bytes.NewReader(body))
 	if err != nil {
@@ -70,7 +70,7 @@ func (c *HTTPClient) Ping(ctx context.Context) PingResult {
 		return result
 	}
 
-	return c.parseResponse(respBytes)
+	return c.parseResponse(ctx, respBytes)
 }
 
 func classifyStatusCode(statusCode int, rawBody string) (PingResult, bool) {
@@ -108,8 +108,25 @@ func classifyStatusCode(statusCode int, rawBody string) (PingResult, bool) {
 	return PingResult{}, false
 }
 
-func (c *HTTPClient) parseResponse(respBytes []byte) PingResult {
+func (c *HTTPClient) parseResponse(ctx context.Context, respBytes []byte) PingResult {
 	rawBody := string(respBytes)
+
+	// When a response_command is configured, delegate entirely to it.
+	if c.responseCommand != nil {
+		extracted, err := c.responseCommand.Run(ctx, rawBody)
+		if err != nil {
+			return PingResult{
+				Error:      err.Error(),
+				Suggestion: "response_command failed. Check the binary and arguments.",
+				RawBody:    truncate(rawBody, 500),
+			}
+		}
+		return PingResult{
+			Success:    true,
+			Response:   extracted,
+			Suggestion: "Target is reachable and response_command parsed the response.",
+		}
+	}
 
 	// No selector configured — we can only verify reachability (2xx), not response structure.
 	if c.responseSelector == "" {

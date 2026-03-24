@@ -17,6 +17,7 @@ type CreateScanRequest struct {
 	Purpose     string        `json:"purpose,omitempty"`
 	GroundTruth *GroundTruth  `json:"ground_truth,omitempty"`
 	TargetURL   string        `json:"target_url,omitempty"`
+	Concurrency int           `json:"concurrency,omitempty"`
 }
 
 // GroundTruth is optional context for judging: system prompt and tools of the target.

@@ -8,6 +8,8 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -33,7 +35,7 @@ type (
 	) controlserver.Client
 	TargetFactory func(
 		httpClient *http.Client, url string, headers map[string]string,
-		bodyTemplate, responseSelector string,
+		bodyTemplate, responseSelector string, opts ...target.ClientOption,
 	) target.Client
 )
 
@@ -44,9 +46,10 @@ var DefaultSnykAPIFactory ControlServerFactory = func(
 }
 
 var DefaultTargetFactory TargetFactory = func(
-	httpClient *http.Client, url string, headers map[string]string, bodyTemplate, responseSelector string,
+	httpClient *http.Client, url string, headers map[string]string,
+	bodyTemplate, responseSelector string, opts ...target.ClientOption,
 ) target.Client {
-	return target.NewHTTPClient(httpClient, url, headers, bodyTemplate, responseSelector)
+	return target.NewHTTPClient(httpClient, url, headers, bodyTemplate, responseSelector, opts...)
 }
 
 func RegisterWorkflows(e workflow.Engine) error {
@@ -71,6 +74,7 @@ func RegisterRedTeamWorkflow(e workflow.Engine) error {
 	flagset.String(utils.FlagPurpose, "", "Intended purpose of the target (ground truth for the judge)")
 	flagset.String(utils.FlagSystemPrompt, "", "Target system prompt (ground truth for prompt-extraction scoring)")
 	flagset.String(utils.FlagTools, "", "Comma-separated tool names the target is configured with (ground truth)")
+	flagset.Int(utils.FlagConcurrency, 0, "Number of chat sessions to run in parallel (default: 1)")
 
 	cfg := workflow.ConfigurationOptionsFromFlagset(flagset)
 	if _, err := e.Register(WorkflowID, cfg, redTeamWorkflow); err != nil {
@@ -125,7 +129,6 @@ func RunRedTeamWorkflow(
 		return nil, err //nolint:wrapcheck // RedTeamError from helpers
 	}
 
-	targetHTTPClient := &http.Client{Timeout: target.DefaultTimeout}
 	controlServerHTTPClient := invocationCtx.GetNetworkAccess().GetHttpClient()
 	controlServerHTTPClient.Timeout = 60 * time.Second
 	controlServerURL := config.GetString(configuration.API_URL)
@@ -139,15 +142,8 @@ func RunRedTeamWorkflow(
 
 	userInterface := invocationCtx.GetUserInterface()
 	displayBanner(userInterface, rtConfig, profileName)
-	targetClient := targetFactory(
-		targetHTTPClient,
-		rtConfig.Target.Settings.URL,
-		rtConfig.HeadersMap(),
-		rtConfig.Target.Settings.RequestBodyTemplate,
-		rtConfig.Target.Settings.ResponseSelector,
-	)
 
-	results, scanErr := runClientDrivenScan(invocationCtx, controlServerClient, targetClient, rtConfig)
+	results, scanErr := runClientDrivenScan(invocationCtx, controlServerClient, targetFactory, rtConfig)
 	if scanErr != nil {
 		return nil, scanErr
 	}
@@ -260,15 +256,148 @@ func appendProfileTable(lines []string, profiles []controlserver.ProfileResponse
 	return lines
 }
 
+// sessionManager tracks per-chat target clients.
+type sessionManager struct {
+	factory       func(url string) target.Client
+	urlCommand    *utils.ExternalCommand
+	sessions      map[string]target.Client
+	defaultClient target.Client
+	logger        *zerolog.Logger
+}
+
+func newSessionManager(
+	logger *zerolog.Logger,
+	rtConfig *Config,
+	targetFactory TargetFactory,
+) *sessionManager {
+	var targetOpts []target.ClientOption
+	if rtConfig.Target.Settings.RequestCommand != nil {
+		targetOpts = append(targetOpts, target.WithRequestCommand(rtConfig.Target.Settings.RequestCommand))
+	}
+	if rtConfig.Target.Settings.ResponseCommand != nil {
+		targetOpts = append(targetOpts, target.WithResponseCommand(rtConfig.Target.Settings.ResponseCommand))
+	}
+	targetHTTPClient := &http.Client{Timeout: target.DefaultTimeout}
+	headers := rtConfig.HeadersMap()
+	bodyTmpl := rtConfig.Target.Settings.RequestBodyTemplate
+	respSel := rtConfig.Target.Settings.ResponseSelector
+
+	factory := func(url string) target.Client {
+		return targetFactory(targetHTTPClient, url, headers, bodyTmpl, respSel, targetOpts...)
+	}
+
+	sm := &sessionManager{
+		factory:    factory,
+		urlCommand: rtConfig.Target.Settings.URLCommand,
+		sessions:   make(map[string]target.Client),
+		logger:     logger,
+	}
+	if sm.urlCommand == nil {
+		sm.defaultClient = factory(rtConfig.Target.Settings.URL)
+	}
+	return sm
+}
+
+//nolint:ireturn // target.Client is the expected interface for polymorphic target clients
+func (sm *sessionManager) getClient(ctx context.Context, chatID string) (target.Client, error) {
+	if sm.urlCommand == nil {
+		return sm.defaultClient, nil
+	}
+	if c, ok := sm.sessions[chatID]; ok {
+		return c, nil
+	}
+	resolved, err := sm.urlCommand.Run(ctx, "")
+	if err != nil {
+		return nil, fmt.Errorf("url_command for chat %s: %w", chatID, err)
+	}
+	sm.logger.Debug().Str("chatID", chatID).Str("url", resolved).Msg("new session URL")
+	c := sm.factory(resolved)
+	sm.sessions[chatID] = c
+	return c, nil
+}
+
+func (sm *sessionManager) cleanupSessions(chats []controlserver.ChatPrompt) {
+	if sm.urlCommand == nil {
+		return
+	}
+	active := make(map[string]struct{}, len(chats))
+	for _, chat := range chats {
+		active[chat.ChatID] = struct{}{}
+	}
+	for chatID := range sm.sessions {
+		if _, ok := active[chatID]; !ok {
+			delete(sm.sessions, chatID)
+		}
+	}
+}
+
+func (sm *sessionManager) resolveClients(ctx context.Context, chats []controlserver.ChatPrompt) ([]target.Client, error) {
+	clients := make([]target.Client, len(chats))
+	for i, chat := range chats {
+		c, err := sm.getClient(ctx, chat.ChatID)
+		if err != nil {
+			return nil, err
+		}
+		clients[i] = c
+	}
+	return clients, nil
+}
+
+type promptResult struct {
+	seq      int
+	response string
+}
+
+func sendPromptsConcurrently(
+	ctx context.Context,
+	logger *zerolog.Logger,
+	scanID string,
+	chats []controlserver.ChatPrompt,
+	clients []target.Client,
+	concurrency int,
+) ([]promptResult, error) {
+	results := make([]promptResult, len(chats))
+	var circuitErr atomic.Value
+	sem := make(chan struct{}, concurrency)
+	var wg sync.WaitGroup
+
+	for i, chat := range chats {
+		wg.Add(1)
+		sem <- struct{}{} // acquire
+		go func(idx int, c controlserver.ChatPrompt, tc target.Client) {
+			defer wg.Done()
+			defer func() { <-sem }() // release
+
+			resp, tgtErr := tc.SendPrompt(ctx, c.Prompt)
+			if tgtErr != nil {
+				if errors.Is(tgtErr, target.ErrCircuitOpen) {
+					circuitErr.Store(tgtErr)
+				}
+				logger.Warn().Err(tgtErr).Str("scanID", scanID).Str("chatID", c.ChatID).Msg("The scan target returned an error")
+				resp = fmt.Sprintf("[error: %s]", tgtErr.Error())
+			}
+			results[idx] = promptResult{seq: c.Seq, response: resp}
+		}(i, chat, clients[i])
+	}
+	wg.Wait()
+
+	if stored := circuitErr.Load(); stored != nil {
+		return nil, fmt.Errorf("aborting scan: %s", stored) //nolint:err113 // dynamic circuit-breaker message
+	}
+	return results, nil
+}
+
 func runClientDrivenScan(
 	invocationCtx workflow.InvocationContext,
 	csClient controlserver.Client,
-	targetClient target.Client,
+	targetFactory TargetFactory,
 	rtConfig *Config,
 ) ([]workflow.Data, error) {
 	logger := invocationCtx.GetEnhancedLogger()
 	userInterface := invocationCtx.GetUserInterface()
 	ctx := context.Background()
+
+	sm := newSessionManager(logger, rtConfig, targetFactory)
 
 	scanID, err := csClient.CreateScan(ctx, rtConfig.ToCreateScanRequest())
 	if err != nil {
@@ -291,19 +420,23 @@ func runClientDrivenScan(
 			break
 		}
 
+		sm.cleanupSessions(chats)
+
+		chatClients, clientErr := sm.resolveClients(ctx, chats)
+		if clientErr != nil {
+			return nil, redteam_errors.NewNetworkError(clientErr.Error())
+		}
+
+		results, sendErr := sendPromptsConcurrently(ctx, logger, scanID, chats, chatClients, rtConfig.Concurrency)
+		if sendErr != nil {
+			return nil, redteam_errors.NewNetworkError(sendErr.Error())
+		}
+
 		responses = make([]controlserver.ChatResponse, 0, len(chats))
-		for _, chat := range chats {
-			resp, tgtErr := targetClient.SendPrompt(ctx, chat.Prompt)
-			if tgtErr != nil {
-				if errors.Is(tgtErr, target.ErrCircuitOpen) {
-					return nil, redteam_errors.NewNetworkError(fmt.Sprintf("aborting scan: %s", tgtErr))
-				}
-				logger.Warn().Err(tgtErr).Str("scanID", scanID).Str("chatID", chat.ChatID).Msg("The scan target returned an error")
-				resp = fmt.Sprintf("[error: %s]", tgtErr.Error())
-			}
+		for _, r := range results {
 			responses = append(responses, controlserver.ChatResponse{
-				Seq:      chat.Seq,
-				Response: resp,
+				Seq:      r.seq,
+				Response: r.response,
 			})
 		}
 

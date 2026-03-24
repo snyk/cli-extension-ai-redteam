@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/target"
+	"github.com/snyk/cli-extension-ai-redteam/internal/utils"
 )
 
 const (
@@ -197,4 +198,86 @@ func TestSendPrompt_InvalidResponseSelector(t *testing.T) {
 	_, err := client.SendPrompt(t.Context(), testPrompt)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no match found")
+}
+
+// ---------------------------------------------------------------------------
+// External command options
+// ---------------------------------------------------------------------------
+
+func TestSendPrompt_RequestCommand(t *testing.T) {
+	// request_command receives prompt on stdin, produces the HTTP body on stdout.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		// The "sh -c" command wraps the prompt in a custom JSON body.
+		assert.JSONEq(t, `{"custom":"hello world"}`, string(body))
+		json.NewEncoder(w).Encode(map[string]string{defaultSelector: "ok"})
+	}))
+	defer server.Close()
+
+	cmd := &utils.ExternalCommand{
+		Binary: "sh",
+		Args:   []string{"-c", `read prompt; printf '{"custom":"%s"}' "$prompt"`},
+	}
+	client := target.NewHTTPClient(nil, server.URL, nil, "", defaultSelector,
+		target.WithRequestCommand(cmd))
+
+	result, err := client.SendPrompt(t.Context(), "hello world")
+	require.NoError(t, err)
+	assert.Equal(t, "ok", result)
+}
+
+func TestSendPrompt_ResponseCommand(t *testing.T) {
+	// response_command receives raw body on stdin, produces extracted text on stdout.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(`{"deep":{"nested":"secret value"}}`))
+	}))
+	defer server.Close()
+
+	// Use a simple sh command to extract the value via grep.
+	cmd := &utils.ExternalCommand{
+		Binary: "sh",
+		Args:   []string{"-c", `cat | sed 's/.*"nested":"//;s/".*//'`},
+	}
+	client := target.NewHTTPClient(nil, server.URL, nil, defaultBodyTemplate, "",
+		target.WithResponseCommand(cmd))
+
+	result, err := client.SendPrompt(t.Context(), testPrompt)
+	require.NoError(t, err)
+	assert.Equal(t, "secret value", result)
+}
+
+func TestSendPrompt_RequestCommandError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Fatal("should not reach server when request command fails")
+	}))
+	defer server.Close()
+
+	cmd := &utils.ExternalCommand{
+		Binary: "sh",
+		Args:   []string{"-c", "exit 1"},
+	}
+	client := target.NewHTTPClient(nil, server.URL, nil, "", defaultSelector,
+		target.WithRequestCommand(cmd))
+
+	_, err := client.SendPrompt(t.Context(), testPrompt)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "request_command")
+}
+
+func TestSendPrompt_ResponseCommandError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]string{defaultSelector: "ok"})
+	}))
+	defer server.Close()
+
+	cmd := &utils.ExternalCommand{
+		Binary: "sh",
+		Args:   []string{"-c", "exit 1"},
+	}
+	client := target.NewHTTPClient(nil, server.URL, nil, defaultBodyTemplate, "",
+		target.WithResponseCommand(cmd))
+
+	_, err := client.SendPrompt(t.Context(), testPrompt)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "response_command")
 }

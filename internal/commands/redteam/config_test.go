@@ -549,3 +549,220 @@ target:
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), errTargetURLRequired)
 }
+
+// ---------------------------------------------------------------------------
+// External commands (url_command, request_command, response_command)
+// ---------------------------------------------------------------------------
+
+func TestLoadAndValidateConfig_URLCommandFromYAML(t *testing.T) {
+	path := writeTestConfig(t, `
+target:
+  name: test
+  type: http
+  settings:
+    url_command:
+      binary: echo
+      args: ["https://resolved.example.com"]
+    response_selector: "response"
+    request_body_template: '{"message": "{{prompt}}"}'
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	assert.Equal(t, "https://resolved.example.com", rtCfg.Target.Settings.URL)
+}
+
+func TestLoadAndValidateConfig_URLCommandSetsName(t *testing.T) {
+	path := writeTestConfig(t, `
+target:
+  settings:
+    url_command:
+      binary: echo
+      args: ["https://resolved.example.com"]
+    response_selector: "response"
+    request_body_template: '{"message": "{{prompt}}"}'
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	assert.Equal(t, "https://resolved.example.com", rtCfg.Target.Name)
+}
+
+func TestLoadAndValidateConfig_URLCommandOverridesStaticURL(t *testing.T) {
+	path := writeTestConfig(t, `
+target:
+  name: test
+  settings:
+    url: "https://static.example.com"
+    url_command:
+      binary: echo
+      args: ["https://dynamic.example.com"]
+    response_selector: "response"
+    request_body_template: '{"message": "{{prompt}}"}'
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	assert.Equal(t, "https://dynamic.example.com", rtCfg.Target.Settings.URL)
+}
+
+func TestLoadAndValidateConfig_URLCommandEmptyOutput(t *testing.T) {
+	path := writeTestConfig(t, `
+target:
+  name: test
+  settings:
+    url_command:
+      binary: echo
+      args: [""]
+    response_selector: "response"
+    request_body_template: '{"message": "{{prompt}}"}'
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+
+	_, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "url_command returned empty output")
+}
+
+func TestLoadAndValidateConfig_URLCommandMissingBinary(t *testing.T) {
+	cfg := &redteam.Config{
+		Target: redteam.ConfigTarget{
+			Name: "test",
+			Settings: redteam.ConfigSettings{
+				URL: "https://example.com",
+				URLCommand: &utils.ExternalCommand{
+					Binary: "",
+				},
+				RequestBodyTemplate: `{"message": "{{prompt}}"}`,
+			},
+		},
+	}
+	err := redteam.ValidateConfig(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "url_command")
+	assert.Contains(t, err.Error(), "binary is required")
+}
+
+func TestLoadAndValidateConfig_RequestCommandSkipsTemplateValidation(t *testing.T) {
+	cfg := &redteam.Config{
+		Target: redteam.ConfigTarget{
+			Name: "test",
+			Settings: redteam.ConfigSettings{
+				URL: "https://example.com",
+				RequestCommand: &utils.ExternalCommand{
+					Binary: "/usr/bin/python",
+					Args:   []string{"build_request.py"},
+				},
+			},
+		},
+	}
+	err := redteam.ValidateConfig(cfg)
+	require.NoError(t, err)
+}
+
+func TestLoadAndValidateConfig_RequestCommandMissingBinary(t *testing.T) {
+	cfg := &redteam.Config{
+		Target: redteam.ConfigTarget{
+			Name: "test",
+			Settings: redteam.ConfigSettings{
+				URL: "https://example.com",
+				RequestCommand: &utils.ExternalCommand{
+					Binary: "",
+				},
+			},
+		},
+	}
+	err := redteam.ValidateConfig(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "request_command")
+	assert.Contains(t, err.Error(), "binary is required")
+}
+
+func TestLoadAndValidateConfig_ResponseCommandSkipsJMESPathValidation(t *testing.T) {
+	cfg := &redteam.Config{
+		Target: redteam.ConfigTarget{
+			Name: "test",
+			Settings: redteam.ConfigSettings{
+				URL:              "https://example.com",
+				ResponseSelector: "[.invalid",
+				ResponseCommand: &utils.ExternalCommand{
+					Binary: "/usr/bin/python",
+					Args:   []string{"parse_response.py"},
+				},
+				RequestBodyTemplate: `{"message": "{{prompt}}"}`,
+			},
+		},
+	}
+	err := redteam.ValidateConfig(cfg)
+	require.NoError(t, err)
+}
+
+func TestLoadAndValidateConfig_ResponseCommandMissingBinary(t *testing.T) {
+	cfg := &redteam.Config{
+		Target: redteam.ConfigTarget{
+			Name: "test",
+			Settings: redteam.ConfigSettings{
+				URL: "https://example.com",
+				ResponseCommand: &utils.ExternalCommand{
+					Binary: "",
+				},
+				RequestBodyTemplate: `{"message": "{{prompt}}"}`,
+			},
+		},
+	}
+	err := redteam.ValidateConfig(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "response_command")
+	assert.Contains(t, err.Error(), "binary is required")
+}
+
+func TestLoadAndValidateConfig_RequestCommandFromYAML(t *testing.T) {
+	path := writeTestConfig(t, `
+target:
+  name: test
+  type: http
+  settings:
+    url: "https://example.com"
+    request_command:
+      binary: /usr/bin/python
+      args: ["build_request.py"]
+    response_selector: "response"
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	require.NotNil(t, rtCfg.Target.Settings.RequestCommand)
+	assert.Equal(t, "/usr/bin/python", rtCfg.Target.Settings.RequestCommand.Binary)
+	assert.Equal(t, []string{"build_request.py"}, rtCfg.Target.Settings.RequestCommand.Args)
+	assert.Empty(t, rtCfg.Target.Settings.RequestBodyTemplate, "default template should not be set when request_command is configured")
+}
+
+func TestLoadAndValidateConfig_ResponseCommandFromYAML(t *testing.T) {
+	path := writeTestConfig(t, `
+target:
+  name: test
+  type: http
+  settings:
+    url: "https://example.com"
+    response_command:
+      binary: /usr/bin/python
+      args: ["parse_response.py"]
+    request_body_template: '{"message": "{{prompt}}"}'
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	require.NotNil(t, rtCfg.Target.Settings.ResponseCommand)
+	assert.Equal(t, "/usr/bin/python", rtCfg.Target.Settings.ResponseCommand.Binary)
+}

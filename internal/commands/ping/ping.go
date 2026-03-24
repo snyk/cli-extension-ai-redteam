@@ -49,12 +49,20 @@ func pingWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) (
 	}
 
 	headers := rtConfig.HeadersMap()
+	var opts []target.ClientOption
+	if rtConfig.Target.Settings.RequestCommand != nil {
+		opts = append(opts, target.WithRequestCommand(rtConfig.Target.Settings.RequestCommand))
+	}
+	if rtConfig.Target.Settings.ResponseCommand != nil {
+		opts = append(opts, target.WithResponseCommand(rtConfig.Target.Settings.ResponseCommand))
+	}
 	client := target.NewHTTPClient(
 		nil,
 		rtConfig.Target.Settings.URL,
 		headers,
 		rtConfig.Target.Settings.RequestBodyTemplate,
 		rtConfig.Target.Settings.ResponseSelector,
+		opts...,
 	)
 
 	ctx := context.Background()
