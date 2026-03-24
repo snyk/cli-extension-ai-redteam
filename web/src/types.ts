@@ -8,6 +8,8 @@ export interface ConfigSettings {
   headers?: ConfigHeader[];
   response_selector: string;
   request_body_template: string;
+  /** Per-request HTTP timeout in seconds. Omit or 0 for default (60). */
+  timeout?: number;
 }
 
 export interface ConfigGroundTruth {

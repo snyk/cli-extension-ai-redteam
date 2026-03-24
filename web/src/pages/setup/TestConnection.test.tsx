@@ -20,7 +20,12 @@ beforeEach(() => {
   });
 });
 
-const defaultSettings = {
+const defaultSettings: {
+  url: string;
+  request_body_template: string;
+  headers: never[];
+  timeout?: number;
+} = {
   url: "https://example.com",
   request_body_template: '{"prompt":"{{prompt}}"}',
   headers: [],
@@ -146,5 +151,23 @@ describe("TestConnection", () => {
     const body = JSON.parse(fetchSpy.mock.calls[0]?.[1]?.body as string);
     expect(body.url).toBe("https://target.com/chat");
     expect(body.request_body_template).toBe('{"msg":"{{prompt}}"}');
+    expect(body.timeout).toBe(0);
+  });
+
+  it("includes timeout in ping payload when set", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ success: true, response: "ok", suggestion: "" }),
+    } as Response);
+
+    renderComponent({ timeout: 120 });
+    fireEvent.click(screen.getByRole("button", { name: /test connection/i }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalled();
+    });
+
+    const body = JSON.parse(fetchSpy.mock.calls[0]?.[1]?.body as string);
+    expect(body.timeout).toBe(120);
   });
 });

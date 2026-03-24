@@ -33,6 +33,12 @@ export function configToYaml(config: Config): string {
   lines.push(`    url: ${quote(config.target.settings.url)}`);
   lines.push(`    request_body_template: ${quote(config.target.settings.request_body_template)}`);
   lines.push(`    response_selector: ${quote(config.target.settings.response_selector)}`);
+  if (
+    typeof config.target.settings.timeout === "number" &&
+    config.target.settings.timeout > 0
+  ) {
+    lines.push(`    timeout: ${config.target.settings.timeout}`);
+  }
 
   const headers = config.target.settings.headers;
   if (headers && headers.length > 0) {

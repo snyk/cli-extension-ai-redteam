@@ -116,6 +116,27 @@ describe("configToYaml", () => {
     expect(yaml).toContain("        value: application/json");
   });
 
+  it("renders timeout when set", () => {
+    const yaml = configToYaml(
+      minimalConfig({
+        target: {
+          settings: {
+            url: "https://example.com",
+            request_body_template: "{}",
+            response_selector: "$",
+            timeout: 90,
+          },
+        },
+      } as Partial<Config>),
+    );
+    expect(yaml).toContain("    timeout: 90");
+  });
+
+  it("omits timeout when unset or zero", () => {
+    const yaml = configToYaml(minimalConfig());
+    expect(yaml).not.toContain("timeout:");
+  });
+
   it("quotes values with special characters", () => {
     const yaml = configToYaml(
       minimalConfig({
