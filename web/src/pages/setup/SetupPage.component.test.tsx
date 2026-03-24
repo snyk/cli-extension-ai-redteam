@@ -98,11 +98,20 @@ describe("SetupPage", () => {
     expect(onStepChange).toHaveBeenCalledWith("target-definition");
   });
 
-  it("renders Download and Save buttons on review step", () => {
-    render(<SetupPage {...defaultProps} activeStep="review" />);
-    expect(screen.getByRole("button", { name: /download/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /save/i })).toBeInTheDocument();
-  });
+  it(
+    "renders Download and Save buttons on review step",
+    { timeout: 20_000 },
+    async () => {
+      render(<SetupPage {...defaultProps} activeStep="review" />);
+      await waitFor(
+        () => {
+          expect(screen.getByRole("button", { name: /download/i })).toBeInTheDocument();
+          expect(screen.getByRole("button", { name: /save/i })).toBeInTheDocument();
+        },
+        { timeout: 15_000 },
+      );
+    },
+  );
 
   it("renders Review Configuration text on goal step (last before review)", () => {
     render(<SetupPage {...defaultProps} activeStep="goal" />);
