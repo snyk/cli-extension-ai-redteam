@@ -113,6 +113,21 @@ func TestRunRedTeamGetWorkflow_MissingExperimentalFlag(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestRunRedTeamGetWorkflow_RejectsOrgFlag(t *testing.T) {
+	ictx := frameworkmock.NewMockInvocationContext(t)
+	ictx.GetConfiguration().Set(experimentalKey, true)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
+	ictx.GetConfiguration().Set("id", validScanID)
+
+	originalArgs := os.Args
+	os.Args = []string{"snyk", "redteam", "get", "--org", "some-org"}
+	defer func() { os.Args = originalArgs }()
+
+	_, err := redteamget.RunRedTeamGetWorkflow(ictx, mockCSFactory(defaultResultMock()))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Incomplete command arguments")
+}
+
 func TestRunRedTeamGetWorkflow_ScanNotFound(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)
