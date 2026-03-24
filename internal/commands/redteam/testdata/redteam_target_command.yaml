@@ -1,0 +1,8 @@
+target:
+  name: "External Target"
+  settings:
+    target_command:
+      binary: "sh"
+      args: ["-c", "cat - | jq -c '{response: .prompt}'"]
+goals:
+  - "system_prompt_extraction"

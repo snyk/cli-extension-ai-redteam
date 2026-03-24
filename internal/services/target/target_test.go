@@ -19,6 +19,7 @@ const (
 	defaultBodyTemplate = `{"message": "{{prompt}}"}`
 	defaultSelector     = "response"
 	testPrompt          = "test"
+	helloWorldPrompt    = "hello world"
 )
 
 func TestSendPrompt_DefaultTemplate(t *testing.T) {
@@ -29,14 +30,14 @@ func TestSendPrompt_DefaultTemplate(t *testing.T) {
 		body, _ := io.ReadAll(r.Body)
 		var req map[string]any
 		require.NoError(t, json.Unmarshal(body, &req))
-		assert.Equal(t, "hello world", req["message"])
+		assert.Equal(t, helloWorldPrompt, req["message"])
 
 		json.NewEncoder(w).Encode(map[string]string{defaultSelector: "hi there"})
 	}))
 	defer server.Close()
 
 	client := target.NewHTTPClient(nil, server.URL, nil, defaultBodyTemplate, defaultSelector)
-	result, err := client.SendPrompt(t.Context(), "hello world")
+	result, err := client.SendPrompt(t.Context(), helloWorldPrompt)
 	require.NoError(t, err)
 	assert.Equal(t, "hi there", result)
 }
@@ -221,7 +222,7 @@ func TestSendPrompt_RequestCommand(t *testing.T) {
 	client := target.NewHTTPClient(nil, server.URL, nil, "", defaultSelector,
 		target.WithRequestCommand(cmd))
 
-	result, err := client.SendPrompt(t.Context(), "hello world")
+	result, err := client.SendPrompt(t.Context(), helloWorldPrompt)
 	require.NoError(t, err)
 	assert.Equal(t, "ok", result)
 }
@@ -280,4 +281,81 @@ func TestSendPrompt_ResponseCommandError(t *testing.T) {
 	_, err := client.SendPrompt(t.Context(), testPrompt)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "response_command")
+}
+
+func TestExternalClient_SendPrompt(t *testing.T) {
+	// Binary echoes back JSON with the prompt uppercased via sh/python-free approach.
+	cmd := &utils.ExternalCommand{
+		Binary: "sh",
+		Args:   []string{"-c", `cat - | jq -c '{response: .prompt}'`},
+	}
+	client := target.NewExternalClient(cmd)
+
+	ctx := target.WithChatContext(t.Context(), target.ChatContext{ChatID: "chat-42", Seq: 3})
+	result, err := client.SendPrompt(ctx, helloWorldPrompt)
+	require.NoError(t, err)
+	assert.Equal(t, helloWorldPrompt, result)
+}
+
+func TestExternalClient_SendPrompt_RawText(t *testing.T) {
+	// Binary returns plain text (not JSON) — should be used as-is.
+	cmd := &utils.ExternalCommand{
+		Binary: "echo",
+		Args:   []string{"raw response text"},
+	}
+	client := target.NewExternalClient(cmd)
+
+	result, err := client.SendPrompt(t.Context(), "test")
+	require.NoError(t, err)
+	assert.Equal(t, "raw response text", result)
+}
+
+func TestExternalClient_SendPrompt_Error(t *testing.T) {
+	cmd := &utils.ExternalCommand{
+		Binary: "sh",
+		Args:   []string{"-c", "echo 'something broke' >&2; exit 1"},
+	}
+	client := target.NewExternalClient(cmd)
+
+	_, err := client.SendPrompt(t.Context(), "test")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "target_command")
+	assert.Contains(t, err.Error(), "something broke")
+}
+
+func TestExternalClient_SendPrompt_ChatContext(t *testing.T) {
+	// Verify chat_id and seq are passed in the stdin JSON.
+	cmd := &utils.ExternalCommand{
+		Binary: "sh",
+		Args:   []string{"-c", `cat - | jq -c '{response: (.chat_id + ":" + (.seq | tostring))}'`},
+	}
+	client := target.NewExternalClient(cmd)
+
+	ctx := target.WithChatContext(t.Context(), target.ChatContext{ChatID: "abc-123", Seq: 7})
+	result, err := client.SendPrompt(ctx, "ignored")
+	require.NoError(t, err)
+	assert.Equal(t, "abc-123:7", result)
+}
+
+func TestExternalClient_Ping(t *testing.T) {
+	cmd := &utils.ExternalCommand{
+		Binary: "echo",
+		Args:   []string{`{"response": "pong"}`},
+	}
+	client := target.NewExternalClient(cmd)
+
+	result := client.Ping(t.Context())
+	assert.True(t, result.Success)
+}
+
+func TestExternalClient_Ping_Failure(t *testing.T) {
+	cmd := &utils.ExternalCommand{
+		Binary: "sh",
+		Args:   []string{"-c", "exit 1"},
+	}
+	client := target.NewExternalClient(cmd)
+
+	result := client.Ping(t.Context())
+	assert.False(t, result.Success)
+	assert.Contains(t, result.Suggestion, "target_command failed")
 }

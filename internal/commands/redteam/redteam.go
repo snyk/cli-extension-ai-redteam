@@ -270,6 +270,15 @@ func newSessionManager(
 	rtConfig *Config,
 	targetFactory TargetFactory,
 ) *sessionManager {
+	// When target_command is set, it handles the entire interaction — no HTTP client needed.
+	if rtConfig.Target.Settings.TargetCommand != nil {
+		return &sessionManager{
+			defaultClient: target.NewExternalClient(rtConfig.Target.Settings.TargetCommand),
+			sessions:      make(map[string]target.Client),
+			logger:        logger,
+		}
+	}
+
 	var targetOpts []target.ClientOption
 	if rtConfig.Target.Settings.RequestCommand != nil {
 		targetOpts = append(targetOpts, target.WithRequestCommand(rtConfig.Target.Settings.RequestCommand))
@@ -368,7 +377,8 @@ func sendPromptsConcurrently(
 			defer wg.Done()
 			defer func() { <-sem }() // release
 
-			resp, tgtErr := tc.SendPrompt(ctx, c.Prompt)
+			promptCtx := target.WithChatContext(ctx, target.ChatContext{ChatID: c.ChatID, Seq: c.Seq})
+			resp, tgtErr := tc.SendPrompt(promptCtx, c.Prompt)
 			if tgtErr != nil {
 				if errors.Is(tgtErr, target.ErrCircuitOpen) {
 					circuitErr.Store(tgtErr)

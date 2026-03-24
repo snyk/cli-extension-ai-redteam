@@ -766,3 +766,51 @@ target:
 	require.NotNil(t, rtCfg.Target.Settings.ResponseCommand)
 	assert.Equal(t, "/usr/bin/python", rtCfg.Target.Settings.ResponseCommand.Binary)
 }
+
+func TestValidateConfig_TargetCommandSkipsAllHTTPValidation(t *testing.T) {
+	cfg := &redteam.Config{
+		Target: redteam.ConfigTarget{
+			Settings: redteam.ConfigSettings{
+				TargetCommand: &utils.ExternalCommand{Binary: "/usr/bin/python3", Args: []string{"bridge.py"}},
+				// No URL, no template, no selector — should still pass.
+			},
+		},
+	}
+	err := redteam.ValidateConfig(cfg)
+	assert.NoError(t, err)
+}
+
+func TestValidateConfig_TargetCommandMissingBinary(t *testing.T) {
+	cfg := &redteam.Config{
+		Target: redteam.ConfigTarget{
+			Settings: redteam.ConfigSettings{
+				TargetCommand: &utils.ExternalCommand{},
+			},
+		},
+	}
+	err := redteam.ValidateConfig(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "target_command")
+	assert.Contains(t, err.Error(), "binary is required")
+}
+
+func TestLoadAndValidateConfig_TargetCommandFromYAML(t *testing.T) {
+	path := writeTestConfig(t, `
+target:
+  name: websocket-bridge
+  settings:
+    target_command:
+      binary: /usr/bin/python3
+      args: ["ws_bridge.py", "--endpoint", "ws://localhost:8080"]
+goals:
+  - system_prompt_extraction
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	require.NotNil(t, rtCfg.Target.Settings.TargetCommand)
+	assert.Equal(t, "/usr/bin/python3", rtCfg.Target.Settings.TargetCommand.Binary)
+	assert.Equal(t, []string{"ws_bridge.py", "--endpoint", "ws://localhost:8080"}, rtCfg.Target.Settings.TargetCommand.Args)
+}

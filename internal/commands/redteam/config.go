@@ -59,6 +59,7 @@ type ConfigSettings struct {
 	ResponseCommand     *utils.ExternalCommand `yaml:"response_command,omitempty" json:"response_command,omitempty"`
 	RequestBodyTemplate string                 `yaml:"request_body_template" json:"request_body_template"`
 	RequestCommand      *utils.ExternalCommand `yaml:"request_command,omitempty" json:"request_command,omitempty"`
+	TargetCommand       *utils.ExternalCommand `yaml:"target_command,omitempty" json:"target_command,omitempty"`
 }
 
 type ConfigHeader struct {
@@ -227,42 +228,13 @@ func buildGroundTruthFromConfig(gt *ConfigGroundTruth) *controlserver.GroundTrut
 func ValidateConfig(cfg *Config) error {
 	var errs []string
 
-	if cfg.Target.Settings.URL == "" {
-		errs = append(errs, "target URL is required (set in config file or pass --target-url)")
-	} else if err := validateURL(cfg.Target.Settings.URL, "target URL"); err != nil {
-		errs = append(errs, err.Error())
-	}
-
-	// Skip request body template validation when request_command handles body building.
-	if cfg.Target.Settings.RequestCommand != nil {
-		if err := cfg.Target.Settings.RequestCommand.Validate("request_command"); err != nil {
+	// When target_command handles the entire interaction, only validate the command itself.
+	if cfg.Target.Settings.TargetCommand != nil {
+		if err := cfg.Target.Settings.TargetCommand.Validate("target_command"); err != nil {
 			errs = append(errs, err.Error())
 		}
 	} else {
-		if !strings.Contains(cfg.Target.Settings.RequestBodyTemplate, "{{prompt}}") {
-			errs = append(errs, "request_body_template must contain the {{prompt}} placeholder")
-		}
-		replaced := strings.ReplaceAll(cfg.Target.Settings.RequestBodyTemplate, "{{prompt}}", "test")
-		if !json.Valid([]byte(replaced)) {
-			errs = append(errs, "request_body_template is not valid JSON")
-		}
-	}
-
-	// Skip JMESPath validation when response_command handles response parsing.
-	if cfg.Target.Settings.ResponseCommand != nil {
-		if err := cfg.Target.Settings.ResponseCommand.Validate("response_command"); err != nil {
-			errs = append(errs, err.Error())
-		}
-	} else if cfg.Target.Settings.ResponseSelector != "" {
-		if _, err := jmespath.Compile(cfg.Target.Settings.ResponseSelector); err != nil {
-			errs = append(errs, fmt.Sprintf("response_selector is not a valid JMESPath expression: %v", err))
-		}
-	}
-
-	if cfg.Target.Settings.URLCommand != nil {
-		if err := cfg.Target.Settings.URLCommand.Validate("url_command"); err != nil {
-			errs = append(errs, err.Error())
-		}
+		errs = append(errs, validateHTTPSettings(&cfg.Target.Settings)...)
 	}
 
 	if len(errs) == 0 {
@@ -270,6 +242,50 @@ func ValidateConfig(cfg *Config) error {
 	}
 	msg := fmt.Sprintf("invalid configuration:\n  - %s", strings.Join(errs, "\n  - "))
 	return redteam_errors.NewConfigValidationError(msg)
+}
+
+func validateHTTPSettings(s *ConfigSettings) []string {
+	var errs []string
+
+	if s.URL == "" {
+		errs = append(errs, "target URL is required (set in config file or pass --target-url)")
+	} else if err := validateURL(s.URL, "target URL"); err != nil {
+		errs = append(errs, err.Error())
+	}
+
+	// Skip request body template validation when request_command handles body building.
+	if s.RequestCommand != nil {
+		if err := s.RequestCommand.Validate("request_command"); err != nil {
+			errs = append(errs, err.Error())
+		}
+	} else {
+		if !strings.Contains(s.RequestBodyTemplate, "{{prompt}}") {
+			errs = append(errs, "request_body_template must contain the {{prompt}} placeholder")
+		}
+		replaced := strings.ReplaceAll(s.RequestBodyTemplate, "{{prompt}}", "test")
+		if !json.Valid([]byte(replaced)) {
+			errs = append(errs, "request_body_template is not valid JSON")
+		}
+	}
+
+	// Skip JMESPath validation when response_command handles response parsing.
+	if s.ResponseCommand != nil {
+		if err := s.ResponseCommand.Validate("response_command"); err != nil {
+			errs = append(errs, err.Error())
+		}
+	} else if s.ResponseSelector != "" {
+		if _, err := jmespath.Compile(s.ResponseSelector); err != nil {
+			errs = append(errs, fmt.Sprintf("response_selector is not a valid JMESPath expression: %v", err))
+		}
+	}
+
+	if s.URLCommand != nil {
+		if err := s.URLCommand.Validate("url_command"); err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
+
+	return errs
 }
 
 func validateURL(rawURL, label string) error {
@@ -338,8 +354,10 @@ func applyDefaults(cfg *Config) {
 		cfg.Target.Type = defaultTargetType
 	}
 	// Empty response_selector means "use raw response body as-is" (plain text targets).
-	// Skip default template when request_command handles body building.
-	if cfg.Target.Settings.RequestBodyTemplate == "" && cfg.Target.Settings.RequestCommand == nil {
+	// Skip default template when request_command or target_command handles body building.
+	if cfg.Target.Settings.RequestBodyTemplate == "" &&
+		cfg.Target.Settings.RequestCommand == nil &&
+		cfg.Target.Settings.TargetCommand == nil {
 		cfg.Target.Settings.RequestBodyTemplate = defaultRequestBodyTemplate
 	}
 	if cfg.Concurrency < 1 {
