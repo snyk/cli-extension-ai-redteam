@@ -31,6 +31,10 @@ func RegisterPingWorkflow(e workflow.Engine) error {
 func pingWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
 	config := invocationCtx.GetConfiguration()
 
+	if err := utils.RejectOrgFlag(); err != nil {
+		return nil, err //nolint:wrapcheck // already a catalog error
+	}
+
 	if err := utils.RequireAuth(config); err != nil {
 		return nil, err //nolint:wrapcheck // already a catalog error
 	}
