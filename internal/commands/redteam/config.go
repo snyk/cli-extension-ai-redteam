@@ -24,12 +24,12 @@ const (
 	defaultRequestBodyTemplate = `{"message": "{{prompt}}"}`
 	defaultTargetType          = "http"
 	contentTypePlain           = "text/plain"
-	// DefaultTargetTimeoutSeconds is the default for target.settings.timeout when unset or zero (1 minute).
-	DefaultTargetTimeoutSeconds = 60
+	// defaultTargetTimeoutSeconds is the default for target.settings.timeout when unset or zero (1 minute).
+	defaultTargetTimeoutSeconds = 60
 )
 
-// DefaultTargetHTTPTimeout is the default [time.Duration] for target HTTP requests (see DefaultTargetTimeoutSeconds).
-var DefaultTargetHTTPTimeout = DefaultTargetTimeoutSeconds * time.Second
+// DefaultTargetHTTPTimeout is the default [time.Duration] for target HTTP requests (see defaultTargetTimeoutSeconds).
+var DefaultTargetHTTPTimeout = defaultTargetTimeoutSeconds * time.Second
 
 const defaultProfileID = "fast"
 
@@ -37,8 +37,6 @@ type Config struct {
 	Target  ConfigTarget                `yaml:"target" json:"target"`
 	Goals   []string                    `yaml:"goals" json:"goals"`
 	Attacks []controlserver.AttackEntry `yaml:"attacks" json:"attacks,omitempty"`
-
-	targetHTTPTimeout time.Duration `yaml:"-" json:"-"`
 }
 
 type ConfigTarget struct {
@@ -63,7 +61,7 @@ type ConfigSettings struct {
 	Headers             []ConfigHeader `yaml:"headers,omitempty" json:"headers,omitempty"`
 	ResponseSelector    string         `yaml:"response_selector" json:"response_selector"`
 	RequestBodyTemplate string         `yaml:"request_body_template" json:"request_body_template"`
-	// Timeout is the per-request HTTP timeout in seconds. Zero or unset uses DefaultTargetTimeoutSeconds.
+	// Timeout is the per-request HTTP timeout in seconds. Zero or unset uses defaultTargetTimeoutSeconds.
 	Timeout int `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 }
 
@@ -206,12 +204,13 @@ func TargetTimeoutFromSeconds(sec int) (time.Duration, error) {
 	return time.Duration(sec) * time.Second, nil
 }
 
-// TargetHTTPTimeout returns the HTTP client timeout for the target after successful validation.
+// TargetHTTPTimeout returns the HTTP client timeout derived from target.settings.timeout (seconds).
+// Zero or negative values yield DefaultTargetHTTPTimeout; callers should run ValidateConfig first so negative timeouts are rejected.
 func (cfg *Config) TargetHTTPTimeout() time.Duration {
-	if cfg.targetHTTPTimeout > 0 {
-		return cfg.targetHTTPTimeout
+	if cfg.Target.Settings.Timeout <= 0 {
+		return DefaultTargetHTTPTimeout
 	}
-	return DefaultTargetHTTPTimeout
+	return time.Duration(cfg.Target.Settings.Timeout) * time.Second
 }
 
 func ValidateConfig(cfg *Config) error {
@@ -237,13 +236,8 @@ func ValidateConfig(cfg *Config) error {
 		}
 	}
 
-	switch {
-	case cfg.Target.Settings.Timeout < 0:
+	if cfg.Target.Settings.Timeout < 0 {
 		errs = append(errs, "target.settings.timeout must be non-negative")
-	case cfg.Target.Settings.Timeout == 0:
-		cfg.targetHTTPTimeout = time.Duration(DefaultTargetTimeoutSeconds) * time.Second
-	default:
-		cfg.targetHTTPTimeout = time.Duration(cfg.Target.Settings.Timeout) * time.Second
 	}
 
 	if len(errs) == 0 {
