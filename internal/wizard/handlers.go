@@ -38,6 +38,7 @@ type pingRequest struct {
 	Headers             []redteam.ConfigHeader `json:"headers"`
 	RequestBodyTemplate string                 `json:"request_body_template"`
 	ResponseSelector    string                 `json:"response_selector"`
+	Timeout             int                    `json:"timeout,omitempty"`
 }
 
 func handlePing() http.HandlerFunc {
@@ -49,7 +50,18 @@ func handlePing() http.HandlerFunc {
 		}
 
 		headers := redteam.HeadersToMap(req.Headers)
-		client := target.NewHTTPClient(nil, req.URL, headers, req.RequestBodyTemplate, req.ResponseSelector)
+		timeout, err := redteam.TargetTimeoutFromSeconds(req.Timeout)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		client := target.NewHTTPClient(
+			&http.Client{Timeout: timeout},
+			req.URL,
+			headers,
+			req.RequestBodyTemplate,
+			req.ResponseSelector,
+		)
 		result := client.Ping(r.Context())
 		writeJSON(w, http.StatusOK, result)
 	}

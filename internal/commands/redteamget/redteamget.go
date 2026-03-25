@@ -1,3 +1,5 @@
+// Package redteamget implements the Snyk CLI workflow that fetches an existing Agent Red Team
+// scan report by scan ID from the control API.
 package redteamget
 
 import (
@@ -68,6 +70,10 @@ func RunRedTeamGetWorkflow(
 	logger := invocationCtx.GetEnhancedLogger()
 	config := invocationCtx.GetConfiguration()
 
+	if err := utils.RejectOrgFlag(); err != nil {
+		return nil, err //nolint:wrapcheck // already a catalog error
+	}
+
 	if err := utils.RequireAuth(config); err != nil {
 		logger.Debug().Msg("No organization id is found.")
 		return nil, err //nolint:wrapcheck // already a catalog error
@@ -98,6 +104,7 @@ func handleGetScanResults(
 	logger := invocationCtx.GetEnhancedLogger()
 	config := invocationCtx.GetConfiguration()
 	httpClient := invocationCtx.GetNetworkAccess().GetHttpClient()
+	httpClient.Timeout = controlserver.DefaultClientTimeout
 	ctx := context.Background()
 
 	scanID := config.GetString(utils.FlagScanID)

@@ -1,3 +1,5 @@
+// Package redteam implements the Snyk CLI workflow that runs a new Agent Red Team scan
+// against a configured target (control server + target HTTP API) and returns the report.
 package redteam
 
 import (
@@ -9,7 +11,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/rs/zerolog"
@@ -101,6 +102,10 @@ func RunRedTeamWorkflow(
 
 	config.Set(configuration.RAW_CMD_ARGS, os.Args[1:])
 
+	if err := utils.RejectOrgFlag(); err != nil {
+		return nil, err //nolint:wrapcheck // already a catalog error
+	}
+
 	experimental := config.GetBool(utils.FlagExperimental)
 	if !experimental {
 		logger.Debug().Msg("Required experimental flag is not present")
@@ -145,9 +150,9 @@ func RunRedTeamWorkflow(
 		return nil, err //nolint:wrapcheck // RedTeamError from helpers
 	}
 
-	targetHTTPClient := &http.Client{Timeout: target.DefaultTimeout}
+	targetHTTPClient := &http.Client{Timeout: rtConfig.TargetHTTPTimeout()}
 	controlServerHTTPClient := invocationCtx.GetNetworkAccess().GetHttpClient()
-	controlServerHTTPClient.Timeout = 60 * time.Second
+	controlServerHTTPClient.Timeout = controlserver.DefaultClientTimeout
 	controlServerURL := config.GetString(configuration.API_URL)
 
 	controlServerClient := controlServerFactory(logger, controlServerHTTPClient, controlServerURL, tenantID)
@@ -228,6 +233,7 @@ func handleListFlags(
 	listGoals, listStrategies, listProfiles bool,
 ) ([]workflow.Data, error) {
 	ctx := context.Background()
+	httpClient.Timeout = controlserver.DefaultClientTimeout
 	snykAPIURL := config.GetString(configuration.API_URL)
 	controlServerClient := controlServerFactory(logger, httpClient, snykAPIURL, "")
 

@@ -52,6 +52,9 @@ export function buildConfig(values: Record<string, any>): Config {
         ),
         response_selector: settings.response_selector || "",
         request_body_template: settings.request_body_template || "",
+        ...(typeof settings.timeout === "number" && settings.timeout > 0
+          ? { timeout: settings.timeout }
+          : {}),
       },
     },
     goals: [],
@@ -127,6 +130,7 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
               headers: cfg.target?.settings?.headers,
               response_selector: cfg.target?.settings?.response_selector,
               request_body_template: cfg.target?.settings?.request_body_template,
+              timeout: cfg.target?.settings?.timeout,
             },
           },
           goals: cfg.goals || [],

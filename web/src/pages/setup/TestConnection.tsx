@@ -44,6 +44,7 @@ export default function TestConnection() {
             ) || [],
           request_body_template: settings.request_body_template || "",
           response_selector: settings.response_selector || "",
+          timeout: typeof settings.timeout === "number" ? settings.timeout : 0,
         }),
       });
       const data: PingResult = await res.json();

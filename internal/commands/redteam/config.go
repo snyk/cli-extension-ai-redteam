@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/jmespath/go-jmespath"
 	"github.com/rs/zerolog"
@@ -23,7 +24,12 @@ const (
 	defaultRequestBodyTemplate = `{"message": "{{prompt}}"}`
 	defaultTargetType          = "http"
 	contentTypePlain           = "text/plain"
+	// defaultTargetTimeoutSeconds is the default for target.settings.timeout when unset or zero (1 minute).
+	defaultTargetTimeoutSeconds = 60
 )
+
+// DefaultTargetHTTPTimeout is the default [time.Duration] for target HTTP requests (see defaultTargetTimeoutSeconds).
+var DefaultTargetHTTPTimeout = defaultTargetTimeoutSeconds * time.Second
 
 const defaultProfileID = "fast"
 
@@ -55,6 +61,8 @@ type ConfigSettings struct {
 	Headers             []ConfigHeader `yaml:"headers,omitempty" json:"headers,omitempty"`
 	ResponseSelector    string         `yaml:"response_selector" json:"response_selector"`
 	RequestBodyTemplate string         `yaml:"request_body_template" json:"request_body_template"`
+	// Timeout is the per-request HTTP timeout in seconds. Zero or unset uses defaultTargetTimeoutSeconds.
+	Timeout int `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 }
 
 type ConfigHeader struct {
@@ -184,6 +192,27 @@ func buildGroundTruthFromConfig(gt *ConfigGroundTruth) *controlserver.GroundTrut
 	}
 }
 
+// TargetTimeoutFromSeconds returns the HTTP client duration for target.settings.timeout (seconds).
+// Zero uses DefaultTargetHTTPTimeout.
+func TargetTimeoutFromSeconds(sec int) (time.Duration, error) {
+	if sec < 0 {
+		return 0, fmt.Errorf("target.settings.timeout must be non-negative")
+	}
+	if sec == 0 {
+		return DefaultTargetHTTPTimeout, nil
+	}
+	return time.Duration(sec) * time.Second, nil
+}
+
+// TargetHTTPTimeout returns the HTTP client timeout derived from target.settings.timeout (seconds).
+// Zero or negative values yield DefaultTargetHTTPTimeout; callers should run ValidateConfig first so negative timeouts are rejected.
+func (cfg *Config) TargetHTTPTimeout() time.Duration {
+	if cfg.Target.Settings.Timeout <= 0 {
+		return DefaultTargetHTTPTimeout
+	}
+	return time.Duration(cfg.Target.Settings.Timeout) * time.Second
+}
+
 func ValidateConfig(cfg *Config) error {
 	var errs []string
 
@@ -205,6 +234,10 @@ func ValidateConfig(cfg *Config) error {
 		if _, err := jmespath.Compile(cfg.Target.Settings.ResponseSelector); err != nil {
 			errs = append(errs, fmt.Sprintf("response_selector is not a valid JMESPath expression: %v", err))
 		}
+	}
+
+	if cfg.Target.Settings.Timeout < 0 {
+		errs = append(errs, "target.settings.timeout must be non-negative")
 	}
 
 	if len(errs) == 0 {
@@ -372,6 +405,7 @@ func getInvalidConfigMessage() string {
 				  value: '<optional, e.g. Bearer TOKEN>'
 			response_selector: '<optional, JMESPath expression; omit for plain text>'
 			request_body_template: '<optional, default: {"message": "{{prompt}}"}'
+			timeout: '<optional, seconds; default: 60>'
 	goals:
 		- '<optional, default: system_prompt_extraction>'
 	attacks:

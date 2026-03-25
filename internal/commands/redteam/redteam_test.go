@@ -250,6 +250,19 @@ func TestRunRedTeamWorkflow_ExperimentalFlagRequired(t *testing.T) {
 	assert.Contains(t, err.Error(), "experimental")
 }
 
+func TestRunRedTeamWorkflow_RejectsOrgFlag(t *testing.T) {
+	ictx := frameworkmock.NewMockInvocationContext(t)
+	ictx.GetConfiguration().Set(experimentalKey, true)
+
+	originalArgs := os.Args
+	os.Args = []string{"snyk", "redteam", "--org", "some-org"}
+	defer func() { os.Args = originalArgs }()
+
+	_, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Incomplete command arguments")
+}
+
 func TestRunRedTeamWorkflow_ConfigFileNotFound(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)

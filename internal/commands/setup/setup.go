@@ -42,6 +42,10 @@ func RegisterSetupWorkflow(e workflow.Engine) error {
 func setupWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
 	config := invocationCtx.GetConfiguration()
 
+	if err := utils.RejectOrgFlag(); err != nil {
+		return nil, err //nolint:wrapcheck // already a catalog error
+	}
+
 	if err := utils.RequireAuth(config); err != nil {
 		return nil, err //nolint:wrapcheck // already a catalog error
 	}
@@ -71,6 +75,7 @@ func setupWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) 
 	}
 
 	httpClient := invocationCtx.GetNetworkAccess().GetHttpClient()
+	httpClient.Timeout = controlserver.DefaultClientTimeout
 	apiURL := config.GetString(configuration.API_URL)
 	csClient := controlserver.NewClient(&logger, httpClient, apiURL, "")
 

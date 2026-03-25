@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -53,8 +54,34 @@ func testLogger() *zerolog.Logger {
 // ---------------------------------------------------------------------------
 
 func TestValidateConfig_Valid(t *testing.T) {
-	err := redteam.ValidateConfig(validConfig())
+	cfg := validConfig()
+	err := redteam.ValidateConfig(cfg)
 	require.NoError(t, err)
+	assert.Equal(t, redteam.DefaultTargetHTTPTimeout, cfg.TargetHTTPTimeout())
+}
+
+func TestValidateConfig_InvalidTimeout(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.Timeout = -1
+	err := redteam.ValidateConfig(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "non-negative")
+}
+
+func TestValidateConfig_TimeoutCustom(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.Timeout = 150
+	err := redteam.ValidateConfig(cfg)
+	require.NoError(t, err)
+	assert.Equal(t, 150*time.Second, cfg.TargetHTTPTimeout())
+}
+
+func TestValidateConfig_TimeoutZeroUsesDefault(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.Timeout = 0
+	err := redteam.ValidateConfig(cfg)
+	require.NoError(t, err)
+	assert.Equal(t, redteam.DefaultTargetHTTPTimeout, cfg.TargetHTTPTimeout())
 }
 
 func TestValidateConfig_MissingTargetURL(t *testing.T) {

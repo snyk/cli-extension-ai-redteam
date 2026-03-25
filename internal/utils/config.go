@@ -1,6 +1,28 @@
 package utils
 
-import "github.com/spf13/pflag"
+import (
+	"os"
+	"strings"
+
+	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
+	"github.com/spf13/pflag"
+)
+
+// RejectOrgFlag returns an error if the --org flag was passed on the command
+// line. Red team commands use --tenant-id for scoping; --org is not supported.
+func RejectOrgFlag() error {
+	for _, arg := range os.Args[1:] {
+		if arg == "--" {
+			break
+		}
+		if arg == "--org" || strings.HasPrefix(arg, "--org=") {
+			return cli_errors.NewCommandArgsError(
+				"the --org flag is not supported by red team commands; use --tenant-id instead",
+			)
+		}
+	}
+	return nil
+}
 
 const (
 	FlagExperimental     = "experimental"
