@@ -90,6 +90,10 @@ func Render(data *models.GetAIVulnerabilitiesResponseData, meta ScanMeta) string
 
 // RenderWithWidth produces a styled CLI report responsive to the given terminal width.
 func RenderWithWidth(data *models.GetAIVulnerabilitiesResponseData, meta ScanMeta, termWidth int) string {
+	if data.Summary == nil && len(data.Results) > 0 {
+		data.Summary = buildSummaryFromResults(data.Results)
+	}
+
 	l := newLayout(termWidth)
 	var sb strings.Builder
 
@@ -395,6 +399,60 @@ func stripAnsi(s string) string {
 		out.WriteRune(r)
 	}
 	return out.String()
+}
+
+// buildSummaryFromResults synthesises an AIScanSummary from the results list
+// when the server report doesn't include one. Results are grouped by their
+// definition ID (the engine_tag / slug) so each strategy row appears once.
+func buildSummaryFromResults(results []models.AIVulnerability) *models.AIScanSummary {
+	type entry struct {
+		slug      string
+		engineTag string
+		name      string
+		desc      string
+		severity  string
+		total     int
+		success   int
+	}
+
+	order := make([]string, 0)
+	bySlug := make(map[string]*entry)
+
+	for i := range results {
+		r := &results[i]
+		slug := r.Definition.ID
+		e, ok := bySlug[slug]
+		if !ok {
+			e = &entry{
+				slug:      slug,
+				engineTag: slug,
+				name:      r.Definition.Name,
+				desc:      r.Definition.Description,
+				severity:  r.Severity,
+			}
+			bySlug[slug] = e
+			order = append(order, slug)
+		}
+		e.total++
+		e.success++
+	}
+
+	vulns := make([]models.AIScanSummaryVulnerability, 0, len(order))
+	for _, slug := range order {
+		e := bySlug[slug]
+		vulns = append(vulns, models.AIScanSummaryVulnerability{
+			EngineTag:  e.engineTag,
+			Slug:       e.slug,
+			Name:       e.name,
+			Severity:   e.severity,
+			Status:     "completed",
+			Vulnerable: e.success > 0,
+			TotalChats: e.total,
+			Successful: e.success,
+			Failed:     e.total - e.success,
+		})
+	}
+	return &models.AIScanSummary{Vulnerabilities: vulns}
 }
 
 func leafStrategy(engineTag string) string {

@@ -41,6 +41,9 @@ type model struct {
 }
 
 func newModel(data *models.GetAIVulnerabilitiesResponseData, meta ScanMeta) model {
+	if data.Summary == nil && len(data.Results) > 0 {
+		data.Summary = buildSummaryFromResults(data.Results)
+	}
 	expanded := make([]bool, len(data.Results))
 	return model{
 		data:     data,
