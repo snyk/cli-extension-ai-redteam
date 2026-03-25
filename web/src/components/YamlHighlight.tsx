@@ -67,15 +67,50 @@ function escape(s: string): string {
     .replace(/>/g, "&gt;");
 }
 
+import { useState } from "react";
+import { Tooltip } from "antd";
+import { CopyOutlined, CheckOutlined } from "@ant-design/icons";
+
 interface YamlHighlightProps {
   content: string;
 }
 
 export default function YamlHighlight({ content }: YamlHighlightProps) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
-    <pre
-      className="yaml-highlight"
-      dangerouslySetInnerHTML={{ __html: highlightYaml(content) }}
-    />
+    <div style={{ position: "relative" }}>
+      <Tooltip title={copied ? "Copied!" : "Copy to clipboard"}>
+        <button
+          onClick={handleCopy}
+          style={{
+            position: "absolute",
+            top: 8,
+            right: 8,
+            background: "none",
+            border: "1px solid var(--pcl-color-border)",
+            borderRadius: 4,
+            padding: "4px 6px",
+            cursor: "pointer",
+            color: "var(--pcl-color-fg-secondary)",
+            fontSize: 14,
+            lineHeight: 1,
+            zIndex: 1,
+          }}
+        >
+          {copied ? <CheckOutlined /> : <CopyOutlined />}
+        </button>
+      </Tooltip>
+      <pre
+        className="yaml-highlight"
+        dangerouslySetInnerHTML={{ __html: highlightYaml(content) }}
+      />
+    </div>
   );
 }

@@ -6,7 +6,7 @@ This repo is intended for internal (Snyk) contributions only at this time.
 
 ### Prerequisites
 
-- Go 1.22+
+- Go 1.24+
 - Python 3.x (for pre-commit hooks)
 
 ### Install tools
@@ -34,10 +34,19 @@ go run cmd/develop/main.go auth
 
 ### Run a scan
 
+Set up your environment using the helper script:
+
+```bash
+source scripts/env.sh local              # local minired via tilt (default ports)
+source scripts/env.sh local 8186 9180    # custom ports (e.g. from `make serve-new`)
+source scripts/env.sh pre-prod           # pre-prod backend
+```
+
+Then run:
+
 ```bash
 go run cmd/develop/main.go redteam --experimental --config=targets/minimal.yaml \
-  --target-url=https://your-app.example.com/api/chat \
-  --headers 'Authorization: Bearer <token>'
+  --target-url=http://localhost:8001
 ```
 
 ### Target config
@@ -47,18 +56,27 @@ Create a YAML file in `targets/` (see `targets/minimal.yaml` for reference):
 ```yaml
 target:
   name: my-app
-  type: api
+  type: http
   settings:
     url: "https://your-app.example.com/api/chat"
     response_selector: "response"
     request_body_template: '{"message": "{{prompt}}"}'
 
-goal: "system_prompt_extraction"
-strategies:
-  - "directly_asking"
+goals:
+  - "system_prompt_extraction"
 ```
 
-Secrets (auth headers, tokens) should be passed via `--headers` on the command line, not in config files.
+For explicit control over strategies, use `attacks` instead of `goals`:
+
+```yaml
+attacks:
+  - goal: "system_prompt_extraction"
+    strategy: "directly_asking"
+  - goal: "system_prompt_extraction"
+    strategy: "crescendo"
+```
+
+Secrets (auth headers, tokens) should be passed via `--header` on the command line, not in config files.
 
 ### Common tasks
 

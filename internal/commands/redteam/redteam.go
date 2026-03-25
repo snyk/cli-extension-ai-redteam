@@ -21,10 +21,10 @@ import (
 
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam/clireport"
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam/htmlreport"
+	redteam_errors "github.com/snyk/cli-extension-ai-redteam/internal/errors/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/helpers"
 	"github.com/snyk/cli-extension-ai-redteam/internal/models"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
-	"github.com/snyk/cli-extension-ai-redteam/internal/services/normalizer"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/target"
 	"github.com/snyk/cli-extension-ai-redteam/internal/utils"
 )
@@ -32,11 +32,18 @@ import (
 var WorkflowID = workflow.NewWorkflowIdentifier("redteam")
 
 type (
-	ControlServerFactory func(logger *zerolog.Logger, httpClient *http.Client, url, tenantID string) controlserver.Client
-	TargetFactory        func(httpClient *http.Client, url string, headers map[string]string, bodyTemplate, responseSelector string) target.Client
+	ControlServerFactory func(
+		logger *zerolog.Logger, httpClient *http.Client, url, tenantID string,
+	) controlserver.Client
+	TargetFactory func(
+		httpClient *http.Client, url string, headers map[string]string,
+		bodyTemplate, responseSelector string,
+	) target.Client
 )
 
-var DefaultSnykAPIFactory ControlServerFactory = func(logger *zerolog.Logger, httpClient *http.Client, url, tenantID string) controlserver.Client {
+var DefaultSnykAPIFactory ControlServerFactory = func(
+	logger *zerolog.Logger, httpClient *http.Client, url, tenantID string,
+) controlserver.Client {
 	return controlserver.NewClient(logger, httpClient, url, tenantID)
 }
 
@@ -58,14 +65,18 @@ func RegisterRedTeamWorkflow(e workflow.Engine) error {
 	utils.AddTargetFlags(flagset)
 	flagset.Bool(utils.FlagHTML, false, "Output the red team report in HTML format instead of JSON")
 	flagset.String(utils.FlagHTMLFileOutput, "", "Write the HTML report to the specified file path")
+	flagset.String(utils.FlagJSONFileOutput, "", "Write the JSON report to the specified file path")
 	flagset.Bool(utils.FlagFullConversation, false, "Show all conversation turns in findings (default: first and last only)")
 	flagset.Bool(utils.FlagJSON, false, "Output raw JSON instead of the styled CLI report")
 	flagset.Bool(utils.FlagListGoals, false, "List all available attack goals and exit")
 	flagset.Bool(utils.FlagListStrategies, false, "List all available attack strategies and exit")
+	flagset.Bool(utils.FlagListProfiles, false, "List all available attack profiles and exit")
+	flagset.String(utils.FlagGoals, "", "Comma-separated goals to test (e.g. system_prompt_extraction,pii_extraction)")
+	flagset.String(utils.FlagProfile, "", "Attack profile to use (e.g. fast, security, safety)")
 	flagset.String(utils.FlagTenantID, "", "Tenant ID (auto-discovered if not provided)")
 	flagset.String(utils.FlagPurpose, "", "Intended purpose of the target (ground truth for the judge)")
 	flagset.String(utils.FlagSystemPrompt, "", "Target system prompt (ground truth for prompt-extraction scoring)")
-	flagset.StringArray(utils.FlagTools, nil, "Tool names the target is configured with (ground truth, repeatable)")
+	flagset.String(utils.FlagTools, "", "Comma-separated tool names the target is configured with (ground truth)")
 	flagset.Bool(utils.FlagReport, false, "Re-open the last scan report without running a new scan")
 
 	cfg := workflow.ConfigurationOptionsFromFlagset(flagset)
@@ -79,6 +90,7 @@ func redTeamWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data
 	return RunRedTeamWorkflow(invocationCtx, DefaultSnykAPIFactory, DefaultTargetFactory)
 }
 
+//nolint:gocyclo // inherent complexity of workflow orchestration
 func RunRedTeamWorkflow(
 	invocationCtx workflow.InvocationContext,
 	controlServerFactory ControlServerFactory,
@@ -92,7 +104,12 @@ func RunRedTeamWorkflow(
 	experimental := config.GetBool(utils.FlagExperimental)
 	if !experimental {
 		logger.Debug().Msg("Required experimental flag is not present")
-		return nil, cli_errors.NewCommandIsExperimentalError("")
+		return nil, cli_errors.NewCommandIsExperimentalError("re-run with --experimental to use this command")
+	}
+
+	if err := utils.RequireAuth(config); err != nil {
+		logger.Debug().Msg("No organization id is found.")
+		return nil, err //nolint:wrapcheck // already a catalog error
 	}
 
 	if config.GetBool(utils.FlagReport) {
@@ -102,16 +119,17 @@ func RunRedTeamWorkflow(
 		}
 		if err := clireport.RunInteractive(data, meta); err != nil {
 			report := clireport.Render(data, meta)
-			return []workflow.Data{newWorkflowData(contentTypePlain, []byte(report))}, nil
+			return []workflow.Data{newWorkflowData(contentTypePlain, []byte(report))}, nil //nolint:nilerr // TUI failure is expected, fall back to static render
 		}
 		return []workflow.Data{newWorkflowData(contentTypePlain, []byte(""))}, nil
 	}
 
 	listGoals := config.GetBool(utils.FlagListGoals)
 	listStrategies := config.GetBool(utils.FlagListStrategies)
-	if listGoals || listStrategies {
+	listProfiles := config.GetBool(utils.FlagListProfiles)
+	if listGoals || listStrategies || listProfiles {
 		httpClient := invocationCtx.GetNetworkAccess().GetHttpClient()
-		return handleListFlags(config, controlServerFactory, logger, httpClient, listGoals, listStrategies)
+		return handleListFlags(config, controlServerFactory, logger, httpClient, listGoals, listStrategies, listProfiles)
 	}
 
 	rtConfig, configData, err := LoadAndValidateConfig(logger, config)
@@ -124,18 +142,23 @@ func RunRedTeamWorkflow(
 
 	tenantID, err := helpers.GetTenantID(invocationCtx, config.GetString(utils.FlagTenantID))
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve tenant: %w", err)
+		return nil, err //nolint:wrapcheck // RedTeamError from helpers
 	}
-
-	userInterface := invocationCtx.GetUserInterface()
-	displayBanner(userInterface, rtConfig)
 
 	targetHTTPClient := &http.Client{Timeout: target.DefaultTimeout}
 	controlServerHTTPClient := invocationCtx.GetNetworkAccess().GetHttpClient()
-	controlServerHTTPClient.Timeout = 15 * time.Second
+	controlServerHTTPClient.Timeout = 60 * time.Second
 	controlServerURL := config.GetString(configuration.API_URL)
 
 	controlServerClient := controlServerFactory(logger, controlServerHTTPClient, controlServerURL, tenantID)
+
+	profileName, err := resolveAttacks(config, controlServerClient, rtConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	userInterface := invocationCtx.GetUserInterface()
+	displayBanner(userInterface, rtConfig, profileName)
 	targetClient := targetFactory(
 		targetHTTPClient,
 		rtConfig.Target.Settings.URL,
@@ -144,37 +167,57 @@ func RunRedTeamWorkflow(
 		rtConfig.Target.Settings.ResponseSelector,
 	)
 
-	results, normalized, scanErr := runClientDrivenScan(invocationCtx, controlServerClient, targetClient, rtConfig)
+	results, scanErr := runClientDrivenScan(invocationCtx, controlServerClient, targetClient, rtConfig)
 	if scanErr != nil {
 		return nil, scanErr
 	}
 
 	output, htmlErr := htmlreport.ProcessResults(logger, config, results)
 	if htmlErr != nil {
-		return nil, fmt.Errorf("HTML report error: %w", htmlErr)
+		return nil, htmlErr //nolint:wrapcheck // RedTeamError from htmlreport
 	}
 
-	returnJSON := config.GetBool(utils.FlagJSON)
+	returnJSON := config.GetBool(utils.FlagJSON) || config.GetString(utils.FlagJSONFileOutput) != ""
 	returnHTML := config.GetBool(utils.FlagHTML)
-	if !returnJSON && !returnHTML && normalized != nil {
-		meta := clireport.ScanMeta{
-			TargetURL:  rtConfig.Target.Settings.URL,
-			Goals:      rtConfig.Goals,
-			Strategies: rtConfig.Strategies,
+	//nolint:nestif // sequential branching for TUI/static report fallback
+	if !returnJSON && !returnHTML && len(results) > 0 {
+		reportData, parseErr := parseReportForTUI(results, config)
+		if parseErr == nil && reportData != nil {
+			meta := clireport.ScanMeta{
+				TargetURL:        rtConfig.Target.Settings.URL,
+				Goals:            rtConfig.UniqueGoals(),
+				FullConversation: config.GetBool(utils.FlagFullConversation),
+			}
+			// Save report for later re-display via --report.
+			if saveErr := clireport.SaveReport(reportData, meta); saveErr != nil {
+				logger.Debug().Err(saveErr).Msg("failed to save report for --report flag")
+			}
+			if err := clireport.RunInteractive(reportData, meta); err != nil {
+				// Fallback to static report if TUI fails (e.g. piped output).
+				report := clireport.Render(reportData, meta)
+				return []workflow.Data{newWorkflowData(contentTypePlain, []byte(report))}, nil //nolint:nilerr // TUI failure is expected, fall back to static render
+			}
+			return []workflow.Data{newWorkflowData(contentTypePlain, []byte(""))}, nil
 		}
-		// Save report for later re-display via --report.
-		if saveErr := clireport.SaveReport(normalized, meta); saveErr != nil {
-			logger.Debug().Err(saveErr).Msg("failed to save report for --report flag")
-		}
-		if err := clireport.RunInteractive(normalized, meta); err != nil {
-			// Fallback to static report if TUI fails (e.g. piped output).
-			report := clireport.Render(normalized, meta)
-			return []workflow.Data{newWorkflowData(contentTypePlain, []byte(report))}, nil
-		}
-		return []workflow.Data{newWorkflowData(contentTypePlain, []byte(""))}, nil
 	}
 
 	return output, nil
+}
+
+func parseReportForTUI(results []workflow.Data, config configuration.Configuration) (*models.GetAIVulnerabilitiesResponseData, error) {
+	if len(results) == 0 {
+		return nil, fmt.Errorf("no results")
+	}
+	payload, ok := results[0].GetPayload().([]byte)
+	if !ok {
+		return nil, fmt.Errorf("unexpected payload type")
+	}
+	var data models.GetAIVulnerabilitiesResponseData
+	if err := json.Unmarshal(payload, &data); err != nil {
+		return nil, fmt.Errorf("failed to parse report JSON: %w", err)
+	}
+	_ = config // reserved for future use (e.g. building summary from status)
+	return &data, nil
 }
 
 func handleListFlags(
@@ -182,7 +225,7 @@ func handleListFlags(
 	controlServerFactory ControlServerFactory,
 	logger *zerolog.Logger,
 	httpClient *http.Client,
-	listGoals, listStrategies bool,
+	listGoals, listStrategies, listProfiles bool,
 ) ([]workflow.Data, error) {
 	ctx := context.Background()
 	snykAPIURL := config.GetString(configuration.API_URL)
@@ -192,7 +235,7 @@ func handleListFlags(
 	if listGoals {
 		goals, err := controlServerClient.ListGoals(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to list goals: %w", err)
+			return nil, err //nolint:wrapcheck // RedTeamError from controlserver
 		}
 		sort.Slice(goals, func(i, j int) bool { return goals[i].DisplayOrder < goals[j].DisplayOrder })
 		lines = append(lines, "Available goals:", "")
@@ -204,15 +247,41 @@ func handleListFlags(
 		}
 		strategies, err := controlServerClient.ListStrategies(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to list strategies: %w", err)
+			return nil, err //nolint:wrapcheck // RedTeamError from controlserver
 		}
 		sort.Slice(strategies, func(i, j int) bool { return strategies[i].DisplayOrder < strategies[j].DisplayOrder })
 		lines = append(lines, "Available strategies:", "")
 		lines = appendEnumTable(lines, strategies)
 	}
+	if listProfiles {
+		if len(lines) > 0 {
+			lines = append(lines, "")
+		}
+		profiles, err := controlServerClient.ListProfiles(ctx)
+		if err != nil {
+			return nil, err //nolint:wrapcheck // RedTeamError from controlserver
+		}
+		lines = append(lines, "Available profiles:", "")
+		lines = appendProfileTable(lines, profiles)
+	}
 
 	output := strings.Join(lines, "\n") + "\n"
 	return []workflow.Data{newWorkflowData(contentTypePlain, []byte(output))}, nil
+}
+
+func getGoalsFlag(config configuration.Configuration) []string {
+	raw := config.GetString(utils.FlagGoals)
+	if raw == "" {
+		return nil
+	}
+	var goals []string
+	for _, g := range strings.Split(raw, ",") {
+		g = strings.TrimSpace(g)
+		if g != "" {
+			goals = append(goals, g)
+		}
+	}
+	return goals
 }
 
 func appendEnumTable(lines []string, entries []controlserver.EnumEntry) []string {
@@ -231,32 +300,53 @@ func appendEnumTable(lines []string, entries []controlserver.EnumEntry) []string
 	return lines
 }
 
+func appendProfileTable(lines []string, profiles []controlserver.ProfileResponse) []string {
+	idWidth := len("ID")
+	nameWidth := len("NAME")
+	for _, p := range profiles {
+		if len(p.ID) > idWidth {
+			idWidth = len(p.ID)
+		}
+		if len(p.Name) > nameWidth {
+			nameWidth = len(p.Name)
+		}
+	}
+	idWidth += 2
+	nameWidth += 2
+
+	lines = append(lines, fmt.Sprintf("  %-*s  %-*s  %s", idWidth, "ID", nameWidth, "NAME", "ATTACKS"))
+	for _, p := range profiles {
+		lines = append(lines, fmt.Sprintf("  %-*s  %-*s  %d", idWidth, p.ID, nameWidth, p.Name, len(p.Entries)))
+	}
+	return lines
+}
+
 func runClientDrivenScan(
 	invocationCtx workflow.InvocationContext,
 	csClient controlserver.Client,
 	targetClient target.Client,
 	rtConfig *Config,
-) ([]workflow.Data, *models.GetAIVulnerabilitiesResponseData, error) {
+) ([]workflow.Data, error) {
 	logger := invocationCtx.GetEnhancedLogger()
 	userInterface := invocationCtx.GetUserInterface()
 	ctx := context.Background()
 
 	scanID, err := csClient.CreateScan(ctx, rtConfig.ToCreateScanRequest())
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create scan: %w", err)
+		return nil, err //nolint:wrapcheck // RedTeamError from controlserver
 	}
-	logger.Info().Str("scanID", scanID).Msg("scan created on Snyk API")
+	logger.Info().Str("scanID", scanID).Msg("scan created successfully")
 
 	progressBar := userInterface.NewProgressBar()
 	progressBar.SetTitle(fmt.Sprintf("Scanning %s...", rtConfig.Target.Name))
-	_ = progressBar.UpdateProgress(ui.InfiniteProgress) //nolint:errcheck // best-effort progress
-	defer func() { _ = progressBar.Clear() }()          //nolint:errcheck // best-effort cleanup
+	_ = progressBar.UpdateProgress(ui.InfiniteProgress) //nolint:errcheck // best-effort UI
+	defer func() { _ = progressBar.Clear() }()          //nolint:errcheck // best-effort UI
 
 	var responses []controlserver.ChatResponse
 	for {
 		chats, nextErr := csClient.NextChats(ctx, scanID, responses)
 		if nextErr != nil {
-			return nil, nil, fmt.Errorf("failed to get next chats: %w", nextErr)
+			return nil, nextErr //nolint:wrapcheck // RedTeamError from controlserver
 		}
 		if len(chats) == 0 {
 			break
@@ -267,9 +357,9 @@ func runClientDrivenScan(
 			resp, tgtErr := targetClient.SendPrompt(ctx, chat.Prompt)
 			if tgtErr != nil {
 				if errors.Is(tgtErr, target.ErrCircuitOpen) {
-					return nil, nil, fmt.Errorf("aborting scan: %w", tgtErr)
+					return nil, redteam_errors.NewNetworkError(fmt.Sprintf("aborting scan: %s", tgtErr))
 				}
-				logger.Warn().Err(tgtErr).Str("chatID", chat.ChatID).Msg("target error, using error as response")
+				logger.Warn().Err(tgtErr).Str("scanID", scanID).Str("chatID", chat.ChatID).Msg("The scan target returned an error")
 				resp = fmt.Sprintf("[error: %s]", tgtErr.Error())
 			}
 			responses = append(responses, controlserver.ChatResponse{
@@ -282,28 +372,21 @@ func runClientDrivenScan(
 	}
 
 	progressBar.SetTitle("Scan completed")
-	_ = progressBar.UpdateProgress(1.0) //nolint:errcheck // best-effort progress
+	_ = progressBar.UpdateProgress(1.0) //nolint:errcheck // best-effort UI
 
 	status, statusErr := csClient.GetStatus(ctx, scanID)
 	if statusErr != nil {
 		logger.Debug().Err(statusErr).Msg("failed to get final status")
 	}
 
-	result, resultErr := csClient.GetResult(ctx, scanID)
-	if resultErr != nil {
-		return nil, nil, fmt.Errorf("failed to get scan result: %w", resultErr)
-	}
-
 	outputStatus(userInterface, logger, status)
 
-	normalized := normalizer.Normalize(result, status, rtConfig.Target.Settings.URL)
-
-	resultsBytes, marshalErr := json.Marshal(normalized)
-	if marshalErr != nil {
-		return nil, nil, fmt.Errorf("failed to marshal results: %w", marshalErr)
+	reportJSON, reportErr := csClient.GetReport(ctx, scanID)
+	if reportErr != nil {
+		return nil, reportErr //nolint:wrapcheck // RedTeamError from controlserver
 	}
 
-	return []workflow.Data{newWorkflowData("application/json", resultsBytes)}, normalized, nil
+	return []workflow.Data{newWorkflowData("application/json", reportJSON)}, nil
 }
 
 func updateProgress(
@@ -321,7 +404,7 @@ func updateProgress(
 	}
 	if status.TotalChats > 0 {
 		progressBar.SetTitle(fmt.Sprintf("Scanning (%d/%d)", status.Completed, status.TotalChats))
-		_ = progressBar.UpdateProgress(float64(status.Completed) / float64(status.TotalChats)) //nolint:errcheck // best-effort
+		_ = progressBar.UpdateProgress(float64(status.Completed) / float64(status.TotalChats)) //nolint:errcheck // best-effort UI
 	}
 }
 

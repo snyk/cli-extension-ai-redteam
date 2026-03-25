@@ -1,9 +1,15 @@
 package models
 
 type GetAIVulnerabilitiesResponseData struct {
-	ID      string            `json:"id"`
-	Results []AIVulnerability `json:"results"`
-	Summary *AIScanSummary    `json:"summary,omitempty"`
+	ID          string            `json:"id"`
+	Results     []AIVulnerability `json:"results"`
+	Summary     *AIScanSummary    `json:"summary,omitempty"`
+	PassedTypes []PassedType      `json:"passed_types,omitempty"`
+}
+
+type PassedType struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 type AIVulnerability struct {

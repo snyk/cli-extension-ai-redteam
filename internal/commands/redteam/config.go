@@ -1,6 +1,7 @@
 package redteam
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -13,27 +14,23 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"gopkg.in/yaml.v3"
 
+	redteam_errors "github.com/snyk/cli-extension-ai-redteam/internal/errors/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
 	"github.com/snyk/cli-extension-ai-redteam/internal/utils"
 )
 
 const (
-	defaultResponseSelector    = "response"
 	defaultRequestBodyTemplate = `{"message": "{{prompt}}"}`
 	defaultTargetType          = "http"
 	contentTypePlain           = "text/plain"
 )
 
-var (
-	defaultGoals      = []string{"system_prompt_extraction"}
-	defaultStrategies = []string{"directly_asking"}
-)
+const defaultProfileID = "fast"
 
 type Config struct {
-	Target           ConfigTarget `yaml:"target" json:"target"`
-	ControlServerURL string       `yaml:"control_server_url" json:"control_server_url,omitempty"`
-	Goals            []string     `yaml:"goals" json:"goals"`
-	Strategies       []string     `yaml:"strategies" json:"strategies"`
+	Target  ConfigTarget                `yaml:"target" json:"target"`
+	Goals   []string                    `yaml:"goals" json:"goals"`
+	Attacks []controlserver.AttackEntry `yaml:"attacks" json:"attacks,omitempty"`
 }
 
 type ConfigTarget struct {
@@ -54,14 +51,10 @@ type ConfigGroundTruth struct {
 }
 
 type ConfigSettings struct {
-	URL                       string         `yaml:"url" json:"url"`
-	Headers                   []ConfigHeader `yaml:"headers,omitempty" json:"headers,omitempty"`
-	ResponseSelector          string         `yaml:"response_selector" json:"response_selector"`
-	RequestBodyTemplate       string         `yaml:"request_body_template" json:"request_body_template"`
-	SocketIOPath              string         `yaml:"socketio_path,omitempty" json:"socketio_path,omitempty"`
-	SocketIONamespace         string         `yaml:"socketio_namespace,omitempty" json:"socketio_namespace,omitempty"`
-	SocketIOSendEventName     string         `yaml:"socketio_send_event_name,omitempty" json:"socketio_send_event_name,omitempty"`
-	SocketIOResponseEventName string         `yaml:"socketio_response_event_name,omitempty" json:"socketio_response_event_name,omitempty"`
+	URL                 string         `yaml:"url" json:"url"`
+	Headers             []ConfigHeader `yaml:"headers,omitempty" json:"headers,omitempty"`
+	ResponseSelector    string         `yaml:"response_selector" json:"response_selector"`
+	RequestBodyTemplate string         `yaml:"request_body_template" json:"request_body_template"`
 }
 
 type ConfigHeader struct {
@@ -69,7 +62,9 @@ type ConfigHeader struct {
 	Value string `yaml:"value" json:"value"`
 }
 
-func LoadAndValidateConfig(logger *zerolog.Logger, config configuration.Configuration) (*Config, []workflow.Data, error) {
+func LoadAndValidateConfig(
+	logger *zerolog.Logger, config configuration.Configuration,
+) (*Config, []workflow.Data, error) {
 	rtConfig, earlyReturn := loadConfigFromFile(logger, config)
 	if earlyReturn != nil {
 		return nil, earlyReturn, nil
@@ -163,18 +158,15 @@ func applyFlagOverrides(config configuration.Configuration, rtConfig *Config) {
 
 // ToCreateScanRequest builds the control server CreateScan request from config.
 func (cfg *Config) ToCreateScanRequest() *controlserver.CreateScanRequest {
-	var attacks []controlserver.Attack
-	for _, goal := range cfg.Goals {
-		for _, strategy := range cfg.Strategies {
-			attacks = append(attacks, controlserver.Attack{
-				Goal:     goal,
-				Strategy: strategy,
-			})
+	attacks := cfg.Attacks
+	if len(attacks) == 0 {
+		attacks = make([]controlserver.AttackEntry, 0, len(cfg.Goals))
+		for _, g := range cfg.Goals {
+			attacks = append(attacks, controlserver.AttackEntry{Goal: g})
 		}
 	}
 	req := &controlserver.CreateScanRequest{
 		Attacks:     attacks,
-		TargetURL:   cfg.Target.Settings.URL,
 		Purpose:     cfg.Target.Context.Purpose,
 		GroundTruth: buildGroundTruthFromConfig(&cfg.Target.Context.GroundTruth),
 	}
@@ -208,14 +200,17 @@ func ValidateConfig(cfg *Config) error {
 		errs = append(errs, "request_body_template is not valid JSON")
 	}
 
-	if _, err := jmespath.Compile(cfg.Target.Settings.ResponseSelector); err != nil {
-		errs = append(errs, fmt.Sprintf("response_selector is not a valid JMESPath expression: %v", err))
+	if cfg.Target.Settings.ResponseSelector != "" {
+		if _, err := jmespath.Compile(cfg.Target.Settings.ResponseSelector); err != nil {
+			errs = append(errs, fmt.Sprintf("response_selector is not a valid JMESPath expression: %v", err))
+		}
 	}
 
 	if len(errs) == 0 {
 		return nil
 	}
-	return fmt.Errorf("invalid configuration:\n  - %s", strings.Join(errs, "\n  - "))
+	msg := fmt.Sprintf("invalid configuration:\n  - %s", strings.Join(errs, "\n  - "))
+	return redteam_errors.NewConfigValidationError(msg)
 }
 
 func validateURL(rawURL, label string) error {
@@ -226,19 +221,64 @@ func validateURL(rawURL, label string) error {
 	return nil
 }
 
+// NeedsDefaultProfile returns true when no goals or attacks are configured.
+func (cfg *Config) NeedsDefaultProfile() bool {
+	return len(cfg.Goals) == 0 && len(cfg.Attacks) == 0
+}
+
+// resolveAttacks determines which attacks to run based on CLI flags and config.
+// Precedence: --goals > --profile > YAML attacks/goals > default "fast" profile.
+// Returns the resolved profile name (empty if goals were used directly).
+func resolveAttacks(
+	config configuration.Configuration,
+	client controlserver.Client,
+	cfg *Config,
+) (string, error) {
+	goalsFlag := getGoalsFlag(config)
+	profileID := config.GetString(utils.FlagProfile)
+
+	if len(goalsFlag) > 0 && profileID != "" {
+		return "", fmt.Errorf("--goals and --profile cannot be used together")
+	}
+
+	switch {
+	case len(goalsFlag) > 0:
+		cfg.Goals = goalsFlag
+		cfg.Attacks = nil
+		return "", nil
+	case profileID != "":
+		return applyProfile(context.Background(), client, cfg, profileID)
+	case cfg.NeedsDefaultProfile():
+		return applyProfile(context.Background(), client, cfg, defaultProfileID)
+	default:
+		return "", nil
+	}
+}
+
+func applyProfile(
+	ctx context.Context,
+	client controlserver.Client,
+	cfg *Config,
+	profileID string,
+) (string, error) {
+	profiles, err := client.ListProfiles(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch profiles: %w", err)
+	}
+	for _, p := range profiles {
+		if p.ID == profileID {
+			cfg.Attacks = p.Entries
+			return p.Name, nil
+		}
+	}
+	return "", fmt.Errorf("profile %q not found on server", profileID)
+}
+
 func applyDefaults(cfg *Config) {
-	if len(cfg.Goals) == 0 {
-		cfg.Goals = defaultGoals
-	}
-	if len(cfg.Strategies) == 0 {
-		cfg.Strategies = defaultStrategies
-	}
 	if cfg.Target.Type == "" {
 		cfg.Target.Type = defaultTargetType
 	}
-	if cfg.Target.Settings.ResponseSelector == "" {
-		cfg.Target.Settings.ResponseSelector = defaultResponseSelector
-	}
+	// Empty response_selector means "use raw response body as-is" (plain text targets).
 	if cfg.Target.Settings.RequestBodyTemplate == "" {
 		cfg.Target.Settings.RequestBodyTemplate = defaultRequestBodyTemplate
 	}
@@ -254,21 +294,46 @@ func HeadersToMap(hdrs []ConfigHeader) map[string]string {
 	return headers
 }
 
+// UniqueGoals returns deduplicated goal names from attacks and goals.
+func (cfg *Config) UniqueGoals() []string {
+	seen := make(map[string]struct{})
+	var goals []string
+	for _, a := range cfg.Attacks {
+		if _, ok := seen[a.Goal]; !ok {
+			seen[a.Goal] = struct{}{}
+			goals = append(goals, a.Goal)
+		}
+	}
+	for _, g := range cfg.Goals {
+		if _, ok := seen[g]; !ok {
+			seen[g] = struct{}{}
+			goals = append(goals, g)
+		}
+	}
+	return goals
+}
+
 func (cfg *Config) HeadersMap() map[string]string {
 	return HeadersToMap(cfg.Target.Settings.Headers)
 }
 
 func getToolsFlags(config configuration.Configuration) []string {
-	raw := config.Get(utils.FlagTools)
-	vals, ok := raw.([]string)
-	if !ok || len(vals) == 0 {
+	raw := config.GetString(utils.FlagTools)
+	if raw == "" {
 		return nil
 	}
-	return vals
+	var tools []string
+	for _, t := range strings.Split(raw, ",") {
+		t = strings.TrimSpace(t)
+		if t != "" {
+			tools = append(tools, t)
+		}
+	}
+	return tools
 }
 
 func parseHeaderFlags(config configuration.Configuration) []ConfigHeader {
-	raw := config.Get(utils.FlagHeaders)
+	raw := config.Get(utils.FlagHeader)
 	vals, ok := raw.([]string)
 	if !ok || len(vals) == 0 {
 		return nil
@@ -304,14 +369,14 @@ func getInvalidConfigMessage() string {
 			headers:
 				- name: '<optional, e.g. Authorization>'
 				  value: '<optional, e.g. Bearer TOKEN>'
-			response_selector: '<optional, default: response>'
+			response_selector: '<optional, JMESPath expression; omit for plain text>'
 			request_body_template: '<optional, default: {"message": "{{prompt}}"}'
-	control_server_url: '<optional, control server URL>'
 	goals:
 		- '<optional, default: system_prompt_extraction>'
-	strategies:
-		- directly_asking
-	
+	attacks:
+		- goal: '<optional, goal name>'
+		  strategy: '<optional, strategy name>'
+
 	For more configuration options, refer to the documentation.
 
 	`

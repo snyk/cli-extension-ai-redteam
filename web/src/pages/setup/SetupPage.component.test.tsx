@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, cleanup, screen, fireEvent, waitFor } from "@testing-library/react";
 import SetupPage from "./SetupPage";
 
-// GoalStep and StrategiesStep fetch on mount — stub fetch globally
+// GoalStep fetches on mount — stub fetch globally
 beforeEach(() => {
   vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     const url = typeof input === "string" ? input : (input as Request).url;
@@ -20,10 +20,14 @@ beforeEach(() => {
     if (url === "/api/strategies") {
       return Promise.resolve({
         ok: true,
-        json: () =>
-          Promise.resolve([
-            { value: "directly_asking", description: "Ask directly", display_order: 1 },
-          ]),
+        json: () => Promise.resolve([]),
+      } as Response);
+    }
+
+    if (url === "/api/profiles") {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve([]),
       } as Response);
     }
 
@@ -59,7 +63,7 @@ afterEach(() => {
 });
 
 const defaultProps = {
-  activeStep: "target-type",
+  activeStep: "target-definition",
   onStepChange: vi.fn(),
   onConfigPathLoaded: vi.fn(),
 };
@@ -68,7 +72,7 @@ describe("SetupPage", () => {
   it("renders step title for target-type", async () => {
     render(<SetupPage {...defaultProps} />);
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Target Type" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Target Definition" })).toBeInTheDocument();
     });
   });
 
@@ -91,16 +95,17 @@ describe("SetupPage", () => {
     const onStepChange = vi.fn();
     render(<SetupPage {...defaultProps} activeStep="target-config" onStepChange={onStepChange} />);
     fireEvent.click(screen.getByRole("button", { name: /^back$/i }));
-    expect(onStepChange).toHaveBeenCalledWith("target-type");
+    expect(onStepChange).toHaveBeenCalledWith("target-definition");
   });
 
-  it("renders Download Configuration button on review step", () => {
+  it("renders Download and Save buttons on review step", () => {
     render(<SetupPage {...defaultProps} activeStep="review" />);
-    expect(screen.getByRole("button", { name: /download configuration/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /download/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /save/i })).toBeInTheDocument();
   });
 
-  it("renders Review Configuration text on strategies step (last before review)", () => {
-    render(<SetupPage {...defaultProps} activeStep="strategies" />);
+  it("renders Review Configuration text on goal step (last before review)", () => {
+    render(<SetupPage {...defaultProps} activeStep="goal" />);
     expect(screen.getByRole("button", { name: /review configuration/i })).toBeInTheDocument();
   });
 
@@ -129,13 +134,12 @@ describe("SetupPage", () => {
                   settings: { url: "https://loaded.com" },
                 },
                 goals: ["system_prompt_extraction"],
-                strategies: ["directly_asking"],
               },
             }),
         } as Response);
       }
 
-      if (url === "/api/goals" || url === "/api/strategies") {
+      if (url === "/api/goals" || url === "/api/profiles") {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve([]),
@@ -153,11 +157,45 @@ describe("SetupPage", () => {
     });
   });
 
-  it("shows download modal when Download Configuration is clicked", async () => {
-    render(<SetupPage {...defaultProps} activeStep="review" />);
-    fireEvent.click(screen.getByRole("button", { name: /download configuration/i }));
+  it("shows validation error when clicking Review Configuration without goals", async () => {
+    render(<SetupPage {...defaultProps} activeStep="goal" />);
+
     await waitFor(() => {
-      expect(screen.getByText("Save as")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /review configuration/i })).toBeInTheDocument();
     });
+
+    fireEvent.click(screen.getByRole("button", { name: /review configuration/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/select at least one goal/i)).toBeInTheDocument();
+    });
+  });
+
+  it("shows validation error when clicking Next without target name", async () => {
+    render(<SetupPage {...defaultProps} activeStep="target-definition" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/select target name/i)).toBeInTheDocument();
+    });
+  });
+
+  it("validation error does not show on a different step", async () => {
+    const { rerender } = render(<SetupPage {...defaultProps} activeStep="goal" />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /review configuration/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /review configuration/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/select at least one goal/i)).toBeInTheDocument();
+    });
+
+    rerender(<SetupPage {...defaultProps} activeStep="target-type" />);
+
+    expect(screen.queryByText(/select at least one goal/i)).not.toBeInTheDocument();
   });
 });

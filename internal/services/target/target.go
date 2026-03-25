@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/jmespath/go-jmespath"
+
+	"github.com/snyk/cli-extension-ai-redteam/internal/utils"
 )
 
 const (
@@ -124,7 +126,7 @@ func (c *HTTPClient) doRequest(ctx context.Context, body []byte) (string, error)
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", &serverError{statusCode: resp.StatusCode, body: string(respBytes)}
+		return "", &serverError{statusCode: resp.StatusCode, body: utils.TruncateBody(respBytes)}
 	}
 
 	return extractResponse(respBytes, c.responseSelector)
@@ -177,6 +179,10 @@ func buildRequestBody(template, prompt string) ([]byte, error) {
 }
 
 func extractResponse(respBytes []byte, selector string) (string, error) {
+	if selector == "" {
+		return string(respBytes), nil
+	}
+
 	var data any
 	if err := json.Unmarshal(respBytes, &data); err != nil {
 		return "", fmt.Errorf("parse target response JSON: %w", err)

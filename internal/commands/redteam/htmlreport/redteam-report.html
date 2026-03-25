@@ -2056,17 +2056,10 @@
         // ── Render ──────────────────────────────────────────────────────
         const data = REPORT_DATA;
         const results = data.results || [];
-        const summaryVulns = (data.summary && Array.isArray(data.summary.vulnerabilities))
-          ? data.summary.vulnerabilities
-          : [];
-        const useSummaryAsSource = summaryVulns.length > 0;
+        const passedTypes = data.passed_types || [];
 
-        const issueTypesDetectedCount = useSummaryAsSource
-          ? summaryVulns.filter((v) => v.vulnerable).length
-          : new Set(results.map((r) => r.definition.id)).size;
-        const issueTypesPassedCount = useSummaryAsSource
-          ? summaryVulns.filter((v) => !v.vulnerable && v.status !== "skipped" && v.status !== "error").length
-          : (VULNERABILITY_CATALOG.length - new Set(results.map((r) => r.definition.id)).size);
+        const issueTypesDetectedCount = new Set(results.map((r) => r.definition.id)).size;
+        const issueTypesPassedCount = passedTypes.length;
 
         const counts = severityCounts(results);
         const urls = uniqueUrls(results);
@@ -2336,43 +2329,9 @@
           return noTurns || noEvidence;
         }
 
-        let passedTypes, partialTypes, errorTypes, failedTypes;
-        if (useSummaryAsSource) {
-          const failedTypeSlugs = new Set();
-          summaryVulns.forEach((v) => {
-            const defResults = results.filter((r) => r.definition.id === v.slug);
-            if (defResults.length > 0 && defResults.every(isErroneousResult)) {
-              failedTypeSlugs.add(v.slug);
-            }
-          });
-          passedTypes = summaryVulns.filter(
-            (v) => !v.vulnerable && v.status !== "skipped" && v.status !== "error" && !failedTypeSlugs.has(v.slug),
-          );
-          partialTypes = summaryVulns.filter((v) => v.status === "skipped");
-          errorTypes = summaryVulns.filter((v) => v.status === "error");
-          failedTypes = summaryVulns.filter((v) => failedTypeSlugs.has(v.slug));
-        } else {
-          errorTypes = [];
-          function classifyDefId(defId) {
-            const defResults = results.filter((r) => r.definition.id === defId);
-            if (defResults.length === 0) return "passed";
-            const hasErr = defResults.some(isErroneousResult);
-            const hasGood = defResults.some((r) => !isErroneousResult(r));
-            if (hasErr && hasGood) return "partial";
-            if (hasErr && !hasGood) return "failed";
-            return "issues";
-          }
-          partialTypes = VULNERABILITY_CATALOG.filter(
-            (v) => classifyDefId(v.id) === "partial",
-          );
-          failedTypes = VULNERABILITY_CATALOG.filter(
-            (v) => classifyDefId(v.id) === "failed",
-          );
-          const failedTypeIds = new Set(failedTypes.map((v) => v.id));
-          passedTypes = VULNERABILITY_CATALOG.filter(
-            (v) => !foundDefIds.has(v.id) && !failedTypeIds.has(v.id),
-          );
-        }
+        var partialTypes = [];
+        var errorTypes = [];
+        var failedTypes = [];
 
         /**
          * Render the passed-tests table body based on the current group-by mode.

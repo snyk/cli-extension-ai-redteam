@@ -1,6 +1,6 @@
 target:
   name: "Custom Config"
-  type: api
+  type: http
   context:
     purpose: "Testing chatbot"
   settings:

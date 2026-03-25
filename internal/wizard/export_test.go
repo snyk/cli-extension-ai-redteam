@@ -29,6 +29,11 @@ func HandleListStrategies(client controlserver.Client) http.HandlerFunc {
 	return handleListStrategies(client)
 }
 
+// HandleListProfiles exports handleListProfiles for external tests.
+func HandleListProfiles(client controlserver.Client) http.HandlerFunc {
+	return handleListProfiles(client)
+}
+
 // InitialConfigResponse is an alias for external tests.
 type InitialConfigResponse = initialConfigResponse
 

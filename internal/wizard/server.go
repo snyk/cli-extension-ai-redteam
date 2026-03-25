@@ -32,7 +32,10 @@ type Server struct {
 	shutdown      chan struct{}
 }
 
-func NewServer(port int, configPath string, initialConfig *redteam.Config, csClient controlserver.Client, userInterface ui.UserInterface) *Server {
+func NewServer(
+	port int, configPath string, initialConfig *redteam.Config,
+	csClient controlserver.Client, userInterface ui.UserInterface,
+) *Server {
 	return &Server{
 		port:          port,
 		configPath:    configPath,
@@ -51,6 +54,10 @@ func (s *Server) Start() error {
 	mux.HandleFunc("POST /api/ping", handlePing())
 	mux.HandleFunc("GET /api/goals", handleListGoals(s.csClient))
 	mux.HandleFunc("GET /api/strategies", handleListStrategies(s.csClient))
+	mux.HandleFunc("GET /api/profiles", handleListProfiles(s.csClient))
+	mux.HandleFunc("POST /api/save", handleSaveConfig(func(msg string) {
+		_ = s.ui.Output(msg) //nolint:errcheck // best-effort output
+	}))
 	mux.HandleFunc("POST /api/download-complete", s.handleDownloadComplete())
 
 	if s.devMode {
@@ -76,10 +83,10 @@ func (s *Server) Start() error {
 
 	addr := listener.Addr().String()
 	wizardURL := fmt.Sprintf("http://%s", addr)
-	_ = s.ui.Output(fmt.Sprintf("Setup wizard running at %s\n", wizardURL)) //nolint:errcheck // best-effort display
+	_ = s.ui.Output(fmt.Sprintf("Setup wizard running at %s\n", wizardURL)) //nolint:errcheck // best-effort output
 	if !s.devMode {
 		if err := browser.OpenURL(wizardURL); err != nil {
-			_ = s.ui.Output(fmt.Sprintf("Could not open browser: %v\n", err)) //nolint:errcheck // best-effort display
+			_ = s.ui.Output(fmt.Sprintf("Could not open browser: %v\n", err)) //nolint:errcheck // best-effort output
 		}
 	}
 
@@ -116,14 +123,7 @@ func (s *Server) handleDownloadComplete() http.HandlerFunc {
 		if configFile == "" {
 			configFile = "redteam.yaml"
 		}
-
-		var sb strings.Builder
-		sb.WriteString("\nConfiguration downloaded successfully!\n\n")
-		sb.WriteString("Next steps:\n")
-		sb.WriteString("  1. Close this wizard with Ctrl+C\n")
-		sb.WriteString("  2. Run your red team scan:\n\n")
-		fmt.Fprintf(&sb, "     snyk redteam --experimental --config %s\n\n", configFile)
-		_ = s.ui.Output(sb.String()) //nolint:errcheck // best-effort display
+		_ = s.ui.Output(fmt.Sprintf("\nConfiguration downloaded as %s\n", configFile)) //nolint:errcheck // best-effort output
 	}
 }
 

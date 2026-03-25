@@ -2,6 +2,7 @@ package controlservermock
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
 )
@@ -12,14 +13,18 @@ type MockClient struct {
 	ChatSeqs      [][]controlserver.ChatPrompt
 	Status        *controlserver.ScanStatus
 	Result        *controlserver.ScanResult
+	Report        json.RawMessage
 	Goals         []controlserver.EnumEntry
 	Strategies    []controlserver.EnumEntry
+	Profiles      []controlserver.ProfileResponse
 	CreateErr     error
 	NextErr       error
 	StatusErr     error
 	ResultErr     error
+	ReportErr     error
 	GoalsErr      error
 	StrategiesErr error
+	ProfilesErr   error
 
 	// Capture CreateScan arguments for tests (set when CreateScan is called).
 	CreateScanRequest *controlserver.CreateScanRequest
@@ -35,7 +40,9 @@ func (m *MockClient) CreateScan(_ context.Context, req *controlserver.CreateScan
 	return m.ScanID, nil
 }
 
-func (m *MockClient) NextChats(_ context.Context, _ string, _ []controlserver.ChatResponse) ([]controlserver.ChatPrompt, error) {
+func (m *MockClient) NextChats(
+	_ context.Context, _ string, _ []controlserver.ChatResponse,
+) ([]controlserver.ChatPrompt, error) {
 	if m.NextErr != nil {
 		return nil, m.NextErr
 	}
@@ -61,6 +68,13 @@ func (m *MockClient) GetResult(_ context.Context, _ string) (*controlserver.Scan
 	return m.Result, nil
 }
 
+func (m *MockClient) GetReport(_ context.Context, _ string) (json.RawMessage, error) {
+	if m.ReportErr != nil {
+		return nil, m.ReportErr
+	}
+	return m.Report, nil
+}
+
 func (m *MockClient) ListGoals(_ context.Context) ([]controlserver.EnumEntry, error) {
 	if m.GoalsErr != nil {
 		return nil, m.GoalsErr
@@ -73,4 +87,11 @@ func (m *MockClient) ListStrategies(_ context.Context) ([]controlserver.EnumEntr
 		return nil, m.StrategiesErr
 	}
 	return m.Strategies, nil
+}
+
+func (m *MockClient) ListProfiles(_ context.Context) ([]controlserver.ProfileResponse, error) {
+	if m.ProfilesErr != nil {
+		return nil, m.ProfilesErr
+	}
+	return m.Profiles, nil
 }

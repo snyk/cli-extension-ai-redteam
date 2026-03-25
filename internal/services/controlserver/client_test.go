@@ -35,8 +35,6 @@ func TestCreateScan_Happy(t *testing.T) {
 		require.NoError(t, json.Unmarshal(body, &req))
 		require.Len(t, req.Attacks, 1)
 		assert.Equal(t, "system_prompt_extraction", req.Attacks[0].Goal)
-		assert.Equal(t, "directly_asking", req.Attacks[0].Strategy)
-		assert.Equal(t, "https://example.com/chat", req.TargetURL)
 
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(controlserver.CreateScanResponse{ScanID: testScanID})
@@ -44,7 +42,7 @@ func TestCreateScan_Happy(t *testing.T) {
 	defer server.Close()
 
 	client := newTestClient(t, server.URL)
-	req := &controlserver.CreateScanRequest{Attacks: []controlserver.Attack{{Goal: "system_prompt_extraction", Strategy: "directly_asking"}}, TargetURL: "https://example.com/chat"}
+	req := &controlserver.CreateScanRequest{Attacks: []controlserver.AttackEntry{{Goal: "system_prompt_extraction"}}}
 	scanID, err := client.CreateScan(t.Context(), req)
 	require.NoError(t, err)
 	assert.Equal(t, testScanID, scanID)
@@ -65,8 +63,6 @@ func TestCreateScan_WithGroundTruth(t *testing.T) {
 		require.NoError(t, json.Unmarshal(body, &req))
 		require.Len(t, req.Attacks, 1)
 		assert.Equal(t, "system_prompt_extraction", req.Attacks[0].Goal)
-		assert.Equal(t, "directly_asking", req.Attacks[0].Strategy)
-		assert.Equal(t, "https://example.com/chat", req.TargetURL)
 		assert.Equal(t, purpose, req.Purpose)
 		require.NotNil(t, req.GroundTruth)
 		assert.Equal(t, systemPrompt, req.GroundTruth.SystemPrompt)
@@ -79,9 +75,8 @@ func TestCreateScan_WithGroundTruth(t *testing.T) {
 
 	client := newTestClient(t, server.URL)
 	req := &controlserver.CreateScanRequest{
-		Attacks:   []controlserver.Attack{{Goal: "system_prompt_extraction", Strategy: "directly_asking"}},
-		TargetURL: "https://example.com/chat",
-		Purpose:   purpose,
+		Attacks: []controlserver.AttackEntry{{Goal: "system_prompt_extraction"}},
+		Purpose: purpose,
 		GroundTruth: &controlserver.GroundTruth{
 			SystemPrompt: systemPrompt,
 			Tools:        toolsStr,
@@ -100,7 +95,10 @@ func TestCreateScan_ServerError(t *testing.T) {
 	defer server.Close()
 
 	client := newTestClient(t, server.URL)
-	_, err := client.CreateScan(t.Context(), &controlserver.CreateScanRequest{Attacks: []controlserver.Attack{{Goal: "test", Strategy: "directly_asking"}}, TargetURL: "https://example.com"})
+	req := &controlserver.CreateScanRequest{
+		Attacks: []controlserver.AttackEntry{{Goal: "test"}},
+	}
+	_, err := client.CreateScan(t.Context(), req)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "400")
 }
@@ -213,6 +211,36 @@ func TestGetResult_Happy(t *testing.T) {
 	assert.True(t, result.Attacks[0].Chats[0].Success)
 }
 
+func TestGetReport_Happy(t *testing.T) {
+	reportJSON := `{"id":"scan-123","target_url":"http://example.com","results":[],"passed_types":[]}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "/hidden/tenants/"+testTenantID+"/red_team_scans/"+testScanID+"/report", r.URL.Path)
+		assert.Contains(t, r.URL.RawQuery, "version="+controlserver.APIVersion)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(reportJSON))
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	result, err := client.GetReport(t.Context(), testScanID)
+	require.NoError(t, err)
+	assert.JSONEq(t, reportJSON, string(result))
+}
+
+func TestGetReport_NotFound(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`{"detail": "Scan not found"}`))
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	_, err := client.GetReport(t.Context(), "nonexistent")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
 func TestListEnums_Happy(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -297,6 +325,49 @@ func TestListEnums_ServerError(t *testing.T) {
 			assert.Contains(t, err.Error(), tt.wantStatus)
 		})
 	}
+}
+
+func TestListProfiles_Happy(t *testing.T) {
+	profiles := []controlserver.ProfileResponse{
+		{
+			ID:          "prof-1",
+			Name:        "OWASP LLM Top 10",
+			Description: "Tests based on the OWASP LLM Top 10",
+			Entries: []controlserver.AttackEntry{
+				{Goal: "system_prompt_extraction", Strategy: "directly_asking"},
+				{Goal: "harmful_content"},
+			},
+		},
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "/hidden/profiles", r.URL.Path)
+		assert.Contains(t, r.URL.RawQuery, "version="+controlserver.APIVersion)
+		json.NewEncoder(w).Encode(profiles)
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	results, err := client.ListProfiles(t.Context())
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, "prof-1", results[0].ID)
+	assert.Equal(t, "OWASP LLM Top 10", results[0].Name)
+	assert.Len(t, results[0].Entries, 2)
+}
+
+func TestListProfiles_ServerError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`error`))
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	_, err := client.ListProfiles(t.Context())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "500")
 }
 
 func TestGetResult_NotFound(t *testing.T) {

@@ -17,8 +17,8 @@ import (
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam/htmlreport"
 	redteam_errors "github.com/snyk/cli-extension-ai-redteam/internal/errors/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/helpers"
+	"github.com/snyk/cli-extension-ai-redteam/internal/models"
 	"github.com/snyk/cli-extension-ai-redteam/internal/services/controlserver"
-	"github.com/snyk/cli-extension-ai-redteam/internal/services/normalizer"
 	"github.com/snyk/cli-extension-ai-redteam/internal/utils"
 )
 
@@ -31,15 +31,19 @@ var (
 	getWorkflowType = workflow.NewTypeIdentifier(GetWorkflowID, getWorkflowName)
 )
 
-type ControlServerFactory func(logger *zerolog.Logger, httpClient *http.Client, url, tenantID string) controlserver.Client
+type ControlServerFactory func(
+	logger *zerolog.Logger, httpClient *http.Client, url, tenantID string,
+) controlserver.Client
 
 func RegisterRedTeamGetWorkflow(e workflow.Engine) error {
 	flagset := pflag.NewFlagSet("snyk-cli-extension-ai-redteam-get", pflag.ExitOnError)
-	flagset.Bool(utils.FlagExperimental, false, "This is an experimental feature that will contain breaking changes in future revisions")
+	flagset.Bool(utils.FlagExperimental, false,
+		"This is an experimental feature that will contain breaking changes in future revisions")
 	flagset.String(utils.FlagScanID, "", "Scan ID to retrieve results for")
 	flagset.Bool(utils.FlagJSON, false, "Output raw JSON instead of the styled CLI report")
 	flagset.Bool(utils.FlagHTML, false, "Output the red team report in HTML format instead of JSON")
 	flagset.String(utils.FlagHTMLFileOutput, "", "Write the HTML report to the specified file path")
+	flagset.String(utils.FlagJSONFileOutput, "", "Write the JSON report to the specified file path")
 	flagset.String(utils.FlagTenantID, "", "Tenant ID (auto-discovered if not provided)")
 
 	cfg := workflow.ConfigurationOptionsFromFlagset(flagset)
@@ -50,9 +54,10 @@ func RegisterRedTeamGetWorkflow(e workflow.Engine) error {
 }
 
 func redTeamGetWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
-	factory := ControlServerFactory(func(logger *zerolog.Logger, httpClient *http.Client, url, tenantID string) controlserver.Client {
-		return controlserver.NewClient(logger, httpClient, url, tenantID)
-	})
+	factory := ControlServerFactory(
+		func(logger *zerolog.Logger, httpClient *http.Client, url, tenantID string) controlserver.Client {
+			return controlserver.NewClient(logger, httpClient, url, tenantID)
+		})
 	return RunRedTeamGetWorkflow(invocationCtx, factory)
 }
 
@@ -63,17 +68,22 @@ func RunRedTeamGetWorkflow(
 	logger := invocationCtx.GetEnhancedLogger()
 	config := invocationCtx.GetConfiguration()
 
+	if err := utils.RequireAuth(config); err != nil {
+		logger.Debug().Msg("No organization id is found.")
+		return nil, err //nolint:wrapcheck // already a catalog error
+	}
+
 	experimental := config.GetBool(utils.FlagExperimental)
 	if !experimental {
 		logger.Debug().Msg("Required experimental flag is not present")
-		return nil, cli_errors.NewCommandIsExperimentalError("")
+		return nil, cli_errors.NewCommandIsExperimentalError("re-run with --experimental to use this command")
 	}
 
 	snykAPIURL := config.GetString(configuration.API_URL)
 
 	tenantID, err := helpers.GetTenantID(invocationCtx, config.GetString(utils.FlagTenantID))
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve tenant: %w", err)
+		return nil, err //nolint:wrapcheck // returned by helpers.GetTenantID
 	}
 
 	return handleGetScanResults(invocationCtx, controlServerFactory, tenantID, snykAPIURL)
@@ -102,28 +112,15 @@ func handleGetScanResults(
 
 	snykAPIClient := controlServerFactory(logger, httpClient, snykAPIURL, tenantID)
 
-	logger.Debug().Str("scanID", scanID).Msg("Fetching scan results")
+	logger.Debug().Str("scanID", scanID).Msg("Fetching scan report")
 
-	status, statusErr := snykAPIClient.GetStatus(ctx, scanID)
-	if statusErr != nil {
-		logger.Debug().Err(statusErr).Msg("failed to get status, continuing without summary")
+	reportJSON, reportErr := snykAPIClient.GetReport(ctx, scanID)
+	if reportErr != nil {
+		logger.Debug().Err(reportErr).Msg("Error fetching scan report")
+		return nil, redteam_errors.NewGenericRedTeamError(reportErr.Error(), reportErr)
 	}
 
-	result, resultErr := snykAPIClient.GetResult(ctx, scanID)
-	if resultErr != nil {
-		logger.Debug().Err(resultErr).Msg("Error fetching scan result")
-		return nil, redteam_errors.NewGenericRedTeamError(resultErr.Error(), resultErr)
-	}
-
-	normalized := normalizer.Normalize(result, status, "")
-
-	resultsBytes, err := json.Marshal(normalized)
-	if err != nil {
-		logger.Debug().Err(err).Msg("Error marshaling scan results")
-		return nil, redteam_errors.NewGenericRedTeamError("Failed processing scan results", err)
-	}
-
-	jsonResults := []workflow.Data{workflow.NewData(getWorkflowType, "application/json", resultsBytes)}
+	jsonResults := []workflow.Data{workflow.NewData(getWorkflowType, "application/json", []byte(reportJSON))}
 
 	output, htmlErr := htmlreport.ProcessResults(logger, config, jsonResults)
 	if htmlErr != nil {
@@ -133,12 +130,11 @@ func handleGetScanResults(
 	returnJSON := config.GetBool(utils.FlagJSON)
 	returnHTML := config.GetBool(utils.FlagHTML)
 	if !returnJSON && !returnHTML {
-		report := clireport.Render(normalized, clireport.ScanMeta{
-			TargetURL:  "",
-			Goals:      status.Goals,
-			Strategies: []string{},
-		})
-		return []workflow.Data{workflow.NewData(getWorkflowType, "text/plain", []byte(report))}, nil
+		var data models.GetAIVulnerabilitiesResponseData
+		if err := json.Unmarshal(reportJSON, &data); err == nil {
+			report := clireport.Render(&data, clireport.ScanMeta{})
+			return []workflow.Data{workflow.NewData(getWorkflowType, "text/plain", []byte(report))}, nil
+		}
 	}
 
 	return output, nil

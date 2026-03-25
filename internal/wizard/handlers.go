@@ -2,7 +2,10 @@ package wizard
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 
 	"github.com/rs/zerolog/log"
@@ -73,6 +76,46 @@ func handleListStrategies(client controlserver.Client) http.HandlerFunc {
 		}
 		sort.Slice(entries, func(i, j int) bool { return entries[i].DisplayOrder < entries[j].DisplayOrder })
 		writeJSON(w, http.StatusOK, entries)
+	}
+}
+
+func handleListProfiles(client controlserver.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		profiles, err := client.ListProfiles(r.Context())
+		if err != nil {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, profiles)
+	}
+}
+
+func handleSaveConfig(userOutput func(string)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Filename string `json:"filename"`
+			Content  string `json:"content"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+			return
+		}
+		if req.Content == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "content is required"})
+			return
+		}
+		filename := filepath.Base(req.Filename)
+		if filename == "" || filename == "." {
+			filename = "redteam.yaml"
+		}
+		if err := os.WriteFile(filename, []byte(req.Content), 0o600); err != nil {
+			log.Error().Err(err).Str("filename", filename).Msg("failed to save config")
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		log.Info().Str("filename", filename).Msg("configuration saved")
+		userOutput(fmt.Sprintf("\nConfiguration saved to %s\nClose this wizard and run: snyk redteam --experimental --config %s\n", filename, filename))
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "path": filename})
 	}
 }
 

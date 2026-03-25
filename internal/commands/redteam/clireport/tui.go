@@ -2,10 +2,12 @@ package clireport
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/mattn/go-isatty"
 
 	"github.com/snyk/cli-extension-ai-redteam/internal/models"
 )
@@ -13,10 +15,16 @@ import (
 // RunInteractive launches the interactive TUI report viewer.
 // It returns the final static report string for piping when stdout is not a TTY.
 func RunInteractive(data *models.GetAIVulnerabilitiesResponseData, meta ScanMeta) error {
+	if !isatty.IsTerminal(os.Stdout.Fd()) && !isatty.IsCygwinTerminal(os.Stdout.Fd()) {
+		return fmt.Errorf("not a terminal")
+	}
 	m := newModel(data, meta)
 	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	_, err := p.Run()
-	return err
+	if err != nil {
+		return fmt.Errorf("TUI failed: %w", err)
+	}
+	return nil
 }
 
 // --- bubbletea model ---
@@ -41,10 +49,12 @@ func newModel(data *models.GetAIVulnerabilitiesResponseData, meta ScanMeta) mode
 	}
 }
 
+//nolint:gocritic // tea.Model interface requires value receiver
 func (m model) Init() tea.Cmd {
 	return nil
 }
 
+//nolint:gocyclo,gocritic,ireturn // inherent complexity; tea.Model interface requires value receiver
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -101,14 +111,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.scroll += 3
 		}
 	case tea.MouseMsg:
-		switch msg.Type {
-		case tea.MouseWheelUp:
+		switch msg.Button {
+		case tea.MouseButtonWheelUp:
 			m.scroll -= 3
 			if m.scroll < 0 {
 				m.scroll = 0
 			}
-		case tea.MouseWheelDown:
+		case tea.MouseButtonWheelDown:
 			m.scroll += 3
+		default:
+			// ignore other mouse events
 		}
 	case tea.WindowSizeMsg:
 		m.height = msg.Height
@@ -142,6 +154,7 @@ func (m *model) ensureVisible() {
 	}
 }
 
+//nolint:gocritic // tea.Model interface requires value receiver
 func (m model) View() string {
 	// Help overlay takes over the screen.
 	if m.showHelp {
@@ -209,6 +222,7 @@ func (m model) View() string {
 	return strings.Join(lines[start:end], "\n")
 }
 
+//nolint:gocritic // tea.Model interface requires value receiver
 func (m model) renderHelpOverlay() string {
 	w := m.width
 	if w <= 0 {
@@ -255,6 +269,7 @@ var (
 	expandedIcon  = dimStyle.Render("\u25bc") // ▼
 )
 
+//nolint:gocritic // tea.Model interface requires value receiver
 func (m model) renderFinding(idx int, vuln models.AIVulnerability, l layout) string {
 	var sb strings.Builder
 
@@ -275,22 +290,22 @@ func (m model) renderFinding(idx int, vuln models.AIVulnerability, l layout) str
 	candidateBadge := findingCandidateBadge.Render(" FINDING CANDIDATE ")
 
 	if isSelected {
-		sb.WriteString(fmt.Sprintf("  %s %s  %s  %s  %s  %s",
+		fmt.Fprintf(&sb, "  %s %s  %s  %s  %s  %s",
 			selectedStyle.Render("\u25b8"),
 			icon,
 			failText.Render(numStr),
 			selectedStyle.Render(name),
 			badge,
 			candidateBadge,
-		))
+		)
 	} else {
-		sb.WriteString(fmt.Sprintf("    %s  %s  %s  %s  %s",
+		fmt.Fprintf(&sb, "    %s  %s  %s  %s  %s",
 			icon,
 			failText.Render(numStr),
 			valueStyle.Render(name),
 			badge,
 			candidateBadge,
-		))
+		)
 	}
 
 	// Contextual keybinding hint for collapsed findings.
@@ -299,25 +314,25 @@ func (m model) renderFinding(idx int, vuln models.AIVulnerability, l layout) str
 	}
 	sb.WriteString("\n")
 
-	sb.WriteString(fmt.Sprintf("      %s\n", dimStyle.Render(vuln.Definition.Description)))
+	fmt.Fprintf(&sb, indentFmt, dimStyle.Render(vuln.Definition.Description))
 
 	// Probe result.
-	_, total := findingPassRate(vuln.Definition.ID, m.data.Summary)
+	total := findingPassRate(vuln.Definition.ID, m.data.Summary)
 	candidateCount := findingFailCount(vuln.Definition.ID, m.data.Summary)
-	sb.WriteString(fmt.Sprintf("      %s\n",
+	fmt.Fprintf(&sb, indentFmt,
 		failText.Render(fmt.Sprintf("%d of %d probes are finding candidates", candidateCount, total)),
-	))
+	)
 
 	// OWASP reference inline.
 	if len(vuln.Tags) > 0 {
 		owasp := owaspLabel(vuln.Tags)
 		if owasp != "" {
-			sb.WriteString(fmt.Sprintf("      %s\n", valueStyle.Render(owasp)))
+			fmt.Fprintf(&sb, indentFmt, valueStyle.Render(owasp))
 		} else {
-			sb.WriteString(fmt.Sprintf("      %s %s\n",
+			fmt.Fprintf(&sb, "      %s %s\n",
 				labelStyle.Render("Tested Vulnerabilities:"),
 				dimStyle.Render(strings.Join(vuln.Tags, ", ")),
-			))
+			)
 		}
 	}
 

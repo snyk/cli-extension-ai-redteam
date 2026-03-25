@@ -1,15 +1,22 @@
 package controlserver
 
-type Attack struct {
+type AttackEntry struct {
 	Goal     string `json:"goal"`
-	Strategy string `json:"strategy"`
+	Strategy string `json:"strategy,omitempty"`
+}
+
+type ProfileResponse struct {
+	ID          string        `json:"id"`
+	Name        string        `json:"name"`
+	Description string        `json:"description"`
+	Entries     []AttackEntry `json:"entries"`
 }
 
 type CreateScanRequest struct {
-	Attacks     []Attack     `json:"attacks"`
-	TargetURL   string       `json:"target_url"`
-	Purpose     string       `json:"purpose,omitempty"`
-	GroundTruth *GroundTruth `json:"ground_truth,omitempty"`
+	Attacks     []AttackEntry `json:"attacks"`
+	Purpose     string        `json:"purpose,omitempty"`
+	GroundTruth *GroundTruth  `json:"ground_truth,omitempty"`
+	TargetURL   string        `json:"target_url,omitempty"`
 }
 
 // GroundTruth is optional context for judging: system prompt and tools of the target.
@@ -92,7 +99,8 @@ type ScanResult struct {
 }
 
 type EnumEntry struct {
-	Value        string `json:"value"`
-	Description  string `json:"description"`
-	DisplayOrder int    `json:"display_order"`
+	Value        string   `json:"value"`
+	Description  string   `json:"description"`
+	DisplayOrder int      `json:"display_order"`
+	Strategies   []string `json:"strategies,omitempty"`
 }
