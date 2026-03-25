@@ -94,6 +94,10 @@ func RunRedTeamWorkflow(
 
 	config.Set(configuration.RAW_CMD_ARGS, os.Args[1:])
 
+	if err := utils.RejectOrgFlag(); err != nil {
+		return nil, err //nolint:wrapcheck // already a catalog error
+	}
+
 	experimental := config.GetBool(utils.FlagExperimental)
 	if !experimental {
 		logger.Debug().Msg("Required experimental flag is not present")
