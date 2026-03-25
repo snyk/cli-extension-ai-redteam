@@ -1,4 +1,4 @@
-import { Form, Input, Typography } from "antd";
+import { Form, Input, InputNumber, Typography } from "antd";
 import HeadersEditor from "./HeadersEditor";
 import TestConnection from "./TestConnection";
 
@@ -69,6 +69,14 @@ export default function TargetConfigStep() {
         tooltip={<>JMESPath expression to extract the response from a JSON body (e.g. <code>data.choices[0].message.content</code>). Leave empty if the target returns plain text. <a href="https://jmespath.org/specification.html" target="_blank" rel="noopener noreferrer">JMESPath reference</a></>}
       >
         <Input style={{ fontFamily: "var(--pcl-font-family-mono)" }} />
+      </Form.Item>
+
+      <Form.Item
+        label="Request timeout (seconds)"
+        name={["target", "settings", "timeout"]}
+        tooltip="Maximum time to wait for each target HTTP response. Leave empty for default (60 seconds)."
+      >
+        <InputNumber min={0} placeholder="60" style={{ maxWidth: 240 }} />
       </Form.Item>
 
       <Form.Item label="Headers" tooltip="Custom HTTP headers sent with every request (e.g. Authorization, API keys)">

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -15,6 +16,9 @@ import (
 )
 
 const APIVersion = "2026-02-20"
+
+// DefaultClientTimeout is the HTTP client timeout for the control server API (Snyk API or local minired).
+const DefaultClientTimeout = 5 * time.Minute
 
 type Client interface {
 	CreateScan(ctx context.Context, req *CreateScanRequest) (string, error)

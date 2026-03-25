@@ -100,8 +100,8 @@ describe("SetupPage", () => {
 
   it("renders Download and Save buttons on review step", () => {
     render(<SetupPage {...defaultProps} activeStep="review" />);
-    expect(screen.getByRole("button", { name: /download/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /save/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /download download/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /save save/i })).toBeInTheDocument();
   });
 
   it("renders Review Configuration text on goal step (last before review)", () => {

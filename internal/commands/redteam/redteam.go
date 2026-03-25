@@ -1,3 +1,5 @@
+// Package redteam implements the Snyk CLI workflow that runs a new Agent Red Team scan
+// against a configured target (control server + target HTTP API) and returns the report.
 package redteam
 
 import (
@@ -8,7 +10,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/rs/zerolog"
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
@@ -129,9 +130,9 @@ func RunRedTeamWorkflow(
 		return nil, err //nolint:wrapcheck // RedTeamError from helpers
 	}
 
-	targetHTTPClient := &http.Client{Timeout: target.DefaultTimeout}
+	targetHTTPClient := &http.Client{Timeout: rtConfig.TargetHTTPTimeout()}
 	controlServerHTTPClient := invocationCtx.GetNetworkAccess().GetHttpClient()
-	controlServerHTTPClient.Timeout = 60 * time.Second
+	controlServerHTTPClient.Timeout = controlserver.DefaultClientTimeout
 	controlServerURL := config.GetString(configuration.API_URL)
 
 	controlServerClient := controlServerFactory(logger, controlServerHTTPClient, controlServerURL, tenantID)
@@ -171,6 +172,7 @@ func handleListFlags(
 	listGoals, listStrategies, listProfiles bool,
 ) ([]workflow.Data, error) {
 	ctx := context.Background()
+	httpClient.Timeout = controlserver.DefaultClientTimeout
 	snykAPIURL := config.GetString(configuration.API_URL)
 	controlServerClient := controlServerFactory(logger, httpClient, snykAPIURL, "")
 

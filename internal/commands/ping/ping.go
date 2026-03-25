@@ -3,6 +3,7 @@ package ping
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -53,8 +54,9 @@ func pingWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) (
 	}
 
 	headers := rtConfig.HeadersMap()
+	httpClient := &http.Client{Timeout: rtConfig.TargetHTTPTimeout()}
 	client := target.NewHTTPClient(
-		nil,
+		httpClient,
 		rtConfig.Target.Settings.URL,
 		headers,
 		rtConfig.Target.Settings.RequestBodyTemplate,

@@ -75,6 +75,7 @@ func setupWorkflow(invocationCtx workflow.InvocationContext, _ []workflow.Data) 
 	}
 
 	httpClient := invocationCtx.GetNetworkAccess().GetHttpClient()
+	httpClient.Timeout = controlserver.DefaultClientTimeout
 	apiURL := config.GetString(configuration.API_URL)
 	csClient := controlserver.NewClient(&logger, httpClient, apiURL, "")
 

@@ -139,6 +139,27 @@ func TestHandlePing_InvalidJSON(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
+func TestHandlePing_InvalidTimeout(t *testing.T) {
+	pingReq := wizard.PingRequest{
+		URL:                 "https://example.com",
+		RequestBodyTemplate: `{"message":"{{prompt}}"}`,
+		ResponseSelector:    "response",
+		Timeout:             -1,
+	}
+	body, _ := json.Marshal(pingReq)
+
+	handler := wizard.HandlePing()
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	var resp map[string]string
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+	assert.Contains(t, resp["error"], "timeout")
+}
+
 // --- handleListGoals ---
 
 func TestHandleListGoals_Success(t *testing.T) {
