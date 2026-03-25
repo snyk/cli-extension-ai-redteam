@@ -220,6 +220,7 @@ func TestToCreateScanRequest_WithAttacks(t *testing.T) {
 		{Goal: "system_prompt_extraction"},
 	}
 	req := cfg.ToCreateScanRequest()
+	assert.Equal(t, "https://example.com/chat", req.TargetURL)
 	require.Len(t, req.Attacks, 2)
 	assert.Equal(t, "harmful_content", req.Attacks[0].Goal)
 	assert.Equal(t, "role_play", req.Attacks[0].Strategy)

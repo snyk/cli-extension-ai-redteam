@@ -167,6 +167,7 @@ func (cfg *Config) ToCreateScanRequest() *controlserver.CreateScanRequest {
 	}
 	req := &controlserver.CreateScanRequest{
 		Attacks:     attacks,
+		TargetURL:   cfg.Target.Settings.URL,
 		Purpose:     cfg.Target.Context.Purpose,
 		GroundTruth: buildGroundTruthFromConfig(&cfg.Target.Context.GroundTruth),
 	}
