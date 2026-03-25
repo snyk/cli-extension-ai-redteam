@@ -401,7 +401,7 @@ func stripAnsi(s string) string {
 	return out.String()
 }
 
-// buildSummaryFromResults synthesises an AIScanSummary from the results list
+// buildSummaryFromResults synthesizes an AIScanSummary from the results list
 // when the server report doesn't include one. Results are grouped by their
 // definition ID (the engine_tag / slug) so each strategy row appears once.
 func buildSummaryFromResults(results []models.AIVulnerability) *models.AIScanSummary {
