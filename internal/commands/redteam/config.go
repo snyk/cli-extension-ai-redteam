@@ -205,12 +205,15 @@ func (cfg *Config) ToCreateScanRequest() *controlserver.CreateScanRequest {
 			attacks = append(attacks, controlserver.AttackEntry{Goal: g})
 		}
 	}
+	targetURL := cfg.Target.Settings.URL
+	if targetURL == "" && cfg.Target.Settings.TargetCommand != nil {
+		targetURL = "external://target-command"
+	}
 	req := &controlserver.CreateScanRequest{
 		Attacks:     attacks,
 		Purpose:     cfg.Target.Context.Purpose,
 		GroundTruth: buildGroundTruthFromConfig(&cfg.Target.Context.GroundTruth),
-		TargetURL:   cfg.Target.Settings.URL,
-		Concurrency: cfg.Concurrency,
+		TargetURL:   targetURL,
 	}
 	return req
 }

@@ -1,0 +1,9 @@
+target:
+  name: "Maverick UI Chat (WebSocket)"
+  type: external
+  context:
+    purpose: "AI-powered security assistant for threat modeling and vulnerability analysis"
+  settings:
+    target_command:
+      binary: "uv"
+      args: ["run", "--with", "python-socketio[client]", "--with", "websocket-client", "targets/maverick_ws_bridge.py"]
