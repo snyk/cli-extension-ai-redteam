@@ -103,9 +103,11 @@ Flags override values from the config file when set.
 | `--list-strategies` | List available strategies and exit. |
 | `--list-profiles` | List available profiles and exit. |
 | `--tenant-id` | Tenant ID (auto-discovered if not provided). |
+| `--json` | Output raw JSON to stdout instead of the interactive CLI report. |
 | `--html` | Output report as HTML instead of JSON. |
 | `--html-file-output` | Write HTML report to this path. |
 | `--json-file-output` | Write JSON report to this path. |
+| `--report` | Re-open the last scan report in the interactive TUI without running a new scan. |
 
 ## Additional commands
 
@@ -125,6 +127,7 @@ Fetches results for a previously submitted scan by its scan ID.
 
 ```bash
 snyk redteam get --experimental --id <scan-uuid>
+snyk redteam get --experimental --id <scan-uuid> --json
 snyk redteam get --experimental --id <scan-uuid> --html
 snyk redteam get --experimental --id <scan-uuid> --html-file-output report.html
 snyk redteam get --experimental --id <scan-uuid> --json-file-output report.json
@@ -135,6 +138,7 @@ snyk redteam get --experimental --id <scan-uuid> --json-file-output report.json
 | `--id` | Scan ID (UUID) to retrieve results for. |
 | `--experimental` | Required; acknowledges experimental feature. |
 | `--tenant-id` | Tenant ID (auto-discovered if not provided). |
+| `--json` | Output raw JSON to stdout instead of the interactive CLI report. |
 | `--html` | Output the report in HTML format instead of JSON. |
 | `--html-file-output` | Write the HTML report to the specified file path. |
 | `--json-file-output` | Write the JSON report to the specified file path. |

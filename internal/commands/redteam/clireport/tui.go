@@ -335,7 +335,7 @@ func (m model) renderFinding(idx int, vuln models.ReportFinding, l layout) strin
 
 	if isExpanded {
 		sb.WriteString("\n")
-		sb.WriteString(renderConversation(vuln.Turns, true, l))
+		sb.WriteString(renderConversation(vuln.Turns, l))
 
 		if vuln.Evidence.Content.Reason != "" {
 			renderEvidenceBlock(&sb, vuln.Evidence.Content.Reason, l)

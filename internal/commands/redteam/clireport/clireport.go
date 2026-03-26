@@ -73,10 +73,9 @@ func newLayout(termWidth int) layout {
 
 // ScanMeta holds metadata about the scan for display in the report header.
 type ScanMeta struct {
-	TargetURL        string
-	Goals            []string
-	Strategies       []string
-	FullConversation bool
+	TargetURL  string
+	Goals      []string
+	Strategies []string
 }
 
 // Render produces a styled CLI report from normalized scan results.
@@ -98,7 +97,7 @@ func RenderWithWidth(data *models.ScanReport, meta ScanMeta, termWidth int) stri
 	}
 
 	if len(data.Results) > 0 {
-		sb.WriteString(renderFindings(data.Results, meta.FullConversation, l))
+		sb.WriteString(renderFindings(data.Results, l))
 	}
 
 	if len(data.PassedTypes) > 0 {
@@ -470,7 +469,7 @@ func owaspLabel(tags []string) string {
 
 // --- findings ---
 
-func renderFindings(results []models.ReportFinding, fullConversation bool, l layout) string {
+func renderFindings(results []models.ReportFinding, l layout) string {
 	var sb strings.Builder
 
 	sb.WriteString("  " + headingStyle.Render("Findings"))
@@ -502,16 +501,11 @@ func renderFindings(results []models.ReportFinding, fullConversation bool, l lay
 			}
 		}
 
-		if fullConversation {
-			sb.WriteString("\n")
-			sb.WriteString(renderConversation(vuln.Turns, true, l))
+		sb.WriteString("\n")
+		sb.WriteString(renderConversation(vuln.Turns, l))
 
-			if vuln.Evidence.Content.Reason != "" {
-				renderEvidenceBlock(&sb, vuln.Evidence.Content.Reason, l)
-			}
-		} else {
-			fmt.Fprintf(&sb, "    %s\n",
-				dimStyle.Render("[use --full-conversation to expand chat details]"))
+		if vuln.Evidence.Content.Reason != "" {
+			renderEvidenceBlock(&sb, vuln.Evidence.Content.Reason, l)
 		}
 	}
 
@@ -528,7 +522,7 @@ func renderEvidenceBlock(sb *strings.Builder, reason string, l layout) {
 		truncated = true
 	}
 
-	header := failText.Render("Extracted content (finding candidate)")
+	header := failText.Render("Reasoning")
 	content := fmt.Sprintf("%s\n%s", header, dimStyle.Render(evidence))
 	if truncated {
 		content += fmt.Sprintf("\n%s",
@@ -538,21 +532,11 @@ func renderEvidenceBlock(sb *strings.Builder, reason string, l layout) {
 	sb.WriteString("\n")
 }
 
-// renderConversation renders turns as a chat-style layout.
-// By default only the first and last turns are shown. Pass fullConversation=true
-// to display all turns (--full-conversation flag).
-func renderConversation(turns []models.ReportFindingTurn, fullConversation bool, l layout) string {
-	visible := turns
-	omitted := 0
-
-	if !fullConversation && len(turns) > 2 {
-		omitted = len(turns) - 2
-		visible = []models.ReportFindingTurn{turns[0], turns[len(turns)-1]}
-	}
-
+// renderConversation renders all turns as a chat-style layout.
+func renderConversation(turns []models.ReportFindingTurn, l layout) string {
 	var sb strings.Builder
 
-	for i, turn := range visible {
+	for _, turn := range turns {
 		if turn.Request != nil {
 			msg := truncate(*turn.Request, maxConvoLen)
 			content := fmt.Sprintf("%s  %s", dimStyle.Render("You"), valueStyle.Render(msg))
@@ -564,15 +548,6 @@ func renderConversation(turns []models.ReportFindingTurn, fullConversation bool,
 			content := fmt.Sprintf("%s  %s", purpleText.Render("Agent"), valueStyle.Render(msg))
 			sb.WriteString(agentBoxStyle.Width(l.chatBox).Render(content))
 			sb.WriteString("\n")
-		}
-
-		if i == 0 && omitted > 0 {
-			noun := "turn"
-			if omitted > 1 {
-				noun = "turns"
-			}
-			fmt.Fprintf(&sb, indentFmt,
-				dimStyle.Render(fmt.Sprintf("... %d %s hidden (use --full-conversation to expand)", omitted, noun)))
 		}
 	}
 

@@ -41,7 +41,6 @@ const (
 	FlagListProfiles     = "list-profiles"
 	FlagGoals            = "goals"
 	FlagProfile          = "profile"
-	FlagFullConversation = "full-conversation"
 	FlagJSON             = "json"
 	FlagPurpose          = "purpose"
 	FlagSystemPrompt     = "system-prompt"

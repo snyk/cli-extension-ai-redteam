@@ -67,7 +67,6 @@ func RegisterRedTeamWorkflow(e workflow.Engine) error {
 	flagset.Bool(utils.FlagHTML, false, "Output the red team report in HTML format instead of JSON")
 	flagset.String(utils.FlagHTMLFileOutput, "", "Write the HTML report to the specified file path")
 	flagset.String(utils.FlagJSONFileOutput, "", "Write the JSON report to the specified file path")
-	flagset.Bool(utils.FlagFullConversation, false, "Show all conversation turns in findings (default: first and last only)")
 	flagset.Bool(utils.FlagJSON, false, "Output raw JSON instead of the styled CLI report")
 	flagset.Bool(utils.FlagListGoals, false, "List all available attack goals and exit")
 	flagset.Bool(utils.FlagListStrategies, false, "List all available attack strategies and exit")
@@ -189,10 +188,9 @@ func RunRedTeamWorkflow(
 		reportData, parseErr := parseReportForTUI(results, config)
 		if parseErr == nil && reportData != nil {
 			meta := clireport.ScanMeta{
-				TargetURL:        rtConfig.Target.Settings.URL,
-				Goals:            rtConfig.UniqueGoals(),
-				Strategies:       rtConfig.UniqueStrategies(),
-				FullConversation: config.GetBool(utils.FlagFullConversation),
+				TargetURL:  rtConfig.Target.Settings.URL,
+				Goals:      rtConfig.UniqueGoals(),
+				Strategies: rtConfig.UniqueStrategies(),
 			}
 			// Save report for later re-display via --report.
 			if saveErr := clireport.SaveReport(reportData, meta); saveErr != nil {
