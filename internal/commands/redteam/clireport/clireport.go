@@ -270,15 +270,15 @@ func renderHeader(meta ScanMeta) string {
 // --- summary ---
 
 func renderSummary(data *models.ScanReport) string {
-	vulnerable := countUniqueStrategies(data)
+	findings := countUniqueStrategies(data)
 	passed := len(data.PassedTypes)
 
 	var sb strings.Builder
 
 	sb.WriteString("  " + headingStyle.Render("Summary"))
 	sb.WriteString("\n\n")
-	fmt.Fprintf(&sb, "    %s %d vulnerable    %s %d passed\n\n",
-		failText.Render("\u26a0"), vulnerable,
+	fmt.Fprintf(&sb, "    %s %d findings    %s %d passed\n\n",
+		failText.Render("\u26a0"), findings,
 		passText.Render("\u2713"), passed,
 	)
 
