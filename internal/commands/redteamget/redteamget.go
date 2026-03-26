@@ -137,7 +137,7 @@ func handleGetScanResults(
 	returnJSON := config.GetBool(utils.FlagJSON)
 	returnHTML := config.GetBool(utils.FlagHTML)
 	if !returnJSON && !returnHTML {
-		var data models.GetAIVulnerabilitiesResponseData
+		var data models.ScanReport
 		if err := json.Unmarshal(reportJSON, &data); err == nil {
 			report := clireport.Render(&data, clireport.ScanMeta{})
 			return []workflow.Data{workflow.NewData(getWorkflowType, "text/plain", []byte(report))}, nil

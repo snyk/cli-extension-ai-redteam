@@ -191,6 +191,7 @@ func RunRedTeamWorkflow(
 			meta := clireport.ScanMeta{
 				TargetURL:        rtConfig.Target.Settings.URL,
 				Goals:            rtConfig.UniqueGoals(),
+				Strategies:       rtConfig.UniqueStrategies(),
 				FullConversation: config.GetBool(utils.FlagFullConversation),
 			}
 			// Save report for later re-display via --report.
@@ -209,7 +210,7 @@ func RunRedTeamWorkflow(
 	return output, nil
 }
 
-func parseReportForTUI(results []workflow.Data, config configuration.Configuration) (*models.GetAIVulnerabilitiesResponseData, error) {
+func parseReportForTUI(results []workflow.Data, config configuration.Configuration) (*models.ScanReport, error) {
 	if len(results) == 0 {
 		return nil, fmt.Errorf("no results")
 	}
@@ -217,7 +218,7 @@ func parseReportForTUI(results []workflow.Data, config configuration.Configurati
 	if !ok {
 		return nil, fmt.Errorf("unexpected payload type")
 	}
-	var data models.GetAIVulnerabilitiesResponseData
+	var data models.ScanReport
 	if err := json.Unmarshal(payload, &data); err != nil {
 		return nil, fmt.Errorf("failed to parse report JSON: %w", err)
 	}
@@ -418,15 +419,12 @@ func outputStatus(userInterface ui.UserInterface, logger *zerolog.Logger, status
 	if status == nil {
 		return
 	}
-	green := lipgloss.NewStyle().Foreground(lipgloss.Color("#7BF1A8"))
 	red := lipgloss.NewStyle().Foreground(lipgloss.Color("#E44A50"))
 	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("#7f8c8d"))
-	msg := fmt.Sprintf("\nScan complete: %d/%d probes | %s | %s",
+	msg := fmt.Sprintf("\nScan complete: %d/%d probes | %s",
 		status.Completed, status.TotalChats,
-		red.Render(fmt.Sprintf("%d finding candidates", status.Successful)),
-		green.Render(fmt.Sprintf("%d blocked", status.Failed)))
-	evoLink := "\033]8;;https://evo.snyk.io/report\033\\https://evo.snyk.io/report\033]8;;\033\\"
-	msg += "\n" + dim.Render("Tip: Re-open this report anytime with --report or view at ") + evoLink
+		red.Render(fmt.Sprintf("%d finding candidates", status.Successful)))
+	msg += "\n" + dim.Render("Tip: Re-open this report anytime with --report")
 	if err := userInterface.Output(msg); err != nil {
 		logger.Debug().Err(err).Msg("failed to output status")
 	}

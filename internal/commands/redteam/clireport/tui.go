@@ -14,7 +14,7 @@ import (
 
 // RunInteractive launches the interactive TUI report viewer.
 // It returns the final static report string for piping when stdout is not a TTY.
-func RunInteractive(data *models.GetAIVulnerabilitiesResponseData, meta ScanMeta) error {
+func RunInteractive(data *models.ScanReport, meta ScanMeta) error {
 	if !isatty.IsTerminal(os.Stdout.Fd()) && !isatty.IsCygwinTerminal(os.Stdout.Fd()) {
 		return fmt.Errorf("not a terminal")
 	}
@@ -30,7 +30,7 @@ func RunInteractive(data *models.GetAIVulnerabilitiesResponseData, meta ScanMeta
 // --- bubbletea model ---
 
 type model struct {
-	data     *models.GetAIVulnerabilitiesResponseData
+	data     *models.ScanReport
 	meta     ScanMeta
 	cursor   int    // which finding is highlighted
 	expanded []bool // which findings are expanded
@@ -40,10 +40,7 @@ type model struct {
 	showHelp bool   // help overlay visible
 }
 
-func newModel(data *models.GetAIVulnerabilitiesResponseData, meta ScanMeta) model {
-	if data.Summary == nil && len(data.Results) > 0 {
-		data.Summary = buildSummaryFromResults(data.Results)
-	}
+func newModel(data *models.ScanReport, meta ScanMeta) model {
 	expanded := make([]bool, len(data.Results))
 	return model{
 		data:     data,
@@ -174,8 +171,8 @@ func (m model) View() string {
 	sb.WriteString(renderHeader(m.meta))
 	sb.WriteString(renderSummary(m.data))
 
-	if m.data.Summary != nil && len(m.data.Summary.Vulnerabilities) > 0 {
-		sb.WriteString(renderStrategyTable(m.data.Summary, l))
+	if rows := groupByStrategy(m.data.Results); len(rows) > 0 {
+		sb.WriteString(renderStrategyTable(rows, l))
 	}
 
 	// Interactive findings.
@@ -188,6 +185,10 @@ func (m model) View() string {
 			sb.WriteString(m.renderFinding(i, vuln, l))
 		}
 		sb.WriteString("\n")
+	}
+
+	if len(m.data.PassedTypes) > 0 {
+		sb.WriteString(renderPassedTypes(m.data.PassedTypes))
 	}
 
 	// Footer.
@@ -273,7 +274,7 @@ var (
 )
 
 //nolint:gocritic // tea.Model interface requires value receiver
-func (m model) renderFinding(idx int, vuln models.AIVulnerability, l layout) string {
+func (m model) renderFinding(idx int, vuln models.ReportFinding, l layout) string {
 	var sb strings.Builder
 
 	isSelected := idx == m.cursor
@@ -318,13 +319,6 @@ func (m model) renderFinding(idx int, vuln models.AIVulnerability, l layout) str
 	sb.WriteString("\n")
 
 	fmt.Fprintf(&sb, indentFmt, dimStyle.Render(vuln.Definition.Description))
-
-	// Probe result.
-	total := findingPassRate(vuln.Definition.ID, m.data.Summary)
-	candidateCount := findingFailCount(vuln.Definition.ID, m.data.Summary)
-	fmt.Fprintf(&sb, indentFmt,
-		failText.Render(fmt.Sprintf("%d of %d probes are finding candidates", candidateCount, total)),
-	)
 
 	// OWASP reference inline.
 	if len(vuln.Tags) > 0 {

@@ -26,7 +26,6 @@ type layout struct {
 	content          int // usable width inside report box (border + padding removed)
 	strategy         int
 	severity         int
-	blocked          int
 	findingCandidate int
 	tableWidth       int
 	chatBox          int
@@ -49,26 +48,23 @@ func newLayout(termWidth int) layout {
 	}
 
 	// Table columns: distribute proportionally within content width.
-	// Reserve indent (4) + 3 gaps (3*3=9) = 13 chars.
-	available := content - 13
+	// Reserve indent (4) + 2 gaps (2*3=6) = 10 chars.
+	available := content - 10
 	if available < 40 {
 		available = 40
 	}
 
-	// Proportions: strategy 45%, severity 15%, blocked 20%, finding candidate 20%
-	strategy := available * 45 / 100
-	severity := available * 15 / 100
-	blocked := available * 20 / 100
-	findingCandidate := available - strategy - severity - blocked
+	strategy := available * 50 / 100
+	severity := available * 20 / 100
+	findingCandidate := available - strategy - severity
 
-	tw := strategy + severity + blocked + findingCandidate + (3 * colGap)
+	tw := strategy + severity + findingCandidate + (2 * colGap)
 
 	return layout{
 		termWidth:        termWidth,
 		content:          content,
 		strategy:         strategy,
 		severity:         severity,
-		blocked:          blocked,
 		findingCandidate: findingCandidate,
 		tableWidth:       tw,
 		chatBox:          chatBox,
@@ -84,16 +80,12 @@ type ScanMeta struct {
 }
 
 // Render produces a styled CLI report from normalized scan results.
-func Render(data *models.GetAIVulnerabilitiesResponseData, meta ScanMeta) string {
+func Render(data *models.ScanReport, meta ScanMeta) string {
 	return RenderWithWidth(data, meta, defaultTermWidth)
 }
 
 // RenderWithWidth produces a styled CLI report responsive to the given terminal width.
-func RenderWithWidth(data *models.GetAIVulnerabilitiesResponseData, meta ScanMeta, termWidth int) string {
-	if data.Summary == nil && len(data.Results) > 0 {
-		data.Summary = buildSummaryFromResults(data.Results)
-	}
-
+func RenderWithWidth(data *models.ScanReport, meta ScanMeta, termWidth int) string {
 	l := newLayout(termWidth)
 	var sb strings.Builder
 
@@ -101,12 +93,12 @@ func RenderWithWidth(data *models.GetAIVulnerabilitiesResponseData, meta ScanMet
 	sb.WriteString(renderHeader(meta))
 	sb.WriteString(renderSummary(data))
 
-	if data.Summary != nil && len(data.Summary.Vulnerabilities) > 0 {
-		sb.WriteString(renderStrategyTable(data.Summary, l))
+	if rows := groupByStrategy(data.Results); len(rows) > 0 {
+		sb.WriteString(renderStrategyTable(rows, l))
 	}
 
 	if len(data.Results) > 0 {
-		sb.WriteString(renderFindings(data.Results, data.Summary, meta.FullConversation, l))
+		sb.WriteString(renderFindings(data.Results, meta.FullConversation, l))
 	}
 
 	if len(data.PassedTypes) > 0 {
@@ -216,60 +208,49 @@ var (
 
 // --- banner ---
 
-//nolint:nestif // sequential branching for banner rendering
-func renderBanner(data *models.GetAIVulnerabilitiesResponseData) string {
+func renderBanner(data *models.ScanReport) string {
 	var sb strings.Builder
 
-	findingCandidates, blocked, totalProbes := countOutcomes(data)
+	findingCandidates := len(data.Results)
+	strategiesTested := countUniqueStrategies(data) + len(data.PassedTypes)
 
 	sb.WriteString("\n")
 	if findingCandidates == 0 {
-		banner := fmt.Sprintf(" \u2713 All %d probes blocked \u2014 no vulnerabilities found ", totalProbes)
+		banner := fmt.Sprintf(" \u2713 %d strategies tested \u2014 no vulnerabilities found ", strategiesTested)
 		sb.WriteString("  " + bannerCleanStyle.Render(banner))
 	} else {
-		counts := countBySeverity(data.Results)
-		var parts []string
-		if n, ok := counts["critical"]; ok && n > 0 {
-			parts = append(parts, fmt.Sprintf("%d CRITICAL", n))
-		}
-		if n, ok := counts["high"]; ok && n > 0 {
-			parts = append(parts, fmt.Sprintf("%d HIGH", n))
-		}
-		if n, ok := counts["medium"]; ok && n > 0 {
-			parts = append(parts, fmt.Sprintf("%d MEDIUM", n))
-		}
-		if n, ok := counts["low"]; ok && n > 0 {
-			parts = append(parts, fmt.Sprintf("%d LOW", n))
-		}
-
-		noun := "FINDING CANDIDATE"
-		if findingCandidates > 1 {
-			noun = "FINDING CANDIDATES"
-		}
-		banner := fmt.Sprintf(" \u26a0 %d %s   %d blocked   (%d probes) ",
-			findingCandidates, noun, blocked, totalProbes)
-		if len(parts) > 0 {
-			banner = fmt.Sprintf(" \u26a0 %d %s: %s   %d blocked   (%d probes) ",
-				findingCandidates, noun, strings.Join(parts, ", "), blocked, totalProbes)
-		}
-		sb.WriteString("  " + bannerStyle.Render(banner))
+		sb.WriteString("  " + bannerStyle.Render(severityBanner(data.Results, findingCandidates)))
 	}
 	sb.WriteString("\n\n")
 
 	return sb.String()
 }
 
-func countOutcomes(data *models.GetAIVulnerabilitiesResponseData) (findingCandidates, blocked, total int) {
-	if data.Summary == nil {
-		return 0, 0, 0
+func severityBanner(results []models.ReportFinding, findingCandidates int) string {
+	counts := countBySeverity(results)
+	var parts []string
+	for _, level := range []string{"critical", "high", "medium", "low"} {
+		if n := counts[level]; n > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s", n, strings.ToUpper(level)))
+		}
 	}
-	for i := range data.Summary.Vulnerabilities {
-		v := &data.Summary.Vulnerabilities[i]
-		total += v.TotalChats
-		findingCandidates += v.Successful
-		blocked += v.TotalChats - v.Successful
+
+	noun := "FINDING CANDIDATE"
+	if findingCandidates > 1 {
+		noun = "FINDING CANDIDATES"
 	}
-	return findingCandidates, blocked, total
+	if len(parts) > 0 {
+		return fmt.Sprintf(" \u26a0 %d %s: %s ", findingCandidates, noun, strings.Join(parts, ", "))
+	}
+	return fmt.Sprintf(" \u26a0 %d %s ", findingCandidates, noun)
+}
+
+func countUniqueStrategies(data *models.ScanReport) int {
+	seen := make(map[string]struct{})
+	for i := range data.Results {
+		seen[data.Results[i].Definition.ID] = struct{}{}
+	}
+	return len(seen)
 }
 
 // --- header ---
@@ -289,31 +270,17 @@ func renderHeader(meta ScanMeta) string {
 
 // --- summary ---
 
-func renderSummary(data *models.GetAIVulnerabilitiesResponseData) string {
-	var vulnerable, blocked, skipped int
-
-	if data.Summary != nil {
-		for i := range data.Summary.Vulnerabilities {
-			v := &data.Summary.Vulnerabilities[i]
-			switch {
-			case v.Vulnerable:
-				vulnerable++
-			case v.Status == "completed":
-				blocked++
-			default:
-				skipped++
-			}
-		}
-	}
+func renderSummary(data *models.ScanReport) string {
+	vulnerable := countUniqueStrategies(data)
+	passed := len(data.PassedTypes)
 
 	var sb strings.Builder
 
 	sb.WriteString("  " + headingStyle.Render("Summary"))
 	sb.WriteString("\n\n")
-	fmt.Fprintf(&sb, "    %s %d vulnerable    %s %d blocked    %s %d skipped\n\n",
+	fmt.Fprintf(&sb, "    %s %d vulnerable    %s %d passed\n\n",
 		failText.Render("\u26a0"), vulnerable,
-		passText.Render("\u2713"), blocked,
-		dimStyle.Render("\u25cc"), skipped,
+		passText.Render("\u2713"), passed,
 	)
 
 	return sb.String()
@@ -321,7 +288,39 @@ func renderSummary(data *models.GetAIVulnerabilitiesResponseData) string {
 
 // --- strategy table ---
 
-func renderStrategyTable(summary *models.AIScanSummary, l layout) string {
+type strategyRow struct {
+	engineTag  string
+	name       string
+	severity   string
+	candidates int
+}
+
+func groupByStrategy(results []models.ReportFinding) []strategyRow {
+	order := make([]string, 0)
+	byID := make(map[string]*strategyRow)
+	for i := range results {
+		r := &results[i]
+		id := r.Definition.ID
+		row, ok := byID[id]
+		if !ok {
+			row = &strategyRow{
+				engineTag: id,
+				name:      r.Definition.Name,
+				severity:  r.Severity,
+			}
+			byID[id] = row
+			order = append(order, id)
+		}
+		row.candidates++
+	}
+	rows := make([]strategyRow, 0, len(order))
+	for _, id := range order {
+		rows = append(rows, *byID[id])
+	}
+	return rows
+}
+
+func renderStrategyTable(rows []strategyRow, l layout) string {
 	var sb strings.Builder
 	gap := strings.Repeat(" ", colGap)
 
@@ -332,39 +331,33 @@ func renderStrategyTable(summary *models.AIScanSummary, l layout) string {
 
 	sb.WriteString("    " + dash + "\n")
 
-	fmt.Fprintf(&sb, "    %s%s%s%s%s%s%s\n",
+	fmt.Fprintf(&sb, "    %s%s%s%s%s\n",
 		padRight(dimStyle.Render("STRATEGY"), l.strategy),
 		gap,
 		padRight(dimStyle.Render("SEVERITY"), l.severity),
 		gap,
-		padRight(dimStyle.Render("BLOCKED"), l.blocked),
-		gap,
-		padRight(dimStyle.Render("FINDING CANDIDATE"), l.findingCandidate),
+		padRight(dimStyle.Render("FINDING CANDIDATES"), l.findingCandidate),
 	)
 	sb.WriteString("    " + dash + "\n")
 
-	for i := range summary.Vulnerabilities {
-		v := &summary.Vulnerabilities[i]
-		leaf := truncateCol(leafStrategy(v.EngineTag), l.strategy)
-		sev := padRight(renderSeverityText(v.Severity), l.severity)
-		blocked := v.TotalChats - v.Successful
-		candidates := v.Successful
+	for i := range rows {
+		row := &rows[i]
+		leaf := truncateCol(leafStrategy(row.engineTag), l.strategy)
+		sev := padRight(renderSeverityText(row.severity), l.severity)
 
-		blockedStr := padRight(passText.Render(fmt.Sprintf("%d", blocked)), l.blocked)
 		var candidateStr string
-		if candidates > 0 {
-			candidateStr = padRight(failText.Render(fmt.Sprintf("\u25cf %d", candidates)), l.findingCandidate)
+		if row.candidates > 0 {
+			candidateStr = padRight(failText.Render(fmt.Sprintf("\u25cf %d", row.candidates)), l.findingCandidate)
 		} else {
 			candidateStr = padRight(dimStyle.Render("0"), l.findingCandidate)
 		}
 
-		fmt.Fprintf(&sb, "    %s%s%s%s%s%s%s\n",
+		fmt.Fprintf(&sb, "    %s%s%s%s%s\n",
 			padRight(valueStyle.Render(leaf), l.strategy),
 			gap, sev,
-			gap, blockedStr,
 			gap, candidateStr,
 		)
-		fmt.Fprintf(&sb, indentFmt, dimStyle.Render(v.EngineTag))
+		fmt.Fprintf(&sb, indentFmt, dimStyle.Render(row.engineTag))
 	}
 
 	sb.WriteString("    " + dash + "\n\n\n")
@@ -399,60 +392,6 @@ func stripAnsi(s string) string {
 		out.WriteRune(r)
 	}
 	return out.String()
-}
-
-// buildSummaryFromResults synthesizes an AIScanSummary from the results list
-// when the server report doesn't include one. Results are grouped by their
-// definition ID (the engine_tag / slug) so each strategy row appears once.
-func buildSummaryFromResults(results []models.AIVulnerability) *models.AIScanSummary {
-	type entry struct {
-		slug      string
-		engineTag string
-		name      string
-		desc      string
-		severity  string
-		total     int
-		success   int
-	}
-
-	order := make([]string, 0)
-	bySlug := make(map[string]*entry)
-
-	for i := range results {
-		r := &results[i]
-		slug := r.Definition.ID
-		e, ok := bySlug[slug]
-		if !ok {
-			e = &entry{
-				slug:      slug,
-				engineTag: slug,
-				name:      r.Definition.Name,
-				desc:      r.Definition.Description,
-				severity:  r.Severity,
-			}
-			bySlug[slug] = e
-			order = append(order, slug)
-		}
-		e.total++
-		e.success++
-	}
-
-	vulns := make([]models.AIScanSummaryVulnerability, 0, len(order))
-	for _, slug := range order {
-		e := bySlug[slug]
-		vulns = append(vulns, models.AIScanSummaryVulnerability{
-			EngineTag:  e.engineTag,
-			Slug:       e.slug,
-			Name:       e.name,
-			Severity:   e.severity,
-			Status:     "completed",
-			Vulnerable: e.success > 0,
-			TotalChats: e.total,
-			Successful: e.success,
-			Failed:     e.total - e.success,
-		})
-	}
-	return &models.AIScanSummary{Vulnerabilities: vulns}
 }
 
 func leafStrategy(engineTag string) string {
@@ -531,7 +470,7 @@ func owaspLabel(tags []string) string {
 
 // --- findings ---
 
-func renderFindings(results []models.AIVulnerability, summary *models.AIScanSummary, fullConversation bool, l layout) string {
+func renderFindings(results []models.ReportFinding, fullConversation bool, l layout) string {
 	var sb strings.Builder
 
 	sb.WriteString("  " + headingStyle.Render("Findings"))
@@ -549,13 +488,6 @@ func renderFindings(results []models.AIVulnerability, summary *models.AIScanSumm
 			findingCandidateBadge.Render(" FINDING CANDIDATE "),
 		)
 		fmt.Fprintf(&sb, "    %s\n", dimStyle.Render(vuln.Definition.Description))
-
-		// Probe result.
-		total := findingPassRate(vuln.Definition.ID, summary)
-		candidateCount := findingFailCount(vuln.Definition.ID, summary)
-		fmt.Fprintf(&sb, "    %s\n",
-			failText.Render(fmt.Sprintf("%d of %d probes are finding candidates", candidateCount, total)),
-		)
 
 		// OWASP reference inline.
 		if len(vuln.Tags) > 0 {
@@ -606,41 +538,16 @@ func renderEvidenceBlock(sb *strings.Builder, reason string, l layout) {
 	sb.WriteString("\n")
 }
 
-func findingPassRate(defID string, summary *models.AIScanSummary) (total int) {
-	if summary == nil {
-		return 1
-	}
-	for i := range summary.Vulnerabilities {
-		v := &summary.Vulnerabilities[i]
-		if v.Slug == defID {
-			return v.TotalChats
-		}
-	}
-	return 1
-}
-
-func findingFailCount(defID string, summary *models.AIScanSummary) int {
-	if summary == nil {
-		return 0
-	}
-	for i := range summary.Vulnerabilities {
-		if summary.Vulnerabilities[i].Slug == defID {
-			return summary.Vulnerabilities[i].Successful
-		}
-	}
-	return 0
-}
-
 // renderConversation renders turns as a chat-style layout.
 // By default only the first and last turns are shown. Pass fullConversation=true
 // to display all turns (--full-conversation flag).
-func renderConversation(turns []models.Turn, fullConversation bool, l layout) string {
+func renderConversation(turns []models.ReportFindingTurn, fullConversation bool, l layout) string {
 	visible := turns
 	omitted := 0
 
 	if !fullConversation && len(turns) > 2 {
 		omitted = len(turns) - 2
-		visible = []models.Turn{turns[0], turns[len(turns)-1]}
+		visible = []models.ReportFindingTurn{turns[0], turns[len(turns)-1]}
 	}
 
 	var sb strings.Builder
@@ -682,7 +589,7 @@ func truncate(s string, maxLen int) string {
 
 // --- passed types ---
 
-func renderPassedTypes(passedTypes []models.PassedType) string {
+func renderPassedTypes(passedTypes []models.ReportPassedType) string {
 	var sb strings.Builder
 
 	sb.WriteString("  " + headingStyle.Render("Passed Types"))
@@ -703,7 +610,7 @@ func renderPassedTypes(passedTypes []models.PassedType) string {
 
 // --- footer ---
 
-func renderFooter(data *models.GetAIVulnerabilitiesResponseData) string {
+func renderFooter(data *models.ScanReport) string {
 	var sb strings.Builder
 
 	if len(data.Results) == 0 {
@@ -715,15 +622,12 @@ func renderFooter(data *models.GetAIVulnerabilitiesResponseData) string {
 		" " + valueStyle.Render("--html") +
 		" " + dimStyle.Render("to view in browser, or") +
 		" " + valueStyle.Render("--html-file-output report.html") +
-		" " + dimStyle.Render("to save.") + "\n")
-	evoLink := "\033]8;;https://evo.snyk.io/report\033\\https://evo.snyk.io/report\033]8;;\033\\"
-	sb.WriteString("    " + dimStyle.Render("View full report at") +
-		" " + evoLink + "\n\n")
+		" " + dimStyle.Render("to save.") + "\n\n")
 
 	return sb.String()
 }
 
-func countBySeverity(results []models.AIVulnerability) map[string]int {
+func countBySeverity(results []models.ReportFinding) map[string]int {
 	counts := make(map[string]int)
 	for i := range results {
 		counts[strings.ToLower(results[i].Severity)]++
@@ -735,8 +639,8 @@ func countBySeverity(results []models.AIVulnerability) map[string]int {
 
 // SavedReport bundles scan data and metadata for re-display.
 type SavedReport struct {
-	Data *models.GetAIVulnerabilitiesResponseData `json:"data"`
-	Meta ScanMeta                                 `json:"meta"`
+	Data *models.ScanReport `json:"data"`
+	Meta ScanMeta           `json:"meta"`
 }
 
 const reportFileName = "redteam-last-report.json"
@@ -754,7 +658,7 @@ func reportPath() (string, error) {
 }
 
 // SaveReport persists the latest scan report so it can be re-opened with --report.
-func SaveReport(data *models.GetAIVulnerabilitiesResponseData, meta ScanMeta) error {
+func SaveReport(data *models.ScanReport, meta ScanMeta) error {
 	p, err := reportPath()
 	if err != nil {
 		return err
@@ -767,7 +671,7 @@ func SaveReport(data *models.GetAIVulnerabilitiesResponseData, meta ScanMeta) er
 }
 
 // LoadReport loads the last saved report from disk.
-func LoadReport() (*models.GetAIVulnerabilitiesResponseData, ScanMeta, error) {
+func LoadReport() (*models.ScanReport, ScanMeta, error) {
 	p, err := reportPath()
 	if err != nil {
 		return nil, ScanMeta{}, err

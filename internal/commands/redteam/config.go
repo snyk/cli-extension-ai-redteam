@@ -347,6 +347,22 @@ func (cfg *Config) UniqueGoals() []string {
 	return goals
 }
 
+// UniqueStrategies returns deduplicated strategy names from attacks.
+func (cfg *Config) UniqueStrategies() []string {
+	seen := make(map[string]struct{})
+	var strategies []string
+	for _, a := range cfg.Attacks {
+		if a.Strategy == "" {
+			continue
+		}
+		if _, ok := seen[a.Strategy]; !ok {
+			seen[a.Strategy] = struct{}{}
+			strategies = append(strategies, a.Strategy)
+		}
+	}
+	return strategies
+}
+
 func (cfg *Config) HeadersMap() map[string]string {
 	return HeadersToMap(cfg.Target.Settings.Headers)
 }
