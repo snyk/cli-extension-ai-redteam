@@ -11,12 +11,11 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/rs/zerolog"
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 
@@ -161,8 +160,13 @@ func RunRedTeamWorkflow(
 		return nil, err
 	}
 
-	userInterface := invocationCtx.GetUserInterface()
-	displayBanner(userInterface, rtConfig, profileName)
+	configPath := config.GetString(utils.FlagConfig)
+	if configPath == "" {
+		if _, statErr := os.Stat("redteam.yaml"); statErr == nil {
+			configPath = "redteam.yaml"
+		}
+	}
+
 	targetClient := targetFactory(
 		targetHTTPClient,
 		rtConfig.Target.Settings.URL,
@@ -171,7 +175,7 @@ func RunRedTeamWorkflow(
 		rtConfig.Target.Settings.ResponseSelector,
 	)
 
-	results, scanErr := runClientDrivenScan(invocationCtx, controlServerClient, targetClient, rtConfig)
+	results, scanErr := runClientDrivenScan(invocationCtx, controlServerClient, targetClient, rtConfig, profileName, configPath)
 	if scanErr != nil {
 		return nil, scanErr
 	}
@@ -331,6 +335,8 @@ func runClientDrivenScan(
 	csClient controlserver.Client,
 	targetClient target.Client,
 	rtConfig *Config,
+	profileName string,
+	configPath string,
 ) ([]workflow.Data, error) {
 	logger := invocationCtx.GetEnhancedLogger()
 	userInterface := invocationCtx.GetUserInterface()
@@ -342,15 +348,45 @@ func runClientDrivenScan(
 	}
 	logger.Info().Str("scanID", scanID).Msg("scan created successfully")
 
-	progressBar := userInterface.NewProgressBar()
-	progressBar.SetTitle(fmt.Sprintf("Scanning %s...", rtConfig.Target.Name))
-	_ = progressBar.UpdateProgress(ui.InfiniteProgress) //nolint:errcheck // best-effort UI
-	defer func() { _ = progressBar.Clear() }()          //nolint:errcheck // best-effort UI
+	// --- Logo + Banner ---
+	printLogo(userInterface)
+	printBanner(userInterface, bannerParams{
+		ScanID:      scanID,
+		TargetURL:   rtConfig.Target.Settings.URL,
+		ProfileName: profileName,
+		Goals:       rtConfig.UniqueGoals(),
+		Strategies:  rtConfig.UniqueStrategies(),
+		ConfigPath:  configPath,
+	})
+
+	// --- Live progress UI ---
+	progress := newProgressUI(os.Stderr, supportsColor())
+	progress.Start()
+
+	// Background goroutine polls status every 500ms so probe counters tick up live.
+	pollCtx, pollCancel := context.WithCancel(ctx)
+	defer pollCancel()
+	go func() {
+		ticker := time.NewTicker(500 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-pollCtx.Done():
+				return
+			case <-ticker.C:
+				if status, err := csClient.GetStatus(pollCtx, scanID); err == nil {
+					progress.Update(status)
+				}
+			}
+		}
+	}()
 
 	var responses []controlserver.ChatResponse
 	for {
 		chats, nextErr := csClient.NextChats(ctx, scanID, responses)
 		if nextErr != nil {
+			pollCancel()
+			progress.Stop()
 			return nil, nextErr //nolint:wrapcheck // RedTeamError from controlserver
 		}
 		if len(chats) == 0 {
@@ -362,6 +398,8 @@ func runClientDrivenScan(
 			resp, tgtErr := targetClient.SendPrompt(ctx, chat.Prompt)
 			if tgtErr != nil {
 				if errors.Is(tgtErr, target.ErrCircuitOpen) {
+					pollCancel()
+					progress.Stop()
 					return nil, redteam_errors.NewNetworkError(fmt.Sprintf("aborting scan: %s", tgtErr))
 				}
 				logger.Warn().Err(tgtErr).Str("scanID", scanID).Str("chatID", chat.ChatID).Msg("The scan target returned an error")
@@ -372,19 +410,16 @@ func runClientDrivenScan(
 				Response: resp,
 			})
 		}
-
-		updateProgress(ctx, csClient, scanID, progressBar, userInterface, logger)
 	}
 
-	progressBar.SetTitle("Scan completed")
-	_ = progressBar.UpdateProgress(1.0) //nolint:errcheck // best-effort UI
-
-	status, statusErr := csClient.GetStatus(ctx, scanID)
+	// --- Completion ---
+	pollCancel()
+	progress.Stop()
+	finalStatus, statusErr := csClient.GetStatus(ctx, scanID)
 	if statusErr != nil {
 		logger.Debug().Err(statusErr).Msg("failed to get final status")
 	}
-
-	outputStatus(userInterface, logger, status)
+	progress.Finish(finalStatus)
 
 	reportJSON, reportErr := csClient.GetReport(ctx, scanID)
 	if reportErr != nil {
@@ -392,40 +427,6 @@ func runClientDrivenScan(
 	}
 
 	return []workflow.Data{newWorkflowData("application/json", reportJSON)}, nil
-}
-
-func updateProgress(
-	ctx context.Context,
-	csClient controlserver.Client,
-	scanID string,
-	progressBar ui.ProgressBar,
-	_ ui.UserInterface,
-	logger *zerolog.Logger,
-) {
-	status, err := csClient.GetStatus(ctx, scanID)
-	if err != nil {
-		logger.Debug().Err(err).Msg("failed to get status during scan")
-		return
-	}
-	if status.TotalChats > 0 {
-		progressBar.SetTitle(fmt.Sprintf("Scanning (%d/%d)", status.Completed, status.TotalChats))
-		_ = progressBar.UpdateProgress(float64(status.Completed) / float64(status.TotalChats)) //nolint:errcheck // best-effort UI
-	}
-}
-
-func outputStatus(userInterface ui.UserInterface, logger *zerolog.Logger, status *controlserver.ScanStatus) {
-	if status == nil {
-		return
-	}
-	red := lipgloss.NewStyle().Foreground(lipgloss.Color("#E44A50"))
-	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("#7f8c8d"))
-	msg := fmt.Sprintf("\nScan complete: %d/%d probes | %s",
-		status.Completed, status.TotalChats,
-		red.Render(fmt.Sprintf("%d finding candidates", status.Successful)))
-	msg += "\n" + dim.Render("Tip: Re-open this report anytime with --report")
-	if err := userInterface.Output(msg); err != nil {
-		logger.Debug().Err(err).Msg("failed to output status")
-	}
 }
 
 //nolint:ireturn // workflow.Data is the framework's expected return type
