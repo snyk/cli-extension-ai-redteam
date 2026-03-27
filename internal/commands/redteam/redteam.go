@@ -11,6 +11,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
@@ -145,8 +146,6 @@ func RunRedTeamWorkflow(
 		return nil, err
 	}
 
-	userInterface := invocationCtx.GetUserInterface()
-	displayBanner(userInterface, rtConfig, profileName)
 	targetClient := targetFactory(
 		targetHTTPClient,
 		rtConfig.Target.Settings.URL,
@@ -155,7 +154,7 @@ func RunRedTeamWorkflow(
 		rtConfig.Target.Settings.ResponseSelector,
 	)
 
-	results, scanErr := runClientDrivenScan(invocationCtx, controlServerClient, targetClient, rtConfig)
+	results, scanErr := runClientDrivenScan(invocationCtx, controlServerClient, targetClient, rtConfig, profileName, tenantID)
 	if scanErr != nil {
 		return nil, scanErr
 	}
@@ -324,10 +323,14 @@ func runClientDrivenScan(
 	csClient controlserver.Client,
 	targetClient target.Client,
 	rtConfig *Config,
+	profileName string,
+	tenantID string,
 ) ([]workflow.Data, error) {
 	logger := invocationCtx.GetEnhancedLogger()
 	userInterface := invocationCtx.GetUserInterface()
+	config := invocationCtx.GetConfiguration()
 	ctx := context.Background()
+	scanStart := time.Now()
 
 	scanID, err := csClient.CreateScan(ctx, rtConfig.ToCreateScanRequest())
 	if err != nil {
@@ -335,12 +338,23 @@ func runClientDrivenScan(
 	}
 	logger.Info().Str("scanID", scanID).Msg("scan created successfully")
 
+	theme := newCLITheme(os.Stdout)
+	bannerOpts := scanBannerOptions{
+		ScanID:      scanID,
+		ProfileName: profileName,
+		ConfigPath:  EffectiveConfigDisplayPath(config),
+		ScanMode:    deriveScanModeLabel(profileName),
+		TenantID:    tenantID,
+	}
+	_ = displayScanBanner(userInterface, theme, rtConfig, &bannerOpts) //nolint:errcheck // best-effort UI
+
 	progressBar := userInterface.NewProgressBar()
 	progressBar.SetTitle(fmt.Sprintf("Scanning %s...", rtConfig.Target.Name))
 	_ = progressBar.UpdateProgress(ui.InfiniteProgress) //nolint:errcheck // best-effort UI
 	defer func() { _ = progressBar.Clear() }()          //nolint:errcheck // best-effort UI
 
 	var responses []controlserver.ChatResponse
+	lastStatusFP := ""
 	for {
 		chats, nextErr := csClient.NextChats(ctx, scanID, responses)
 		if nextErr != nil {
@@ -366,8 +380,11 @@ func runClientDrivenScan(
 			})
 		}
 
-		updateProgress(ctx, csClient, scanID, progressBar, userInterface, logger)
+		updateProgress(ctx, csClient, scanID, progressBar, userInterface, theme, &lastStatusFP, logger)
 	}
+
+	lastStatusFP = ""
+	updateProgress(ctx, csClient, scanID, progressBar, userInterface, theme, &lastStatusFP, logger)
 
 	progressBar.SetTitle("Scan completed")
 	_ = progressBar.UpdateProgress(1.0) //nolint:errcheck // best-effort UI
@@ -377,12 +394,12 @@ func runClientDrivenScan(
 		logger.Debug().Err(statusErr).Msg("failed to get final status")
 	}
 
-	outputStatus(userInterface, logger, status)
-
 	reportJSON, reportErr := csClient.GetReport(ctx, scanID)
 	if reportErr != nil {
 		return nil, reportErr //nolint:wrapcheck // RedTeamError from controlserver
 	}
+
+	outputResultsSummary(userInterface, logger, theme, status, reportJSON, time.Since(scanStart))
 
 	return []workflow.Data{newWorkflowData("application/json", reportJSON)}, nil
 }
@@ -392,7 +409,9 @@ func updateProgress(
 	csClient controlserver.Client,
 	scanID string,
 	progressBar ui.ProgressBar,
-	_ ui.UserInterface,
+	userInterface ui.UserInterface,
+	theme *cliTheme,
+	lastFP *string,
 	logger *zerolog.Logger,
 ) {
 	status, err := csClient.GetStatus(ctx, scanID)
@@ -400,20 +419,37 @@ func updateProgress(
 		logger.Debug().Err(err).Msg("failed to get status during scan")
 		return
 	}
+	fp := statusFingerprint(status)
+	if fp != *lastFP {
+		*lastFP = fp
+		if block := renderAttackStrategiesSection(theme, status, terminalWidth()); block != "" {
+			_ = userInterface.Output(block) //nolint:errcheck // best-effort UI
+		}
+	}
 	if status.TotalChats > 0 {
 		progressBar.SetTitle(fmt.Sprintf("Scanning (%d/%d)", status.Completed, status.TotalChats))
 		_ = progressBar.UpdateProgress(float64(status.Completed) / float64(status.TotalChats)) //nolint:errcheck // best-effort UI
 	}
 }
 
-func outputStatus(userInterface ui.UserInterface, logger *zerolog.Logger, status *controlserver.ScanStatus) {
-	if status == nil {
-		return
+func outputResultsSummary(
+	userInterface ui.UserInterface,
+	logger *zerolog.Logger,
+	theme *cliTheme,
+	status *controlserver.ScanStatus,
+	reportJSON []byte,
+	elapsed time.Duration,
+) {
+	findings := reportFindingsCount(reportJSON)
+	probes := 0
+	strategies := 0
+	if status != nil {
+		probes = status.TotalChats
+		strategies = len(status.Attacks)
 	}
-	msg := fmt.Sprintf("\nScan complete: %d/%d chats | %d successful | %d failed",
-		status.Completed, status.TotalChats, status.Successful, status.Failed)
-	if err := userInterface.Output(msg); err != nil {
-		logger.Debug().Err(err).Msg("failed to output status")
+	line := renderResultsSummaryLine(theme, findings, probes, strategies, elapsed)
+	if err := userInterface.Output(line); err != nil {
+		logger.Debug().Err(err).Msg("failed to output results summary")
 	}
 }
 
