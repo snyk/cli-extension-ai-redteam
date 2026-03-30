@@ -56,12 +56,10 @@ func printLogo(userInterface ui.UserInterface) {
 	r := ansiReset
 
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "\n  %s ███████╗ ██╗   ██╗  ██████╗ %s\n", lp, r)
-	fmt.Fprintf(&sb, "  %s ██╔════╝ ██║   ██║ ██╔═══██╗%s\n", lp, r)
-	fmt.Fprintf(&sb, "  %s █████╗   ██║   ██║ ██║   ██║%s\n", lp, r)
-	fmt.Fprintf(&sb, "  %s ██╔══╝   ╚██╗ ██╔╝ ██║   ██║%s\n", lp, r)
-	fmt.Fprintf(&sb, "  %s ███████╗  ╚████╔╝  ╚██████╔╝%s\n", lp, r)
-	fmt.Fprintf(&sb, "  %s ╚══════╝   ╚═══╝    ╚═════╝ %s  %sby Snyk%s\n\n", lp, r, w, r)
+	fmt.Fprintf(&sb, "\n  %s ▄▄▄▄  ▄   ▄   ▄▄▄▄ %s\n", lp, r)
+	fmt.Fprintf(&sb, "  %s█▄▄▄█  █   █  █    █%s\n", lp, r)
+	fmt.Fprintf(&sb, "  %s█       █ █   █    █%s\n", lp, r)
+	fmt.Fprintf(&sb, "  %s ▀▀▀▀    ▀     ▀▀▀▀ %s  %sby Snyk%s\n\n", lp, r, w, r)
 
 	_ = userInterface.Output(sb.String()) //nolint:errcheck // best-effort logo output
 }
