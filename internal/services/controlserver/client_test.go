@@ -212,7 +212,7 @@ func TestGetResult_Happy(t *testing.T) {
 }
 
 func TestGetReport_Happy(t *testing.T) {
-	reportJSON := `{"id":"scan-123","target_url":"http://example.com","results":[],"passed_types":[]}`
+	reportJSON := `{"id":"scan-123","target_url":"http://example.com","results":[],"passed_types":[],"summary":{"goals":[]}}`
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodGet, r.Method)
 		assert.Equal(t, "/hidden/tenants/"+testTenantID+"/red_team_scans/"+testScanID+"/report", r.URL.Path)
