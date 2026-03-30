@@ -23,7 +23,8 @@ type bannerParams struct {
 const (
 	ansiReset    = "\033[0m"
 	ansiBold     = "\033[1m"
-	ansiPurple   = "\033[38;5;141m"
+	ansiPurple      = "\033[38;5;141m"
+	ansiLightPurple = "\033[38;5;183m"
 	ansiDimGray  = "\033[38;5;240m"
 	ansiVeryDark = "\033[38;5;236m"
 	ansiBlu      = "\033[38;5;111m"
@@ -43,62 +44,24 @@ func supportsColor() bool {
 	return term.IsTerminal(int(os.Stdout.Fd()))
 }
 
-// Filled logo from: npx oh-my-logo@latest "evo" --filled
-var evoLogo = []string{
-	` ███████╗ ██╗   ██╗  ██████╗ `,
-	` ██╔════╝ ██║   ██║ ██╔═══██╗`,
-	` █████╗   ██║   ██║ ██║   ██║`,
-	` ██╔══╝   ╚██╗ ██╔╝ ██║   ██║`,
-	` ███████╗  ╚████╔╝  ╚██████╔╝`,
-	` ╚══════╝   ╚═══╝    ╚═════╝ `,
-}
-
-// Gradient endpoints: purple (#a855f7) → orange (#f97316).
-var (
-	gradStart = [3]int{168, 85, 247}
-	gradEnd   = [3]int{249, 115, 22}
-)
-
-// gradientRune returns an ANSI true-color escape for a single rune
-// at position t (0.0 = start color, 1.0 = end color).
-func gradientRune(ch rune, t float64) string {
-	r := gradStart[0] + int(t*float64(gradEnd[0]-gradStart[0]))
-	g := gradStart[1] + int(t*float64(gradEnd[1]-gradStart[1]))
-	b := gradStart[2] + int(t*float64(gradEnd[2]-gradStart[2]))
-	return fmt.Sprintf("\033[38;2;%d;%d;%dm%c\033[0m", r, g, b, ch)
-}
-
-// printLogo renders the "evo" logo with a purple→orange gradient.
+// printLogo renders "evo" in a small ASCII art with "by Snyk" beside it.
 // Skipped entirely in non-color / non-TTY mode.
 func printLogo(userInterface ui.UserInterface) {
 	if !supportsColor() {
 		return
 	}
 
-	var sb strings.Builder
-	sb.WriteString("\n")
+	lp := ansiLightPurple
+	w := ansiWhite
+	r := ansiReset
 
-	for i, line := range evoLogo {
-		sb.WriteString("  ")
-		runes := []rune(line)
-		runeLen := len(runes)
-		for j, ch := range runes {
-			if ch == ' ' {
-				sb.WriteRune(' ')
-			} else {
-				t := 0.0
-				if runeLen > 1 {
-					t = float64(j) / float64(runeLen-1)
-				}
-				sb.WriteString(gradientRune(ch, t))
-			}
-		}
-		if i == len(evoLogo)-1 {
-			fmt.Fprintf(&sb, "  %sby Snyk%s", ansiWhite, ansiReset)
-		}
-		sb.WriteString("\n")
-	}
-	sb.WriteString("\n")
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "\n  %s ███████╗ ██╗   ██╗  ██████╗ %s\n", lp, r)
+	fmt.Fprintf(&sb, "  %s ██╔════╝ ██║   ██║ ██╔═══██╗%s\n", lp, r)
+	fmt.Fprintf(&sb, "  %s █████╗   ██║   ██║ ██║   ██║%s\n", lp, r)
+	fmt.Fprintf(&sb, "  %s ██╔══╝   ╚██╗ ██╔╝ ██║   ██║%s\n", lp, r)
+	fmt.Fprintf(&sb, "  %s ███████╗  ╚████╔╝  ╚██████╔╝%s\n", lp, r)
+	fmt.Fprintf(&sb, "  %s ╚══════╝   ╚═══╝    ╚═════╝ %s  %sby Snyk%s\n\n", lp, r, w, r)
 
 	_ = userInterface.Output(sb.String()) //nolint:errcheck // best-effort logo output
 }
@@ -119,7 +82,7 @@ func renderColorBanner(p bannerParams) string {
 
 	// Title.
 	fmt.Fprintf(&sb, "  %s%sAI Red Teaming%s\n",
-		ansiBold, ansiPurple, ansiReset)
+		ansiBold, ansiLightPurple, ansiReset)
 
 	// Subtitle.
 	fmt.Fprintf(&sb, "  %sAdversarial testing for AI-native applications%s\n", ansiWhite, ansiReset)
@@ -155,7 +118,7 @@ func renderColorBanner(p bannerParams) string {
 		sb.WriteString("  ")
 		for i, s := range p.Strategies {
 			if i == 0 {
-				fmt.Fprintf(&sb, "%s[%s]%s", ansiPurple, s, ansiReset)
+				fmt.Fprintf(&sb, "%s[%s]%s", ansiLightPurple, s, ansiReset)
 			} else {
 				fmt.Fprintf(&sb, " %s(%s)%s", ansiDimGray, s, ansiReset)
 			}

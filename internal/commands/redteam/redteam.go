@@ -409,6 +409,7 @@ func runClientDrivenScan(
 				Seq:      chat.Seq,
 				Response: resp,
 			})
+			progress.IncrementSent()
 		}
 	}
 

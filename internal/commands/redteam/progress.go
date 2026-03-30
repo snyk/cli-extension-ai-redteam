@@ -47,6 +47,11 @@ type progressUI struct {
 	items     []checklistItem
 	lineCount int  // lines rendered (for cursor-up rewrite)
 	rendered  bool // true after the first render
+
+	// Client-side sent counter: incremented after each SendPrompt so
+	// progress bars grow smoothly between server-side status updates.
+	sent       int
+	totalChats int
 }
 
 // newProgressUI creates a progress UI that writes to w.
@@ -64,6 +69,41 @@ func (p *progressUI) Start() {}
 // Stop is called when the scan loop ends.
 func (p *progressUI) Stop() {}
 
+// IncrementSent records that one more prompt was sent to the target.
+// Distributes progress proportionally across running strategies so bars
+// grow smoothly between server-side status updates.
+func (p *progressUI) IncrementSent() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.sent++
+	p.distributeClientProgress()
+	if p.color && p.rendered {
+		p.renderColor()
+	}
+}
+
+// distributeClientProgress spreads client-side sent count across running
+// items proportionally based on their totalChats. Caller must hold p.mu.
+func (p *progressUI) distributeClientProgress() {
+	if p.totalChats == 0 || p.sent == 0 {
+		return
+	}
+	for i := range p.items {
+		item := &p.items[i]
+		if item.state != stateRunning || item.totalChats == 0 {
+			continue
+		}
+		// Estimate: this item's share of total sent probes.
+		estimated := p.sent * item.totalChats / p.totalChats
+		if estimated > item.totalChats {
+			estimated = item.totalChats
+		}
+		if estimated > item.completed {
+			item.completed = estimated
+		}
+	}
+}
+
 // Update processes a ScanStatus snapshot, updating the checklist state and
 // redrawing it in-place (color mode) or printing changes (plain mode).
 func (p *progressUI) Update(status *controlserver.ScanStatus) {
@@ -73,6 +113,8 @@ func (p *progressUI) Update(status *controlserver.ScanStatus) {
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	p.totalChats = status.TotalChats
 
 	for _, atk := range status.Attacks {
 		idx := p.findOrAdd(atk.AttackType)
@@ -172,13 +214,13 @@ func (p *progressUI) renderColor() {
 				findingsColor = ansiRed
 			}
 			detail := fmt.Sprintf("%s%d %s%s / %d probes",
-				findingsColor, item.successful, finding, ansiGreen, item.totalChats)
+				findingsColor, item.successful, finding, ansiWhite, item.totalChats)
 			fmt.Fprintf(p.w, "\r  %s\u2713%s %s%s  %s%s%s\n",
 				ansiGreen, ansiReset,
 				ansiWhite, padded,
 				bar, detail, ansiClearLn)
 		case stateRunning:
-			bar := renderBar(item.completed, item.totalChats, ansiPurple, false)
+			bar := renderBar(item.completed, item.totalChats, ansiLightPurple, false)
 			counter := fmt.Sprintf("%s%d/%d%s", ansiWhite, item.completed, item.totalChats, ansiReset)
 			fmt.Fprintf(p.w, "\r  %s\u25A0%s %s%s  %s%s%s\n",
 				ansiWhite, ansiReset,
