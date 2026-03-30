@@ -1,6 +1,7 @@
 package redteam_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -29,6 +30,7 @@ const (
 	configFlag            = "config"
 	redteamTestConfigFile = "testdata/redteam.yaml"
 	testScanID            = "test-scan-id"
+	contentTypeJSON       = "application/json"
 )
 
 func mockCSFactory(mock *controlservermock.MockClient) redteam.ControlServerFactory {
@@ -130,7 +132,7 @@ func TestRunRedTeamWorkflow_HappyPath(t *testing.T) {
 		ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
 	require.NoError(t, err)
 	assert.Len(t, results, 1)
-	assert.Equal(t, "application/json", results[0].GetContentType())
+	assert.Equal(t, contentTypeJSON, results[0].GetContentType())
 	payload, _ := results[0].GetPayload().([]byte)
 	assert.Contains(t, string(payload), testScanID)
 	assert.Contains(t, string(payload), "directly_asking")
@@ -187,7 +189,7 @@ func TestRunRedTeamWorkflow_ReportPassedTypes(t *testing.T) {
 	results, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(mockCS), mockTargetFactory(defaultMockTarget()))
 	require.NoError(t, err)
 	require.Len(t, results, 1)
-	assert.Equal(t, "application/json", results[0].GetContentType())
+	assert.Equal(t, contentTypeJSON, results[0].GetContentType())
 
 	payload, ok := results[0].GetPayload().([]byte)
 	require.True(t, ok)
@@ -481,7 +483,7 @@ func TestRunRedTeamWorkflow_HTMLFileOutput(t *testing.T) {
 		ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
 	require.NoError(t, err)
 	assert.Len(t, results, 1)
-	assert.Equal(t, "application/json", results[0].GetContentType())
+	assert.Equal(t, contentTypeJSON, results[0].GetContentType())
 
 	fileContent, readErr := os.ReadFile(tmpFile)
 	require.NoError(t, readErr)
@@ -507,7 +509,7 @@ func TestRunRedTeamWorkflow_JSONFileOutput(t *testing.T) {
 		ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
 	require.NoError(t, err)
 	assert.Len(t, results, 1)
-	assert.Equal(t, "application/json", results[0].GetContentType())
+	assert.Equal(t, contentTypeJSON, results[0].GetContentType())
 
 	fileContent, readErr := os.ReadFile(tmpFile)
 	require.NoError(t, readErr)
@@ -956,4 +958,105 @@ func TestRunRedTeamWorkflow_ProfileNotFound(t *testing.T) {
 	_, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(defaultMockCS()), mockTargetFactory(defaultMockTarget()))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `profile "nonexistent" not found`)
+}
+
+func TestRunRedTeamWorkflow_ListGoalsJSON(t *testing.T) {
+	ictx := frameworkmock.NewMockInvocationContext(t)
+	ictx.GetConfiguration().Set(experimentalKey, true)
+	ictx.GetConfiguration().Set("list-goals", true)
+	ictx.GetConfiguration().Set("json", true)
+
+	mockCS := defaultMockCS()
+	mockCS.Goals = []controlserver.EnumEntry{
+		{Value: testGoalSPE, Description: "Extract the system prompt", DisplayOrder: 0},
+		{Value: "harmful_content", Description: "Generate harmful content", DisplayOrder: 1},
+	}
+
+	originalArgs := os.Args
+	os.Args = []string{"snyk", "redteam", "--list-goals", "--json"}
+	defer func() { os.Args = originalArgs }()
+
+	results, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(mockCS), mockTargetFactory(defaultMockTarget()))
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, contentTypeJSON, results[0].GetContentType())
+
+	payload, ok := results[0].GetPayload().([]byte)
+	require.True(t, ok)
+
+	var parsed map[string]any
+	require.NoError(t, json.Unmarshal(payload, &parsed))
+	goals, ok := parsed["goals"].([]any)
+	require.True(t, ok)
+	assert.Len(t, goals, 2)
+	first, ok := goals[0].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, testGoalSPE, first["value"])
+	assert.Equal(t, "Extract the system prompt", first["description"])
+}
+
+func TestRunRedTeamWorkflow_ListStrategiesJSON(t *testing.T) {
+	ictx := frameworkmock.NewMockInvocationContext(t)
+	ictx.GetConfiguration().Set(experimentalKey, true)
+	ictx.GetConfiguration().Set("list-strategies", true)
+	ictx.GetConfiguration().Set("json", true)
+
+	mockCS := defaultMockCS()
+	mockCS.Strategies = []controlserver.EnumEntry{
+		{Value: "directly_asking", Description: "Ask directly", DisplayOrder: 0},
+	}
+
+	originalArgs := os.Args
+	os.Args = []string{"snyk", "redteam", "--list-strategies", "--json"}
+	defer func() { os.Args = originalArgs }()
+
+	results, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(mockCS), mockTargetFactory(defaultMockTarget()))
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, contentTypeJSON, results[0].GetContentType())
+
+	payload, ok := results[0].GetPayload().([]byte)
+	require.True(t, ok)
+
+	var parsed map[string]any
+	require.NoError(t, json.Unmarshal(payload, &parsed))
+	strategies, ok := parsed["strategies"].([]any)
+	require.True(t, ok)
+	assert.Len(t, strategies, 1)
+	first, ok := strategies[0].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "directly_asking", first["value"])
+}
+
+func TestRunRedTeamWorkflow_ListBothJSON(t *testing.T) {
+	ictx := frameworkmock.NewMockInvocationContext(t)
+	ictx.GetConfiguration().Set(experimentalKey, true)
+	ictx.GetConfiguration().Set("list-goals", true)
+	ictx.GetConfiguration().Set("list-strategies", true)
+	ictx.GetConfiguration().Set("json", true)
+
+	mockCS := defaultMockCS()
+	mockCS.Goals = []controlserver.EnumEntry{
+		{Value: testGoalSPE, Description: "Extract the system prompt", DisplayOrder: 0},
+	}
+	mockCS.Strategies = []controlserver.EnumEntry{
+		{Value: "directly_asking", Description: "Ask directly", DisplayOrder: 0},
+	}
+
+	originalArgs := os.Args
+	os.Args = []string{"snyk", "redteam", "--list-goals", "--list-strategies", "--json"}
+	defer func() { os.Args = originalArgs }()
+
+	results, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(mockCS), mockTargetFactory(defaultMockTarget()))
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, contentTypeJSON, results[0].GetContentType())
+
+	payload, ok := results[0].GetPayload().([]byte)
+	require.True(t, ok)
+
+	var parsed map[string]any
+	require.NoError(t, json.Unmarshal(payload, &parsed))
+	assert.Contains(t, parsed, "goals")
+	assert.Contains(t, parsed, "strategies")
 }

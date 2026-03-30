@@ -36,6 +36,7 @@ const (
 	FlagRequestBodyTmpl  = "request-body-template"
 	FlagResponseSelector = "response-selector"
 	FlagHeader           = "header"
+	FlagJSON             = "json"
 	FlagListGoals        = "list-goals"
 	FlagListStrategies   = "list-strategies"
 	FlagListProfiles     = "list-profiles"
