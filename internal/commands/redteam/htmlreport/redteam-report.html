@@ -2056,10 +2056,17 @@
         // ── Render ──────────────────────────────────────────────────────
         const data = REPORT_DATA;
         const results = data.results || [];
+        const summaryGoals = (data.summary && data.summary.goals) || [];
         const passedTypes = data.passed_types || [];
 
-        const issueTypesDetectedCount = new Set(results.map((r) => r.definition.id)).size;
-        const issueTypesPassedCount = passedTypes.length;
+        const goalsVulnerable = summaryGoals.filter((g) => g.vulnerable);
+        const goalsPassed = summaryGoals.filter((g) => !g.vulnerable);
+        const issueTypesDetectedCount = summaryGoals.length > 0
+          ? goalsVulnerable.length
+          : new Set(results.map((r) => r.definition.id)).size;
+        const issueTypesPassedCount = summaryGoals.length > 0
+          ? goalsPassed.length
+          : passedTypes.length;
 
         const counts = severityCounts(results);
         const urls = uniqueUrls(results);
