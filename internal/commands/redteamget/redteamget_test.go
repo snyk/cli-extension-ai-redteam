@@ -70,7 +70,21 @@ func TestRunRedTeamGetWorkflow_PassedTypesPropagated(t *testing.T) {
 	mock.Report = []byte(`{
 		"id": "` + validScanID + `",
 		"results": [],
-		"passed_types": [{"id": "system_prompt_extraction/directly_asking/0", "name": "System Prompt Extraction (Direct)"}]
+		"passed_types": [
+			{"id": "system_prompt_extraction/directly_asking/0", "name": "System Prompt Extraction (Direct)"}
+		],
+		"summary": {
+			"goals": [
+				{
+					"slug": "system_prompt_extraction",
+					"name": "System Prompt Extraction",
+					"description": "The model revealed its system prompt.",
+					"severity": "high",
+					"status": "completed",
+					"vulnerable": false
+				}
+			]
+		}
 	}`)
 
 	results, err := redteamget.RunRedTeamGetWorkflow(ictx, mockCSFactory(mock))
@@ -80,6 +94,7 @@ func TestRunRedTeamGetWorkflow_PassedTypesPropagated(t *testing.T) {
 	payload, ok := results[0].GetPayload().([]byte)
 	require.True(t, ok)
 	assert.Contains(t, string(payload), "passed_types")
+	assert.Contains(t, string(payload), "summary")
 	assert.Contains(t, string(payload), "System Prompt Extraction (Direct)")
 }
 
@@ -215,7 +230,7 @@ func TestRunRedTeamGetWorkflow_HTMLOutputWithEmptyResults(t *testing.T) {
 	ictx.GetConfiguration().Set("html", true)
 
 	mock := &controlservermock.MockClient{
-		Report: []byte(`{"id": "` + validScanID + `", "results": [], "passed_types": []}`),
+		Report: []byte(`{"id": "` + validScanID + `", "results": [], "passed_types": [], "summary": {"goals": []}}`),
 	}
 
 	results, err := redteamget.RunRedTeamGetWorkflow(ictx, mockCSFactory(mock))

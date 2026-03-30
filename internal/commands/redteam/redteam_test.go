@@ -163,7 +163,21 @@ func TestRunRedTeamWorkflow_ReportPassedTypes(t *testing.T) {
 	mockCS.Report = []byte(`{
 		"id": "` + testScanID + `",
 		"results": [],
-		"passed_types": [{"id": "system_prompt_extraction/directly_asking/0", "name": "System Prompt Extraction (Direct)"}]
+		"passed_types": [
+			{"id": "system_prompt_extraction/directly_asking/0", "name": "System Prompt Extraction (Direct)"}
+		],
+		"summary": {
+			"goals": [
+				{
+					"slug": "system_prompt_extraction",
+					"name": "System Prompt Extraction",
+					"description": "The model revealed its system prompt.",
+					"severity": "high",
+					"status": "completed",
+					"vulnerable": false
+				}
+			]
+		}
 	}`)
 
 	originalArgs := os.Args
@@ -179,6 +193,7 @@ func TestRunRedTeamWorkflow_ReportPassedTypes(t *testing.T) {
 	require.True(t, ok)
 	jsonStr := string(payload)
 	assert.Contains(t, jsonStr, "passed_types")
+	assert.Contains(t, jsonStr, "summary")
 	assert.Contains(t, jsonStr, "System Prompt Extraction (Direct)")
 }
 
@@ -431,7 +446,7 @@ func TestRunRedTeamWorkflow_HTMLOutputWithEmptyResults(t *testing.T) {
 		ScanID: testScanID,
 		Done:   true,
 	}
-	mockCS.Report = []byte(`{"id": "` + testScanID + `", "results": [], "passed_types": []}`)
+	mockCS.Report = []byte(`{"id": "` + testScanID + `", "results": [], "passed_types": [], "summary": {"goals": []}}`)
 
 	originalArgs := os.Args
 	os.Args = []string{"snyk", "redteam", "--html"}
