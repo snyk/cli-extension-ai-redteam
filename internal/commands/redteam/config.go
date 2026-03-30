@@ -33,8 +33,12 @@ var DefaultTargetHTTPTimeout = defaultTargetTimeoutSeconds * time.Second
 
 const defaultProfileID = "fast"
 
-// ScanModeExhaustive runs all attack attempts to completion, even after one succeeds.
-const ScanModeExhaustive = "exhaustive"
+const (
+	// ScanModeEager stops remaining attack attempts after one succeeds (default).
+	ScanModeEager = "eager"
+	// ScanModeExhaustive runs all attack attempts to completion, even after one succeeds.
+	ScanModeExhaustive = "exhaustive"
+)
 
 type ConfigScan struct {
 	Mode string `yaml:"mode" json:"mode,omitempty"`
@@ -254,8 +258,8 @@ func ValidateConfig(cfg *Config) error {
 		errs = append(errs, "target.settings.timeout must be non-negative")
 	}
 
-	if cfg.Scan.Mode != "" && cfg.Scan.Mode != ScanModeExhaustive {
-		errs = append(errs, fmt.Sprintf("scan.mode must be empty or %q, got %q", ScanModeExhaustive, cfg.Scan.Mode))
+	if cfg.Scan.Mode != "" && cfg.Scan.Mode != ScanModeEager && cfg.Scan.Mode != ScanModeExhaustive {
+		errs = append(errs, fmt.Sprintf("scan.mode must be %q or %q, got %q", ScanModeEager, ScanModeExhaustive, cfg.Scan.Mode))
 	}
 
 	if len(errs) == 0 {
@@ -329,6 +333,9 @@ func applyProfile(
 func applyDefaults(cfg *Config) {
 	if cfg.Target.Type == "" {
 		cfg.Target.Type = defaultTargetType
+	}
+	if cfg.Scan.Mode == "" {
+		cfg.Scan.Mode = ScanModeEager
 	}
 	// Empty response_selector means "use raw response body as-is" (plain text targets).
 	if cfg.Target.Settings.RequestBodyTemplate == "" {

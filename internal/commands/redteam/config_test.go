@@ -41,6 +41,7 @@ func validConfig() *redteam.Config {
 			},
 		},
 		Goals: []string{"system_prompt_extraction"},
+		Scan:  redteam.ConfigScan{Mode: redteam.ScanModeEager},
 	}
 }
 
@@ -287,9 +288,9 @@ func TestValidateConfig_ScanModeExhaustive(t *testing.T) {
 	require.NoError(t, redteam.ValidateConfig(cfg))
 }
 
-func TestValidateConfig_ScanModeEmpty(t *testing.T) {
+func TestValidateConfig_ScanModeEager(t *testing.T) {
 	cfg := validConfig()
-	cfg.Scan.Mode = ""
+	cfg.Scan.Mode = redteam.ScanModeEager
 	require.NoError(t, redteam.ValidateConfig(cfg))
 }
 
@@ -320,10 +321,21 @@ func TestToCreateScanRequest_ScanModePassedThrough(t *testing.T) {
 	assert.Equal(t, "exhaustive", req.Mode)
 }
 
-func TestToCreateScanRequest_ScanModeEmptyByDefault(t *testing.T) {
+func TestToCreateScanRequest_ScanModeEagerByDefault(t *testing.T) {
 	cfg := validConfig()
 	req := cfg.ToCreateScanRequest()
-	assert.Empty(t, req.Mode)
+	assert.Equal(t, "eager", req.Mode)
+}
+
+func TestLoadAndValidateConfig_ScanModeDefaultsToEager(t *testing.T) {
+	path := writeTestConfig(t, baseTargetYAML)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	assert.Equal(t, redteam.ScanModeEager, rtCfg.Scan.Mode)
+	assert.False(t, rtCfg.IsExhaustive())
 }
 
 func TestLoadAndValidateConfig_ScanModeFromYAML(t *testing.T) {
