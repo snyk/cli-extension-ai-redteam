@@ -303,17 +303,6 @@ func TestValidateConfig_ScanModeInvalid(t *testing.T) {
 	assert.Contains(t, err.Error(), "turbo")
 }
 
-func TestIsExhaustive_True(t *testing.T) {
-	cfg := validConfig()
-	cfg.Scan.Mode = redteam.ScanModeExhaustive
-	assert.True(t, cfg.IsExhaustive())
-}
-
-func TestIsExhaustive_False(t *testing.T) {
-	cfg := validConfig()
-	assert.False(t, cfg.IsExhaustive())
-}
-
 func TestToCreateScanRequest_ScanModePassedThrough(t *testing.T) {
 	cfg := validConfig()
 	cfg.Scan.Mode = redteam.ScanModeExhaustive
@@ -335,7 +324,6 @@ func TestLoadAndValidateConfig_ScanModeDefaultsToEager(t *testing.T) {
 	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
 	require.NoError(t, err)
 	assert.Equal(t, redteam.ScanModeEager, rtCfg.Scan.Mode)
-	assert.False(t, rtCfg.IsExhaustive())
 }
 
 func TestLoadAndValidateConfig_ScanModeFromYAML(t *testing.T) {
@@ -349,7 +337,6 @@ scan:
 	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
 	require.NoError(t, err)
 	assert.Equal(t, "exhaustive", rtCfg.Scan.Mode)
-	assert.True(t, rtCfg.IsExhaustive())
 }
 
 // ---------------------------------------------------------------------------

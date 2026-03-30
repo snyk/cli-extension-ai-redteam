@@ -51,11 +51,6 @@ type Config struct {
 	Scan    ConfigScan                  `yaml:"scan" json:"scan,omitempty"`
 }
 
-// IsExhaustive returns true when the scan mode is set to exhaustive.
-func (cfg *Config) IsExhaustive() bool {
-	return cfg.Scan.Mode == ScanModeExhaustive
-}
-
 type ConfigTarget struct {
 	Name     string         `yaml:"name" json:"name"`
 	Type     string         `yaml:"type" json:"type"`
