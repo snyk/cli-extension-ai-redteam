@@ -182,10 +182,17 @@ func handleListFlags(
 	if jsonOutput {
 		return handleListFlagsJSON(ctx, controlServerClient, listGoals, listStrategies, listProfiles)
 	}
+	return handleListFlagsTable(ctx, controlServerClient, listGoals, listStrategies, listProfiles)
+}
 
+func handleListFlagsTable(
+	ctx context.Context,
+	client controlserver.Client,
+	listGoals, listStrategies, listProfiles bool,
+) ([]workflow.Data, error) {
 	var lines []string
 	if listGoals {
-		goals, err := controlServerClient.ListGoals(ctx)
+		goals, err := client.ListGoals(ctx)
 		if err != nil {
 			return nil, err //nolint:wrapcheck // RedTeamError from controlserver
 		}
@@ -197,7 +204,7 @@ func handleListFlags(
 		if len(lines) > 0 {
 			lines = append(lines, "")
 		}
-		strategies, err := controlServerClient.ListStrategies(ctx)
+		strategies, err := client.ListStrategies(ctx)
 		if err != nil {
 			return nil, err //nolint:wrapcheck // RedTeamError from controlserver
 		}
@@ -209,7 +216,7 @@ func handleListFlags(
 		if len(lines) > 0 {
 			lines = append(lines, "")
 		}
-		profiles, err := controlServerClient.ListProfiles(ctx)
+		profiles, err := client.ListProfiles(ctx)
 		if err != nil {
 			return nil, err //nolint:wrapcheck // RedTeamError from controlserver
 		}
