@@ -4,6 +4,7 @@ package redteam
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -63,6 +64,7 @@ func RegisterRedTeamWorkflow(e workflow.Engine) error {
 	flagset.Bool(utils.FlagHTML, false, "Output the red team report in HTML format instead of JSON")
 	flagset.String(utils.FlagHTMLFileOutput, "", "Write the HTML report to the specified file path")
 	flagset.String(utils.FlagJSONFileOutput, "", "Write the JSON report to the specified file path")
+	flagset.Bool(utils.FlagJSON, false, "Output results in JSON format")
 	flagset.Bool(utils.FlagListGoals, false, "List all available attack goals and exit")
 	flagset.Bool(utils.FlagListStrategies, false, "List all available attack strategies and exit")
 	flagset.Bool(utils.FlagListProfiles, false, "List all available attack profiles and exit")
@@ -113,8 +115,9 @@ func RunRedTeamWorkflow(
 	listStrategies := config.GetBool(utils.FlagListStrategies)
 	listProfiles := config.GetBool(utils.FlagListProfiles)
 	if listGoals || listStrategies || listProfiles {
+		jsonOutput := config.GetBool(utils.FlagJSON)
 		httpClient := invocationCtx.GetNetworkAccess().GetHttpClient()
-		return handleListFlags(config, controlServerFactory, logger, httpClient, listGoals, listStrategies, listProfiles)
+		return handleListFlags(config, controlServerFactory, logger, httpClient, listGoals, listStrategies, listProfiles, jsonOutput)
 	}
 
 	rtConfig, configData, err := LoadAndValidateConfig(logger, config)
@@ -169,12 +172,16 @@ func handleListFlags(
 	controlServerFactory ControlServerFactory,
 	logger *zerolog.Logger,
 	httpClient *http.Client,
-	listGoals, listStrategies, listProfiles bool,
+	listGoals, listStrategies, listProfiles, jsonOutput bool,
 ) ([]workflow.Data, error) {
 	ctx := context.Background()
 	httpClient.Timeout = controlserver.DefaultClientTimeout
 	snykAPIURL := config.GetString(configuration.API_URL)
 	controlServerClient := controlServerFactory(logger, httpClient, snykAPIURL, "")
+
+	if jsonOutput {
+		return handleListFlagsJSON(ctx, controlServerClient, listGoals, listStrategies, listProfiles)
+	}
 
 	var lines []string
 	if listGoals {
@@ -212,6 +219,45 @@ func handleListFlags(
 
 	output := strings.Join(lines, "\n") + "\n"
 	return []workflow.Data{newWorkflowData(contentTypePlain, []byte(output))}, nil
+}
+
+func handleListFlagsJSON(
+	ctx context.Context,
+	client controlserver.Client,
+	listGoals, listStrategies, listProfiles bool,
+) ([]workflow.Data, error) {
+	result := make(map[string]any)
+
+	if listGoals {
+		goals, err := client.ListGoals(ctx)
+		if err != nil {
+			return nil, err //nolint:wrapcheck // RedTeamError from controlserver
+		}
+		sort.Slice(goals, func(i, j int) bool { return goals[i].DisplayOrder < goals[j].DisplayOrder })
+		result["goals"] = goals
+	}
+	if listStrategies {
+		strategies, err := client.ListStrategies(ctx)
+		if err != nil {
+			return nil, err //nolint:wrapcheck // RedTeamError from controlserver
+		}
+		sort.Slice(strategies, func(i, j int) bool { return strategies[i].DisplayOrder < strategies[j].DisplayOrder })
+		result["strategies"] = strategies
+	}
+	if listProfiles {
+		profiles, err := client.ListProfiles(ctx)
+		if err != nil {
+			return nil, err //nolint:wrapcheck // RedTeamError from controlserver
+		}
+		result["profiles"] = profiles
+	}
+
+	jsonBytes, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal JSON: %w", err)
+	}
+	jsonBytes = append(jsonBytes, '\n')
+	return []workflow.Data{newWorkflowData("application/json", jsonBytes)}, nil
 }
 
 func getGoalsFlag(config configuration.Configuration) []string {
