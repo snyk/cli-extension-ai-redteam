@@ -179,7 +179,7 @@ func (p *progressUI) renderColor() {
 				bar, detail, ansiClearLn)
 		case stateRunning:
 			bar := renderBar(item.completed, item.totalChats, ansiPurple, false)
-			counter := fmt.Sprintf("%s%d/%d%s", ansiDimGray, item.completed, item.totalChats, ansiReset)
+			counter := fmt.Sprintf("%s%d/%d%s", ansiWhite, item.completed, item.totalChats, ansiReset)
 			fmt.Fprintf(p.w, "\r  %s\u25A0%s %s%s  %s%s%s\n",
 				ansiWhite, ansiReset,
 				ansiWhite, padded,
