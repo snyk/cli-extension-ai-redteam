@@ -33,10 +33,23 @@ var DefaultTargetHTTPTimeout = defaultTargetTimeoutSeconds * time.Second
 
 const defaultProfileID = "fast"
 
+// ScanModeExhaustive runs all attack attempts to completion, even after one succeeds.
+const ScanModeExhaustive = "exhaustive"
+
+type ConfigScan struct {
+	Mode string `yaml:"mode" json:"mode,omitempty"`
+}
+
 type Config struct {
 	Target  ConfigTarget                `yaml:"target" json:"target"`
 	Goals   []string                    `yaml:"goals" json:"goals"`
 	Attacks []controlserver.AttackEntry `yaml:"attacks" json:"attacks,omitempty"`
+	Scan    ConfigScan                  `yaml:"scan" json:"scan,omitempty"`
+}
+
+// IsExhaustive returns true when the scan mode is set to exhaustive.
+func (cfg *Config) IsExhaustive() bool {
+	return cfg.Scan.Mode == ScanModeExhaustive
 }
 
 type ConfigTarget struct {
@@ -178,6 +191,7 @@ func (cfg *Config) ToCreateScanRequest() *controlserver.CreateScanRequest {
 		Purpose:     cfg.Target.Context.Purpose,
 		GroundTruth: buildGroundTruthFromConfig(&cfg.Target.Context.GroundTruth),
 		TargetURL:   cfg.Target.Settings.URL,
+		Mode:        cfg.Scan.Mode,
 	}
 	return req
 }
@@ -238,6 +252,10 @@ func ValidateConfig(cfg *Config) error {
 
 	if cfg.Target.Settings.Timeout < 0 {
 		errs = append(errs, "target.settings.timeout must be non-negative")
+	}
+
+	if cfg.Scan.Mode != "" && cfg.Scan.Mode != ScanModeExhaustive {
+		errs = append(errs, fmt.Sprintf("scan.mode must be empty or %q, got %q", ScanModeExhaustive, cfg.Scan.Mode))
 	}
 
 	if len(errs) == 0 {
@@ -411,6 +429,8 @@ func getInvalidConfigMessage() string {
 	attacks:
 		- goal: '<optional, goal name>'
 		  strategy: '<optional, strategy name>'
+	scan:
+		mode: '<optional, "exhaustive" to run all attempts even after success>'
 
 	For more configuration options, refer to the documentation.
 

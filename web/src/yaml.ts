@@ -59,6 +59,11 @@ export function configToYaml(config: Config): string {
     }
   }
 
+  if (config.scan?.mode) {
+    lines.push("scan:");
+    lines.push(`  mode: ${config.scan.mode}`);
+  }
+
   return lines.join("\n") + "\n";
 }
 

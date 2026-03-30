@@ -278,6 +278,69 @@ func TestToCreateScanRequest_AttacksOverrideGoals(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// ScanMode
+// ---------------------------------------------------------------------------
+
+func TestValidateConfig_ScanModeExhaustive(t *testing.T) {
+	cfg := validConfig()
+	cfg.Scan.Mode = redteam.ScanModeExhaustive
+	require.NoError(t, redteam.ValidateConfig(cfg))
+}
+
+func TestValidateConfig_ScanModeEmpty(t *testing.T) {
+	cfg := validConfig()
+	cfg.Scan.Mode = ""
+	require.NoError(t, redteam.ValidateConfig(cfg))
+}
+
+func TestValidateConfig_ScanModeInvalid(t *testing.T) {
+	cfg := validConfig()
+	cfg.Scan.Mode = "turbo"
+	err := redteam.ValidateConfig(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "scan.mode")
+	assert.Contains(t, err.Error(), "turbo")
+}
+
+func TestIsExhaustive_True(t *testing.T) {
+	cfg := validConfig()
+	cfg.Scan.Mode = redteam.ScanModeExhaustive
+	assert.True(t, cfg.IsExhaustive())
+}
+
+func TestIsExhaustive_False(t *testing.T) {
+	cfg := validConfig()
+	assert.False(t, cfg.IsExhaustive())
+}
+
+func TestToCreateScanRequest_ScanModePassedThrough(t *testing.T) {
+	cfg := validConfig()
+	cfg.Scan.Mode = redteam.ScanModeExhaustive
+	req := cfg.ToCreateScanRequest()
+	assert.Equal(t, "exhaustive", req.Mode)
+}
+
+func TestToCreateScanRequest_ScanModeEmptyByDefault(t *testing.T) {
+	cfg := validConfig()
+	req := cfg.ToCreateScanRequest()
+	assert.Empty(t, req.Mode)
+}
+
+func TestLoadAndValidateConfig_ScanModeFromYAML(t *testing.T) {
+	path := writeTestConfig(t, baseTargetYAML+`
+scan:
+  mode: exhaustive
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	assert.Equal(t, "exhaustive", rtCfg.Scan.Mode)
+	assert.True(t, rtCfg.IsExhaustive())
+}
+
+// ---------------------------------------------------------------------------
 // LoadAndValidateConfig — YAML loading
 // ---------------------------------------------------------------------------
 

@@ -18,6 +18,7 @@ function minimalConfig(overrides?: Partial<Config>): Config {
     },
     goals: [],
     attacks: "attacks" in (overrides ?? {}) ? overrides!.attacks : [{ goal: "harmful_content" }],
+    ...("scan" in (overrides ?? {}) ? { scan: overrides!.scan } : {}),
   };
 }
 
@@ -163,6 +164,22 @@ describe("configToYaml", () => {
     expect(yaml).toContain('    url: ""');
     expect(yaml).toContain('    request_body_template: ""');
     expect(yaml).toContain('    response_selector: ""');
+  });
+
+  it("renders scan.mode when set", () => {
+    const yaml = configToYaml(minimalConfig({ scan: { mode: "exhaustive" } }));
+    expect(yaml).toContain("scan:");
+    expect(yaml).toContain("  mode: exhaustive");
+  });
+
+  it("omits scan section when scan is undefined", () => {
+    const yaml = configToYaml(minimalConfig());
+    expect(yaml).not.toContain("scan:");
+  });
+
+  it("omits scan section when mode is empty", () => {
+    const yaml = configToYaml(minimalConfig({ scan: { mode: "" } }));
+    expect(yaml).not.toContain("scan:");
   });
 
   it("uses double quotes when value contains single quotes", () => {

@@ -23,6 +23,9 @@ func displayBanner(userInterface ui.UserInterface, cfg *Config, profileName stri
 	if profileName != "" {
 		fmt.Fprintf(&sb, "  Profile:    %s\n", profileName)
 	}
+	if cfg.IsExhaustive() {
+		fmt.Fprintf(&sb, "  Mode:       exhaustive\n")
+	}
 	fmt.Fprintf(&sb, "  Goals:      %s\n", strings.Join(cfg.UniqueGoals(), ", "))
 	fmt.Fprintf(&sb, "\n")
 
