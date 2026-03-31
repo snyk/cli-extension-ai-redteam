@@ -148,7 +148,7 @@ func renderAttackRow(theme *cliTheme, a *controlserver.AttackStatus, _ int) stri
 	}
 	done := a.TotalChats > 0 && a.Completed >= a.TotalChats
 	mark := rowStatusMark(theme, done, a.Successful > 0)
-	label := truncateRunes(a.AttackType, 40)
+	label := truncateRunes(humanizeAttackType(a.AttackType), 40)
 	bar := renderProbeBar(theme, a.Completed, a.TotalChats, 10)
 
 	findWord := "findings"
@@ -235,6 +235,19 @@ func truncateRunes(s string, maxRunes int) string {
 		return s
 	}
 	return string(rs[:maxRunes-1]) + "…"
+}
+
+func humanizeAttackType(s string) string {
+	parts := strings.Split(s, "/")
+	if len(parts) > 0 {
+		if _, err := strconv.Atoi(parts[len(parts)-1]); err == nil {
+			parts = parts[:len(parts)-1]
+		}
+	}
+	for i, p := range parts {
+		parts[i] = strings.ReplaceAll(p, "_", " ")
+	}
+	return strings.Join(parts, " / ")
 }
 
 // ---------------------------------------------------------------------------

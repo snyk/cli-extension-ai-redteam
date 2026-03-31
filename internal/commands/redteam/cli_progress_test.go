@@ -85,7 +85,7 @@ func TestRenderAttackStrategiesSection_ascii(t *testing.T) {
 	if !strings.Contains(out, "attacks") {
 		t.Fatalf("missing header: %q", out)
 	}
-	if !strings.Contains(out, "system_prompt_extraction/foo") {
+	if !strings.Contains(out, "system prompt extraction / foo") {
 		t.Fatalf("missing attack label: %q", out)
 	}
 }
@@ -118,10 +118,10 @@ func TestLiveProgress_renderBlock_ascii(t *testing.T) {
 	if !strings.Contains(block, "attacks") {
 		t.Fatalf("missing header: %q", block)
 	}
-	if !strings.Contains(block, "goal_a/start_a") {
+	if !strings.Contains(block, "goal a / start a") {
 		t.Fatalf("missing first attack: %q", block)
 	}
-	if !strings.Contains(block, "goal_b/start_b") {
+	if !strings.Contains(block, "goal b / start b") {
 		t.Fatalf("missing second attack: %q", block)
 	}
 	if !strings.Contains(block, "40%") {
