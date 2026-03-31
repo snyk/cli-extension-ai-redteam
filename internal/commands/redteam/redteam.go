@@ -348,13 +348,11 @@ func runClientDrivenScan(
 	}
 	_ = displayScanBanner(userInterface, theme, rtConfig, &bannerOpts) //nolint:errcheck // best-effort UI
 
-	progressBar := userInterface.NewProgressBar()
-	progressBar.SetTitle(fmt.Sprintf("Scanning %s...", rtConfig.Target.Name))
-	_ = progressBar.UpdateProgress(ui.InfiniteProgress) //nolint:errcheck // best-effort UI
-	defer func() { _ = progressBar.Clear() }()          //nolint:errcheck // best-effort UI
+	tw := terminalWidth()
+	live := newLiveProgress(theme, tw)
+	fmt.Fprint(os.Stdout, "\n")
 
 	var responses []controlserver.ChatResponse
-	lastStatusFP := ""
 	for {
 		chats, nextErr := csClient.NextChats(ctx, scanID, responses)
 		if nextErr != nil {
@@ -380,19 +378,16 @@ func runClientDrivenScan(
 			})
 		}
 
-		updateProgress(ctx, csClient, scanID, progressBar, userInterface, theme, &lastStatusFP, logger)
+		if status, err := csClient.GetStatus(ctx, scanID); err == nil {
+			live.update(status)
+		}
 	}
-
-	lastStatusFP = ""
-	updateProgress(ctx, csClient, scanID, progressBar, userInterface, theme, &lastStatusFP, logger)
-
-	progressBar.SetTitle("Scan completed")
-	_ = progressBar.UpdateProgress(1.0) //nolint:errcheck // best-effort UI
 
 	status, statusErr := csClient.GetStatus(ctx, scanID)
 	if statusErr != nil {
 		logger.Debug().Err(statusErr).Msg("failed to get final status")
 	}
+	live.finish(status)
 
 	reportJSON, reportErr := csClient.GetReport(ctx, scanID)
 	if reportErr != nil {
@@ -402,34 +397,6 @@ func runClientDrivenScan(
 	outputResultsSummary(userInterface, logger, theme, status, reportJSON, time.Since(scanStart))
 
 	return []workflow.Data{newWorkflowData("application/json", reportJSON)}, nil
-}
-
-func updateProgress(
-	ctx context.Context,
-	csClient controlserver.Client,
-	scanID string,
-	progressBar ui.ProgressBar,
-	userInterface ui.UserInterface,
-	theme *cliTheme,
-	lastFP *string,
-	logger *zerolog.Logger,
-) {
-	status, err := csClient.GetStatus(ctx, scanID)
-	if err != nil {
-		logger.Debug().Err(err).Msg("failed to get status during scan")
-		return
-	}
-	fp := statusFingerprint(status)
-	if fp != *lastFP {
-		*lastFP = fp
-		if block := renderAttackStrategiesSection(theme, status, terminalWidth()); block != "" {
-			_ = userInterface.Output(block) //nolint:errcheck // best-effort UI
-		}
-	}
-	if status.TotalChats > 0 {
-		progressBar.SetTitle(fmt.Sprintf("Scanning (%d/%d)", status.Completed, status.TotalChats))
-		_ = progressBar.UpdateProgress(float64(status.Completed) / float64(status.TotalChats)) //nolint:errcheck // best-effort UI
-	}
 }
 
 func outputResultsSummary(

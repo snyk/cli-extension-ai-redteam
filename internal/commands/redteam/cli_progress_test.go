@@ -82,14 +82,11 @@ func TestRenderAttackStrategiesSection_ascii(t *testing.T) {
 		},
 	}
 	out := renderAttackStrategiesSection(theme, st, 80)
-	if !strings.Contains(out, "attack strategies") {
+	if !strings.Contains(out, "attacks") {
 		t.Fatalf("missing header: %q", out)
 	}
 	if !strings.Contains(out, "system_prompt_extraction/foo") {
 		t.Fatalf("missing attack label: %q", out)
-	}
-	if !strings.Contains(out, "directly_asking") {
-		t.Fatalf("missing tag: %q", out)
 	}
 }
 
@@ -99,5 +96,59 @@ func TestDeriveScanModeLabel(t *testing.T) {
 	}
 	if deriveScanModeLabel("Fast") != "Fast" {
 		t.Fatal()
+	}
+}
+
+func TestLiveProgress_renderBlock_ascii(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	var buf bytes.Buffer
+	theme := newCLITheme(&buf)
+	theme.r.SetColorProfile(termenv.Ascii)
+	lp := &liveProgress{theme: theme, width: 80, isTTY: false}
+	st := &controlserver.ScanStatus{
+		TotalChats: 10,
+		Completed:  4,
+		Tags:       []string{"directly_asking"},
+		Attacks: []controlserver.AttackStatus{
+			{AttackType: "goal_a/start_a", TotalChats: 5, Completed: 3, Failed: 0},
+			{AttackType: "goal_b/start_b", TotalChats: 5, Completed: 1, Failed: 1},
+		},
+	}
+	block := lp.renderBlock(st, true)
+	if !strings.Contains(block, "attacks") {
+		t.Fatalf("missing header: %q", block)
+	}
+	if !strings.Contains(block, "goal_a/start_a") {
+		t.Fatalf("missing first attack: %q", block)
+	}
+	if !strings.Contains(block, "goal_b/start_b") {
+		t.Fatalf("missing second attack: %q", block)
+	}
+	if !strings.Contains(block, "40%") {
+		t.Fatalf("missing progress pct: %q", block)
+	}
+
+	finalBlock := lp.renderBlock(st, false)
+	if strings.Contains(finalBlock, "Scanning") {
+		t.Fatalf("final block should not have scanning indicator: %q", finalBlock)
+	}
+}
+
+func TestLiveProgress_update_skips_duplicate(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	var buf bytes.Buffer
+	theme := newCLITheme(&buf)
+	theme.r.SetColorProfile(termenv.Ascii)
+	lp := &liveProgress{theme: theme, width: 80, isTTY: false}
+	st := &controlserver.ScanStatus{
+		TotalChats: 5,
+		Completed:  2,
+		Attacks:    []controlserver.AttackStatus{{AttackType: "a/b", TotalChats: 5, Completed: 2}},
+	}
+	lp.update(st)
+	fp1 := lp.lastFP
+	lp.update(st)
+	if lp.lastFP != fp1 {
+		t.Fatal("fingerprint changed on identical status")
 	}
 }

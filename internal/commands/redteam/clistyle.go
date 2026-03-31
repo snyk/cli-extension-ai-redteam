@@ -26,37 +26,33 @@ func newCLITheme(out io.Writer) *cliTheme {
 }
 
 func (t *cliTheme) title() lipgloss.Style {
-	return t.r.NewStyle().Foreground(lipgloss.Color("#B794F6")).Bold(true)
+	return t.r.NewStyle().Foreground(lipgloss.Color("141")).Bold(true) // ansiPurple
 }
 
 func (t *cliTheme) subtitle() lipgloss.Style {
-	return t.r.NewStyle().Foreground(lipgloss.Color("#E2E8F0"))
+	return t.r.NewStyle().Foreground(lipgloss.Color("255")) // ansiWhite
 }
 
 func (t *cliTheme) muted() lipgloss.Style {
-	return t.r.NewStyle().Foreground(lipgloss.Color("#94A3B8"))
+	return t.r.NewStyle().Foreground(lipgloss.Color("240")) // ansiDimGray
 }
 
 func (t *cliTheme) accent() lipgloss.Style {
-	return t.r.NewStyle().Foreground(lipgloss.Color("#C084FC"))
+	return t.r.NewStyle().Foreground(lipgloss.Color("141")) // ansiPurple
 }
 
 func (t *cliTheme) label() lipgloss.Style {
-	return t.r.NewStyle().Foreground(lipgloss.Color("#A78BFA"))
+	return t.r.NewStyle().Foreground(lipgloss.Color("183")) // ansiLightPurple
 }
 
 func (t *cliTheme) success() lipgloss.Style {
-	return t.r.NewStyle().Foreground(lipgloss.Color("#4ADE80"))
+	return t.r.NewStyle().Foreground(lipgloss.Color("114")) // ansiGreen
 }
 
 func (t *cliTheme) danger() lipgloss.Style {
-	return t.r.NewStyle().Foreground(lipgloss.Color("#F87171"))
-}
-
-func (t *cliTheme) tag() lipgloss.Style {
-	return t.r.NewStyle().Foreground(lipgloss.Color("#C084FC"))
+	return t.r.NewStyle().Foreground(lipgloss.Color("203")) // ansiRed
 }
 
 func (t *cliTheme) logoFallback() lipgloss.Style {
-	return t.r.NewStyle().Foreground(lipgloss.Color("#A855F7")).Bold(true)
+	return t.r.NewStyle().Foreground(lipgloss.Color("183")).Bold(true) // ansiLightPurple
 }

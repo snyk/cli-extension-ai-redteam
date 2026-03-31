@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
 	"github.com/snyk/go-application-framework/pkg/ui"
 )
 
@@ -26,28 +24,14 @@ func displayScanBanner(userInterface ui.UserInterface, theme *cliTheme, cfg *Con
 	tw := terminalWidth()
 	var sb strings.Builder
 	sb.WriteString("\n")
-	if opts.TenantID != "" {
-		sb.WriteString("  ")
-		mark := "✓"
-		if theme.r.ColorProfile() == termenv.Ascii {
-			mark = "+"
-		}
-		sb.WriteString(theme.success().Render(mark))
-		sb.WriteString(" ")
-		sb.WriteString(theme.muted().Render("Tenant " + opts.TenantID))
-		sb.WriteString("\n\n")
-	}
-	logoBlock := renderEVOLogo(theme)
-	bySnyk := theme.subtitle().Render("  by Snyk")
-	logoRow := lipgloss.JoinHorizontal(lipgloss.Top, logoBlock, bySnyk)
-	sb.WriteString(theme.r.NewStyle().PaddingLeft(2).Render(logoRow))
+	sb.WriteString(renderEVOLogo(theme))
 	sb.WriteString("\n\n")
 	sb.WriteString("  ")
 	sb.WriteString(theme.title().Render("AI Red Teaming"))
 	sb.WriteString("\n  ")
 	sb.WriteString(theme.subtitle().Render("Adversarial testing for AI-native applications"))
 	sb.WriteString("\n  ")
-	sb.WriteString(theme.subtitle().Render("session "))
+	sb.WriteString(theme.subtitle().Render("scan id "))
 	sb.WriteString(theme.muted().Render(opts.ScanID))
 	sb.WriteString("\n\n")
 
@@ -56,15 +40,12 @@ func displayScanBanner(userInterface ui.UserInterface, theme *cliTheme, cfg *Con
 	sb.WriteString(kvLine(theme, "Target", theme.accent().Render(cfg.Target.Settings.URL)))
 	goals := strings.Join(cfg.UniqueGoals(), ", ")
 	if goals != "" {
-		sb.WriteString(kvLine(theme, "Goal", theme.subtitle().Render(goals)))
+		sb.WriteString(kvLine(theme, "Goals", theme.subtitle().Render(goals)))
 	}
-	sb.WriteString(kvLine(theme, "Mode", theme.subtitle().Render(opts.ScanMode)))
 	sb.WriteString(kvLine(theme, "Config", theme.subtitle().Render(opts.ConfigPath)))
 	if opts.ProfileName != "" {
 		sb.WriteString(kvLine(theme, "Profile", theme.subtitle().Render(opts.ProfileName)))
 	}
-	sb.WriteString("\n")
-
 	if err := userInterface.Output(sb.String()); err != nil {
 		return fmt.Errorf("scan banner output: %w", err)
 	}

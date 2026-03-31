@@ -19,7 +19,7 @@ func statusFingerprint(s *controlserver.ScanStatus) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%d/%d|%d|", s.Completed, s.TotalChats, len(s.Attacks))
 	for _, a := range s.Attacks {
-		fmt.Fprintf(&b, "%s:%d/%d/%d;", a.AttackType, a.Completed, a.TotalChats, a.Failed)
+		fmt.Fprintf(&b, "%s:%d/%d/%d/%d;", a.AttackType, a.Completed, a.TotalChats, a.Failed, a.Successful)
 	}
 	return b.String()
 }
@@ -30,14 +30,8 @@ func renderAttackStrategiesSection(theme *cliTheme, status *controlserver.ScanSt
 	}
 	var sb strings.Builder
 	sb.WriteString("\n")
-	sb.WriteString(horizontalRule(theme, "attack strategies", width))
-	sb.WriteString("\n")
-	if len(status.Tags) > 0 {
-		tagStr := "[" + strings.Join(status.Tags, ", ") + "]"
-		sb.WriteString("  ")
-		sb.WriteString(theme.tag().Render(tagStr))
-		sb.WriteString("\n\n")
-	}
+	sb.WriteString(horizontalRule(theme, "attacks", width))
+	sb.WriteString("\n\n")
 	for i := range status.Attacks {
 		sb.WriteString(renderAttackRow(theme, &status.Attacks[i], width))
 		sb.WriteString("\n")
@@ -50,11 +44,22 @@ func renderAttackRow(theme *cliTheme, a *controlserver.AttackStatus, _ int) stri
 		return ""
 	}
 	done := a.TotalChats > 0 && a.Completed >= a.TotalChats
-	mark := rowStatusMark(theme, done, a.Failed > 0)
+	mark := rowStatusMark(theme, done, a.Successful > 0)
 	label := truncateRunes(a.AttackType, 40)
 	bar := renderProbeBar(theme, a.Completed, a.TotalChats, 10)
-	probeLine := theme.success().Render(strconv.Itoa(a.Completed)) + "/" + theme.success().Render(strconv.Itoa(a.TotalChats)) + " probes"
-	stats := theme.muted().Render(" — ") + probeLine
+
+	findWord := "findings"
+	if a.Successful == 1 {
+		findWord = "finding"
+	}
+	findStyle := theme.success()
+	if a.Successful > 0 {
+		findStyle = theme.danger()
+	}
+	findingsStr := findStyle.Render(strconv.Itoa(a.Successful) + " " + findWord)
+	probesStr := strconv.Itoa(a.TotalChats) + " probes"
+	stats := findingsStr + " / " + probesStr
+
 	var sb strings.Builder
 	sb.WriteString("  ")
 	sb.WriteString(mark)
