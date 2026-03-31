@@ -62,7 +62,14 @@ type ConfigSettings struct {
 	ResponseSelector    string         `yaml:"response_selector" json:"response_selector"`
 	RequestBodyTemplate string         `yaml:"request_body_template" json:"request_body_template"`
 	// Timeout is the per-request HTTP timeout in seconds. Zero or unset uses defaultTargetTimeoutSeconds.
-	Timeout int `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	Timeout        int                   `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	TargetCommand  *ConfigTargetCommand  `yaml:"target_command,omitempty" json:"target_command,omitempty"`
+}
+
+type ConfigTargetCommand struct {
+	Binary string   `yaml:"binary" json:"binary"`
+	Args   []string `yaml:"args" json:"args"`
+	Cwd    string   `yaml:"cwd,omitempty" json:"cwd,omitempty"`
 }
 
 type ConfigHeader struct {
@@ -177,9 +184,18 @@ func (cfg *Config) ToCreateScanRequest() *controlserver.CreateScanRequest {
 		Attacks:     attacks,
 		Purpose:     cfg.Target.Context.Purpose,
 		GroundTruth: buildGroundTruthFromConfig(&cfg.Target.Context.GroundTruth),
-		TargetURL:   cfg.Target.Settings.URL,
+		TargetURL:   cfg.targetURLForServer(),
 	}
 	return req
+}
+
+// targetURLForServer returns the URL to send to the control server.
+// Subprocess targets use a placeholder since the server requires a non-empty value.
+func (cfg *Config) targetURLForServer() string {
+	if cfg.IsSubprocessTarget() {
+		return "subprocess://target_command"
+	}
+	return cfg.Target.Settings.URL
 }
 
 func buildGroundTruthFromConfig(gt *ConfigGroundTruth) *controlserver.GroundTruth {
@@ -213,26 +229,39 @@ func (cfg *Config) TargetHTTPTimeout() time.Duration {
 	return time.Duration(cfg.Target.Settings.Timeout) * time.Second
 }
 
+// IsSubprocessTarget returns true when the config uses target_command instead of HTTP.
+func (cfg *Config) IsSubprocessTarget() bool {
+	tc := cfg.Target.Settings.TargetCommand
+	return tc != nil && tc.Binary != ""
+}
+
 func ValidateConfig(cfg *Config) error {
 	var errs []string
 
-	if cfg.Target.Settings.URL == "" {
-		errs = append(errs, "target URL is required (set in config file or pass --target-url)")
-	} else if err := validateURL(cfg.Target.Settings.URL, "target URL"); err != nil {
-		errs = append(errs, err.Error())
-	}
+	if cfg.IsSubprocessTarget() {
+		// Subprocess targets only need a valid binary — skip URL/body/selector checks.
+		if cfg.Target.Settings.TargetCommand.Binary == "" {
+			errs = append(errs, "target_command.binary is required")
+		}
+	} else {
+		if cfg.Target.Settings.URL == "" {
+			errs = append(errs, "target URL is required (set in config file or pass --target-url)")
+		} else if err := validateURL(cfg.Target.Settings.URL, "target URL"); err != nil {
+			errs = append(errs, err.Error())
+		}
 
-	if !strings.Contains(cfg.Target.Settings.RequestBodyTemplate, "{{prompt}}") {
-		errs = append(errs, "request_body_template must contain the {{prompt}} placeholder")
-	}
-	replaced := strings.ReplaceAll(cfg.Target.Settings.RequestBodyTemplate, "{{prompt}}", "test")
-	if !json.Valid([]byte(replaced)) {
-		errs = append(errs, "request_body_template is not valid JSON")
-	}
+		if !strings.Contains(cfg.Target.Settings.RequestBodyTemplate, "{{prompt}}") {
+			errs = append(errs, "request_body_template must contain the {{prompt}} placeholder")
+		}
+		replaced := strings.ReplaceAll(cfg.Target.Settings.RequestBodyTemplate, "{{prompt}}", "test")
+		if !json.Valid([]byte(replaced)) {
+			errs = append(errs, "request_body_template is not valid JSON")
+		}
 
-	if cfg.Target.Settings.ResponseSelector != "" {
-		if _, err := jmespath.Compile(cfg.Target.Settings.ResponseSelector); err != nil {
-			errs = append(errs, fmt.Sprintf("response_selector is not a valid JMESPath expression: %v", err))
+		if cfg.Target.Settings.ResponseSelector != "" {
+			if _, err := jmespath.Compile(cfg.Target.Settings.ResponseSelector); err != nil {
+				errs = append(errs, fmt.Sprintf("response_selector is not a valid JMESPath expression: %v", err))
+			}
 		}
 	}
 

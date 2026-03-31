@@ -19,7 +19,12 @@ func displayBanner(userInterface ui.UserInterface, cfg *Config, profileName stri
 	fmt.Fprintf(&sb, "\n")
 	fmt.Fprintf(&sb, "  %s%sSnyk Agent Red Teaming%s\n", bold, bred, reset)
 	fmt.Fprintf(&sb, "\n")
-	fmt.Fprintf(&sb, "  Target:     %s\n", cfg.Target.Settings.URL)
+	if cfg.IsSubprocessTarget() {
+		tc := cfg.Target.Settings.TargetCommand
+		fmt.Fprintf(&sb, "  Target:     %s %s\n", tc.Binary, strings.Join(tc.Args, " "))
+	} else {
+		fmt.Fprintf(&sb, "  Target:     %s\n", cfg.Target.Settings.URL)
+	}
 	if profileName != "" {
 		fmt.Fprintf(&sb, "  Profile:    %s\n", profileName)
 	}
