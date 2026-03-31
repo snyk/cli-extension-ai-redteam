@@ -8,7 +8,28 @@ import (
 	"github.com/snyk/go-application-framework/pkg/ui"
 )
 
-// scanBannerOptions configures the post-scan-creation header (mockup-style).
+var evoLogoLines = []string{
+	" ███████╗ ██╗   ██╗  ██████╗ ",
+	" ██╔════╝ ██║   ██║ ██╔═══██╗",
+	" █████╗   ██║   ██║ ██║   ██║",
+	" ██╔══╝   ╚██╗ ██╔╝ ██║   ██║",
+	" ███████╗  ╚████╔╝  ╚██████╔╝",
+}
+
+const evoLogoLastLine = " ╚══════╝   ╚═══╝    ╚═════╝ "
+
+func renderEVOLogo(theme *cliTheme) string {
+	purple := theme.logoFallback()
+	white := theme.subtitle()
+	var sb strings.Builder
+	for _, line := range evoLogoLines {
+		fmt.Fprintf(&sb, "  %s\n", purple.Render(line))
+	}
+	fmt.Fprintf(&sb, "  %s  %s", purple.Render(evoLogoLastLine), white.Render("by Snyk"))
+	return sb.String()
+}
+
+// scanBannerOptions configures the post-scan-creation header.
 type scanBannerOptions struct {
 	ScanID      string
 	ProfileName string

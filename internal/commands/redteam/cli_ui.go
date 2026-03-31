@@ -2,13 +2,20 @@ package redteam
 
 import (
 	"io"
+	"math"
 	"os"
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
+	"golang.org/x/term"
 )
 
-// cliTheme groups lipgloss styles for red team CLI output (mockup palette).
+// ---------------------------------------------------------------------------
+// Theme (color palette + style helpers)
+// ---------------------------------------------------------------------------
+
+// cliTheme groups lipgloss styles for red team CLI output.
 type cliTheme struct {
 	r *lipgloss.Renderer
 }
@@ -55,4 +62,40 @@ func (t *cliTheme) danger() lipgloss.Style {
 
 func (t *cliTheme) logoFallback() lipgloss.Style {
 	return t.r.NewStyle().Foreground(lipgloss.Color("183")).Bold(true) // ansiLightPurple
+}
+
+// ---------------------------------------------------------------------------
+// Terminal layout helpers
+// ---------------------------------------------------------------------------
+
+const defaultTermWidth = 80
+
+func terminalWidth() int {
+	fd := os.Stdout.Fd()
+	if fd > uintptr(math.MaxInt) {
+		return defaultTermWidth
+	}
+	w, _, err := term.GetSize(int(fd))
+	if err != nil || w < 40 {
+		return defaultTermWidth
+	}
+	if w > 120 {
+		return 120
+	}
+	return w
+}
+
+// horizontalRule builds a centered label with em dash padding, e.g. "—— attacks ——".
+func horizontalRule(theme *cliTheme, label string, width int) string {
+	label = strings.TrimSpace(label)
+	pad := strings.Repeat("—", 2)
+	inner := pad + " " + label + " " + pad
+	if lipgloss.Width(inner) >= width {
+		return theme.muted().Render(inner)
+	}
+	remain := width - lipgloss.Width(inner)
+	left := remain / 2
+	right := remain - left
+	line := strings.Repeat("—", left) + inner + strings.Repeat("—", right)
+	return theme.muted().Render(line)
 }
