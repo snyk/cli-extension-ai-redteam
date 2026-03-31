@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -147,13 +148,32 @@ func RunRedTeamWorkflow(
 
 	userInterface := invocationCtx.GetUserInterface()
 	displayBanner(userInterface, rtConfig, profileName)
-	targetClient := targetFactory(
-		targetHTTPClient,
-		rtConfig.Target.Settings.URL,
-		rtConfig.HeadersMap(),
-		rtConfig.Target.Settings.RequestBodyTemplate,
-		rtConfig.Target.Settings.ResponseSelector,
-	)
+	var targetClient target.Client
+	if rtConfig.IsSubprocessTarget() {
+		tc := rtConfig.Target.Settings.TargetCommand
+		cwd := tc.Cwd
+		// Resolve cwd relative to config file directory.
+		configPath := config.GetString(utils.FlagConfig)
+		if configPath == "" {
+			configPath = "redteam.yaml"
+		}
+		configDir, _ := filepath.Abs(filepath.Dir(configPath))
+		if cwd == "" {
+			cwd = configDir
+		} else if !filepath.IsAbs(cwd) {
+			cwd = filepath.Join(configDir, cwd)
+		}
+		targetClient = target.NewSubprocessClient(tc.Binary, tc.Args, cwd)
+		logger.Info().Str("binary", tc.Binary).Strs("args", tc.Args).Str("cwd", cwd).Msg("using subprocess target")
+	} else {
+		targetClient = targetFactory(
+			targetHTTPClient,
+			rtConfig.Target.Settings.URL,
+			rtConfig.HeadersMap(),
+			rtConfig.Target.Settings.RequestBodyTemplate,
+			rtConfig.Target.Settings.ResponseSelector,
+		)
+	}
 
 	results, scanErr := runClientDrivenScan(invocationCtx, controlServerClient, targetClient, rtConfig)
 	if scanErr != nil {
