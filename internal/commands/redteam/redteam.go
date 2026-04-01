@@ -352,6 +352,10 @@ func runClientDrivenScan(
 	live := newLiveProgress(theme, tw)
 	fmt.Fprint(os.Stdout, "\n")
 
+	if initStatus, err := csClient.GetStatus(ctx, scanID); err == nil {
+		live.update(initStatus)
+	}
+
 	var responses []controlserver.ChatResponse
 	for {
 		chats, nextErr := csClient.NextChats(ctx, scanID, responses)
