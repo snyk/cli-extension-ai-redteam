@@ -53,6 +53,7 @@ func displayScanBanner(userInterface ui.UserInterface, theme *cliTheme, cfg *Con
 	if goals != "" {
 		sb.WriteString(kvLine(theme, "Goals", theme.subtitle().Render(goals)))
 	}
+	sb.WriteString(kvLine(theme, "Mode", theme.subtitle().Render(cfg.Scan.Mode)))
 	sb.WriteString(kvLine(theme, "Config", theme.subtitle().Render(opts.ConfigPath)))
 	if opts.ProfileName != "" {
 		sb.WriteString(kvLine(theme, "Profile", theme.subtitle().Render(opts.ProfileName)))

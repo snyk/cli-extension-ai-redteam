@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Form, Checkbox, Space, Spin, Alert, Row, Col, Tag, Tooltip } from "antd";
+import { Form, Checkbox, Space, Spin, Alert, Row, Col, Tag, Tooltip, Switch } from "antd";
 
 interface EnumEntry {
   value: string;
@@ -170,6 +170,16 @@ export default function GoalStep() {
 
   return (
     <>
+      <div style={{ marginBottom: 24 }}>
+        <Form.Item
+          name="scan_mode_toggle"
+          valuePropName="checked"
+          label="Exhaustive Mode"
+          tooltip="Run all attack attempts to completion, even after one succeeds. Provides more thorough coverage."
+        >
+          <Switch />
+        </Form.Item>
+      </div>
       {profiles.length > 0 && (
         <>
         <div style={{ marginBottom: 12, fontWeight: 600 }}>Profiles</div>

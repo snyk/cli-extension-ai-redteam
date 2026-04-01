@@ -34,8 +34,13 @@ export interface Attack {
   strategy?: string;
 }
 
+export interface ConfigScan {
+  mode?: string;
+}
+
 export interface Config {
   target: ConfigTarget;
   goals: string[];
   attacks?: Attack[];
+  scan?: ConfigScan;
 }

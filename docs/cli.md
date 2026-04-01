@@ -19,6 +19,7 @@ By default the CLI looks for `redteam.yaml` in the current directory. Use `--con
 | **target.settings.request_body_template** | No | JSON template with `{{prompt}}` placeholder (default: `{"message": "{{prompt}}"}`). |
 | **goals** | No | List of attack goals. Each goal runs with all registered strategies. Ignored when `attacks` is present. |
 | **attacks** | No | Explicit list of `{goal, strategy?}` entries. Overrides `goals` when present. Strategy is optional; omitting it runs all registered strategies for that goal. |
+| **scan.mode** | No | Set to `exhaustive` to run all attack attempts even after one succeeds. Default: stops remaining attempts after first success. |
 
 Example (goals shorthand):
 
@@ -56,6 +57,8 @@ attacks:
   - goal: system_prompt_extraction
     strategy: agentic
   - goal: pii_extraction
+scan:
+  mode: exhaustive
 ```
 
 ## Profiles

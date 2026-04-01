@@ -41,6 +41,7 @@ func validConfig() *redteam.Config {
 			},
 		},
 		Goals: []string{"system_prompt_extraction"},
+		Scan:  redteam.ConfigScan{Mode: redteam.ScanModeEager},
 	}
 }
 
@@ -275,6 +276,67 @@ func TestToCreateScanRequest_AttacksOverrideGoals(t *testing.T) {
 	req := cfg.ToCreateScanRequest()
 	require.Len(t, req.Attacks, 1)
 	assert.Equal(t, "used_instead", req.Attacks[0].Goal)
+}
+
+// ---------------------------------------------------------------------------
+// ScanMode
+// ---------------------------------------------------------------------------
+
+func TestValidateConfig_ScanModeExhaustive(t *testing.T) {
+	cfg := validConfig()
+	cfg.Scan.Mode = redteam.ScanModeExhaustive
+	require.NoError(t, redteam.ValidateConfig(cfg))
+}
+
+func TestValidateConfig_ScanModeEager(t *testing.T) {
+	cfg := validConfig()
+	cfg.Scan.Mode = redteam.ScanModeEager
+	require.NoError(t, redteam.ValidateConfig(cfg))
+}
+
+func TestValidateConfig_ScanModeInvalid(t *testing.T) {
+	cfg := validConfig()
+	cfg.Scan.Mode = "turbo"
+	err := redteam.ValidateConfig(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "scan.mode")
+	assert.Contains(t, err.Error(), "turbo")
+}
+
+func TestToCreateScanRequest_ScanModePassedThrough(t *testing.T) {
+	cfg := validConfig()
+	cfg.Scan.Mode = redteam.ScanModeExhaustive
+	req := cfg.ToCreateScanRequest()
+	assert.Equal(t, "exhaustive", req.Mode)
+}
+
+func TestToCreateScanRequest_ScanModeEagerByDefault(t *testing.T) {
+	cfg := validConfig()
+	req := cfg.ToCreateScanRequest()
+	assert.Equal(t, "eager", req.Mode)
+}
+
+func TestLoadAndValidateConfig_ScanModeDefaultsToEager(t *testing.T) {
+	path := writeTestConfig(t, baseTargetYAML)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	assert.Equal(t, redteam.ScanModeEager, rtCfg.Scan.Mode)
+}
+
+func TestLoadAndValidateConfig_ScanModeFromYAML(t *testing.T) {
+	path := writeTestConfig(t, baseTargetYAML+`
+scan:
+  mode: exhaustive
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	assert.Equal(t, "exhaustive", rtCfg.Scan.Mode)
 }
 
 // ---------------------------------------------------------------------------

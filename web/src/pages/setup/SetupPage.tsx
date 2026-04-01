@@ -59,6 +59,7 @@ export function buildConfig(values: Record<string, any>): Config {
     },
     goals: [],
     attacks: values?.attacks || (values?.goals || []).map((g: string) => ({ goal: g })),
+    ...(values?.scan_mode_toggle ? { scan: { mode: "exhaustive" } } : {}),
   };
 }
 
@@ -134,6 +135,7 @@ export default function SetupPage({ activeStep, onStepChange, onConfigPathLoaded
             },
           },
           goals: cfg.goals || [],
+          scan_mode_toggle: cfg.scan?.mode === "exhaustive",
         });
       })
       .catch(() => {});

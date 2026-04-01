@@ -15,7 +15,7 @@ import (
 	"github.com/snyk/cli-extension-ai-redteam/internal/utils"
 )
 
-const APIVersion = "2026-03-30"
+const APIVersion = "2026-02-20"
 
 // DefaultClientTimeout is the HTTP client timeout for the control server API (Snyk API or local minired).
 const DefaultClientTimeout = 5 * time.Minute
