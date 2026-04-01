@@ -338,23 +338,7 @@ func runClientDrivenScan(
 	}
 	logger.Info().Str("scanID", scanID).Msg("scan created successfully")
 
-	theme := newCLITheme(os.Stdout)
-	bannerOpts := scanBannerOptions{
-		ScanID:      scanID,
-		ProfileName: profileName,
-		ConfigPath:  EffectiveConfigDisplayPath(config),
-		ScanMode:    deriveScanModeLabel(profileName),
-		TenantID:    tenantID,
-	}
-	_ = displayScanBanner(userInterface, theme, rtConfig, &bannerOpts) //nolint:errcheck // best-effort UI
-
-	tw := terminalWidth()
-	live := newLiveProgress(theme, tw)
-	fmt.Fprint(os.Stdout, "\n")
-
-	if initStatus, err := csClient.GetStatus(ctx, scanID); err == nil {
-		live.update(initStatus)
-	}
+	live := setupScanUI(ctx, config, userInterface, rtConfig, scanID, profileName, tenantID, csClient)
 
 	var responses []controlserver.ChatResponse
 	for {
@@ -382,8 +366,10 @@ func runClientDrivenScan(
 			})
 		}
 
-		if status, err := csClient.GetStatus(ctx, scanID); err == nil {
-			live.update(status)
+		if live != nil {
+			if status, err := csClient.GetStatus(ctx, scanID); err == nil {
+				live.update(status)
+			}
 		}
 	}
 
@@ -391,16 +377,52 @@ func runClientDrivenScan(
 	if statusErr != nil {
 		logger.Debug().Err(statusErr).Msg("failed to get final status")
 	}
-	live.finish(status)
+	if live != nil {
+		live.finish(status)
+	}
 
 	reportJSON, reportErr := csClient.GetReport(ctx, scanID)
 	if reportErr != nil {
 		return nil, reportErr //nolint:wrapcheck // RedTeamError from controlserver
 	}
 
-	outputResultsSummary(userInterface, logger, theme, status, reportJSON, time.Since(scanStart))
+	if live != nil {
+		outputResultsSummary(userInterface, logger, live.theme, status, reportJSON, time.Since(scanStart))
+	}
 
 	return []workflow.Data{newWorkflowData("application/json", reportJSON)}, nil
+}
+
+// setupScanUI initializes the branded banner and live progress when not in
+// JSON mode. Returns nil when --json is set so callers can skip UI updates.
+func setupScanUI(
+	ctx context.Context,
+	config configuration.Configuration,
+	userInterface ui.UserInterface,
+	rtConfig *Config,
+	scanID, profileName, tenantID string,
+	csClient controlserver.Client,
+) *liveProgress {
+	if config.GetBool(utils.FlagJSON) {
+		return nil
+	}
+	theme := newCLITheme(os.Stdout)
+	bannerOpts := scanBannerOptions{
+		ScanID:      scanID,
+		ProfileName: profileName,
+		ConfigPath:  EffectiveConfigDisplayPath(config),
+		ScanMode:    deriveScanModeLabel(profileName),
+		TenantID:    tenantID,
+	}
+	_ = displayScanBanner(userInterface, theme, rtConfig, &bannerOpts) //nolint:errcheck // best-effort UI
+
+	live := newLiveProgress(theme, terminalWidth())
+	fmt.Fprint(os.Stdout, "\n")
+
+	if initStatus, err := csClient.GetStatus(ctx, scanID); err == nil {
+		live.update(initStatus)
+	}
+	return live
 }
 
 func outputResultsSummary(
