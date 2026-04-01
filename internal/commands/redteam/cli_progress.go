@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/muesli/termenv"
@@ -24,15 +25,21 @@ const (
 	ansiEraseToEnd     = "\033[J"
 )
 
-// liveProgress renders the attacks table in-place using ANSI cursor movement
-// so that progress bars fill up without scrolling. On non-TTY outputs (CI,
-// pipes) it skips live updates and renders once at the end via finish().
+// liveProgress renders the attacks table in-place using ANSI cursor movement.
+// A background ticker redraws every 150 ms so spinners animate smoothly even
+// while the main loop blocks on network calls. On non-TTY outputs (CI, pipes)
+// it skips live updates and renders once at the end via finish().
 type liveProgress struct {
 	theme     *cliTheme
 	width     int
 	lineCount int
-	lastFP    string
 	isTTY     bool
+
+	mu     sync.Mutex
+	frame  int
+	last   *controlserver.ScanStatus
+	lastFP string
+	done   chan struct{}
 }
 
 func newLiveProgress(theme *cliTheme, width int) *liveProgress {
@@ -41,35 +48,65 @@ func newLiveProgress(theme *cliTheme, width int) *liveProgress {
 	if fd <= uintptr(math.MaxInt) {
 		tty = term.IsTerminal(int(fd))
 	}
-	return &liveProgress{theme: theme, width: width, isTTY: tty}
+	lp := &liveProgress{theme: theme, width: width, isTTY: tty, done: make(chan struct{})}
+	if tty {
+		go lp.spin()
+	}
+	return lp
 }
 
-// update re-renders the attack table in place when the status changes.
+const spinInterval = 150 * time.Millisecond
+
+// spin redraws the table on a timer so the waiting spinners animate.
+func (lp *liveProgress) spin() {
+	t := time.NewTicker(spinInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-lp.done:
+			return
+		case <-t.C:
+			lp.mu.Lock()
+			if lp.last != nil {
+				lp.frame++
+				block := lp.renderBlock(lp.last, true)
+				lp.overwrite(block)
+			}
+			lp.mu.Unlock()
+		}
+	}
+}
+
+// update stores the latest status and triggers a redraw. On non-TTY it
+// only records the status for the final finish() call.
 func (lp *liveProgress) update(status *controlserver.ScanStatus) {
 	if status == nil || len(status.Attacks) == 0 {
 		return
 	}
+	lp.mu.Lock()
+	defer lp.mu.Unlock()
+
+	lp.last = status
 	fp := statusFingerprint(status)
-	if fp == lp.lastFP {
-		return
-	}
 	lp.lastFP = fp
 
-	if !lp.isTTY {
-		return
+	if lp.isTTY {
+		lp.frame++
+		block := lp.renderBlock(status, true)
+		lp.overwrite(block)
 	}
-
-	block := lp.renderBlock(status, true)
-	lp.overwrite(block)
 }
 
-// finish renders the final state of the table. For TTY it overwrites the
-// live block; for non-TTY it prints the table once (without the progress
-// indicator).
+// finish renders the final state of the table and stops the spinner goroutine.
 func (lp *liveProgress) finish(status *controlserver.ScanStatus) {
+	close(lp.done)
 	if status == nil || len(status.Attacks) == 0 {
 		return
 	}
+	lp.mu.Lock()
+	defer lp.mu.Unlock()
+
+	lp.last = status
 	block := lp.renderBlock(status, false)
 	if lp.isTTY {
 		lp.overwrite(block)
@@ -92,8 +129,9 @@ func (lp *liveProgress) renderBlock(status *controlserver.ScanStatus, showProgre
 	sb.WriteString(horizontalRule(lp.theme, "attacks", lp.width))
 	sb.WriteString("\n")
 	sb.WriteString("\n")
+	activeIdx := firstNonDoneIdx(status.Attacks)
 	for i := range status.Attacks {
-		sb.WriteString(renderAttackRow(lp.theme, &status.Attacks[i], lp.width))
+		sb.WriteString(renderAttackRow(lp.theme, &status.Attacks[i], lp.frame, i == activeIdx))
 		sb.WriteString("\n")
 	}
 	if showProgress {
@@ -135,95 +173,90 @@ func renderAttackStrategiesSection(theme *cliTheme, status *controlserver.ScanSt
 	sb.WriteString("\n")
 	sb.WriteString(horizontalRule(theme, "attacks", width))
 	sb.WriteString("\n\n")
+	activeIdx := firstNonDoneIdx(status.Attacks)
 	for i := range status.Attacks {
-		sb.WriteString(renderAttackRow(theme, &status.Attacks[i], width))
+		sb.WriteString(renderAttackRow(theme, &status.Attacks[i], 0, i == activeIdx))
 		sb.WriteString("\n")
 	}
 	return sb.String()
 }
 
-func renderAttackRow(theme *cliTheme, a *controlserver.AttackStatus, _ int) string {
+func firstNonDoneIdx(attacks []controlserver.AttackStatus) int {
+	for i, a := range attacks {
+		if a.TotalChats == 0 || a.Completed < a.TotalChats {
+			return i
+		}
+	}
+	return -1
+}
+
+var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
+func renderAttackRow(theme *cliTheme, a *controlserver.AttackStatus, frame int, isActive bool) string {
 	if a == nil {
 		return ""
 	}
 	done := a.TotalChats > 0 && a.Completed >= a.TotalChats
-	mark := rowStatusMark(theme, done, a.Successful > 0)
+	mark := rowStatusMark(theme, done, isActive && !done, a.Successful > 0, frame)
 	label := truncateRunes(humanizeAttackType(a.AttackType), 40)
-	bar := renderProbeBar(theme, a.Completed, a.TotalChats, 10)
-
-	findWord := "findings"
-	if a.Successful == 1 {
-		findWord = "finding"
-	}
-	findStyle := theme.success()
-	if a.Successful > 0 {
-		findStyle = theme.danger()
-	}
-	findingsStr := findStyle.Render(strconv.Itoa(a.Successful) + " " + findWord)
-	probesStr := strconv.Itoa(a.TotalChats) + " probes"
-	stats := findingsStr + " / " + probesStr
 
 	var sb strings.Builder
 	sb.WriteString("  ")
 	sb.WriteString(mark)
 	sb.WriteString(" ")
+
+	if !done && !isActive {
+		sb.WriteString(theme.muted().Render(label))
+		return sb.String()
+	}
+
 	sb.WriteString(theme.subtitle().Render(label))
 	sb.WriteString("  ")
-	sb.WriteString(bar)
-	sb.WriteString("  ")
-	sb.WriteString(stats)
+	sb.WriteString(attackRowStats(theme, a, done, isActive))
 	return sb.String()
 }
 
-func rowStatusMark(theme *cliTheme, done, hasFindings bool) string {
-	if theme.r.ColorProfile() == termenv.Ascii {
-		switch {
-		case hasFindings:
-			return theme.danger().Render("!")
-		case done:
-			return theme.success().Render("v")
-		default:
-			return theme.muted().Render("-")
-		}
+func attackRowStats(theme *cliTheme, a *controlserver.AttackStatus, done, isActive bool) string {
+	if isActive && !done {
+		return theme.muted().Render(strconv.Itoa(a.Completed) + "/" + strconv.Itoa(a.TotalChats))
 	}
+	findWord := "findings"
+	if a.Successful == 1 {
+		findWord = "finding"
+	}
+	findingsText := strconv.Itoa(a.Successful) + " " + findWord
+	if a.Successful > 0 {
+		findingsText = theme.danger().Render(findingsText)
+	} else {
+		findingsText = theme.success().Render(findingsText)
+	}
+	return findingsText + " / " + strconv.Itoa(a.TotalChats) + " probes"
+}
+
+func rowStatusMark(theme *cliTheme, done, inProgress, hasFindings bool, frame int) string {
+	ascii := theme.r.ColorProfile() == termenv.Ascii
 	switch {
-	case hasFindings:
+	case done && hasFindings:
+		if ascii {
+			return theme.danger().Render("!")
+		}
 		return theme.danger().Render("✗")
 	case done:
+		if ascii {
+			return theme.success().Render("v")
+		}
 		return theme.success().Render("✓")
+	case inProgress:
+		if ascii {
+			return theme.accent().Render("*")
+		}
+		return theme.accent().Render("●")
 	default:
-		return theme.muted().Render("·")
+		if ascii {
+			return theme.muted().Render(string("/-\\|"[frame%4]))
+		}
+		return theme.muted().Render(spinnerFrames[frame%len(spinnerFrames)])
 	}
-}
-
-func renderProbeBar(theme *cliTheme, completed, total, barW int) string {
-	if total <= 0 {
-		return theme.muted().Render(strings.Repeat(blockEmpty(theme), barW))
-	}
-	filled := (completed * barW) / total
-	if completed > 0 && filled == 0 {
-		filled = 1
-	}
-	if filled > barW {
-		filled = barW
-	}
-	f := blockFilled(theme)
-	e := blockEmpty(theme)
-	return theme.success().Render(strings.Repeat(f, filled)) + theme.muted().Render(strings.Repeat(e, barW-filled))
-}
-
-func blockFilled(theme *cliTheme) string {
-	if theme.r.ColorProfile() == termenv.Ascii {
-		return "#"
-	}
-	return "█"
-}
-
-func blockEmpty(theme *cliTheme) string {
-	if theme.r.ColorProfile() == termenv.Ascii {
-		return "."
-	}
-	return "░"
 }
 
 func truncateRunes(s string, maxRunes int) string {
