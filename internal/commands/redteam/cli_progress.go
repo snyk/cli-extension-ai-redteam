@@ -230,7 +230,7 @@ func attackRowStats(theme *cliTheme, a *controlserver.AttackStatus, done, isActi
 	} else {
 		findingsText = theme.success().Render(findingsText)
 	}
-	return findingsText + " / " + strconv.Itoa(a.TotalChats) + " probes"
+	return strconv.Itoa(a.TotalChats) + " probes / " + findingsText
 }
 
 func rowStatusMark(theme *cliTheme, done, inProgress, hasFindings bool, frame int) string {
