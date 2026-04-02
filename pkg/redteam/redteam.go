@@ -9,6 +9,7 @@ import (
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteamget"
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/setup"
+	"github.com/snyk/cli-extension-ai-redteam/internal/commands/targets"
 	"github.com/snyk/cli-extension-ai-redteam/internal/utils"
 )
 
@@ -26,6 +27,9 @@ func Init(e workflow.Engine) error {
 	}
 	if err := ping.RegisterPingWorkflow(e); err != nil {
 		return fmt.Errorf("error registering ping workflow: %w", err)
+	}
+	if err := targets.RegisterTargetsWorkflow(e); err != nil {
+		return fmt.Errorf("error registering targets workflow: %w", err)
 	}
 	return nil
 }

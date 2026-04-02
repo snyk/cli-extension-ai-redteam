@@ -17,6 +17,9 @@ type MockClient struct {
 	Goals         []controlserver.EnumEntry
 	Strategies    []controlserver.EnumEntry
 	Profiles      []controlserver.ProfileResponse
+	Targets       []controlserver.TargetListItem
+	Target        *controlserver.TargetResponse
+	CreatedTarget *controlserver.TargetResponse
 	CreateErr     error
 	NextErr       error
 	StatusErr     error
@@ -25,9 +28,17 @@ type MockClient struct {
 	GoalsErr      error
 	StrategiesErr error
 	ProfilesErr   error
+	TargetsErr    error
+	TargetErr     error
+	CreateTgtErr  error
+	DeleteTgtErr  error
 
 	// Capture CreateScan arguments for tests (set when CreateScan is called).
 	CreateScanRequest *controlserver.CreateScanRequest
+	// Capture CreateTarget arguments for tests.
+	CreateTargetRequest *controlserver.TargetCreateRequest
+	// Capture DeleteTarget target ID.
+	DeletedTargetID string
 }
 
 var _ controlserver.Client = (*MockClient)(nil)
@@ -94,4 +105,34 @@ func (m *MockClient) ListProfiles(_ context.Context) ([]controlserver.ProfileRes
 		return nil, m.ProfilesErr
 	}
 	return m.Profiles, nil
+}
+
+func (m *MockClient) ListTargets(_ context.Context) ([]controlserver.TargetListItem, error) {
+	if m.TargetsErr != nil {
+		return nil, m.TargetsErr
+	}
+	return m.Targets, nil
+}
+
+func (m *MockClient) GetTarget(_ context.Context, _ string) (*controlserver.TargetResponse, error) {
+	if m.TargetErr != nil {
+		return nil, m.TargetErr
+	}
+	return m.Target, nil
+}
+
+func (m *MockClient) CreateTarget(_ context.Context, req *controlserver.TargetCreateRequest) (*controlserver.TargetResponse, error) {
+	m.CreateTargetRequest = req
+	if m.CreateTgtErr != nil {
+		return nil, m.CreateTgtErr
+	}
+	return m.CreatedTarget, nil
+}
+
+func (m *MockClient) DeleteTarget(_ context.Context, targetID string) error {
+	m.DeletedTargetID = targetID
+	if m.DeleteTgtErr != nil {
+		return m.DeleteTgtErr
+	}
+	return nil
 }

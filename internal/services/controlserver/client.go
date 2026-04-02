@@ -20,7 +20,7 @@ const APIVersion = "2026-02-20"
 // DefaultClientTimeout is the HTTP client timeout for the control server API (Snyk API or local minired).
 const DefaultClientTimeout = 5 * time.Minute
 
-type Client interface {
+type Client interface { //nolint:interfacebloat // API surface for a single backend
 	CreateScan(ctx context.Context, req *CreateScanRequest) (string, error)
 	NextChats(ctx context.Context, scanID string, responses []ChatResponse) ([]ChatPrompt, error)
 	GetStatus(ctx context.Context, scanID string) (*ScanStatus, error)
@@ -29,6 +29,10 @@ type Client interface {
 	ListGoals(ctx context.Context) ([]EnumEntry, error)
 	ListStrategies(ctx context.Context) ([]EnumEntry, error)
 	ListProfiles(ctx context.Context) ([]ProfileResponse, error)
+	ListTargets(ctx context.Context) ([]TargetListItem, error)
+	GetTarget(ctx context.Context, targetID string) (*TargetResponse, error)
+	CreateTarget(ctx context.Context, req *TargetCreateRequest) (*TargetResponse, error)
+	DeleteTarget(ctx context.Context, targetID string) error
 }
 
 type ClientImpl struct {
@@ -247,4 +251,102 @@ func (c *ClientImpl) ListProfiles(ctx context.Context) ([]ProfileResponse, error
 	}
 
 	return profiles, nil
+}
+
+func (c *ClientImpl) ListTargets(ctx context.Context) ([]TargetListItem, error) {
+	url := fmt.Sprintf("%s/hidden/tenants/%s/targets?version=%s", c.baseURL, c.tenantID, APIVersion)
+	respBytes, err := c.doGet(ctx, "ListTargets", url)
+	if err != nil {
+		return nil, err
+	}
+
+	var items []TargetListItem
+	if err := json.Unmarshal(respBytes, &items); err != nil {
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("unmarshal ListTargets response: %s", err))
+	}
+
+	return items, nil
+}
+
+func (c *ClientImpl) GetTarget(ctx context.Context, targetID string) (*TargetResponse, error) {
+	url := fmt.Sprintf(
+		"%s/hidden/tenants/%s/targets/%s?version=%s",
+		c.baseURL, c.tenantID, targetID, APIVersion,
+	)
+	respBytes, err := c.doGet(ctx, "GetTarget", url)
+	if err != nil {
+		return nil, err
+	}
+
+	var result TargetResponse
+	if err := json.Unmarshal(respBytes, &result); err != nil {
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("unmarshal GetTarget response: %s", err))
+	}
+
+	return &result, nil
+}
+
+func (c *ClientImpl) CreateTarget(ctx context.Context, req *TargetCreateRequest) (*TargetResponse, error) {
+	reqBytes, err := json.Marshal(req)
+	if err != nil {
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("marshal CreateTarget request: %s", err))
+	}
+
+	urlStr := fmt.Sprintf("%s/hidden/tenants/%s/targets?version=%s", c.baseURL, c.tenantID, APIVersion)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, urlStr, bytes.NewReader(reqBytes))
+	if err != nil {
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("build CreateTarget request: %s", err))
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, utils.ErrorFromHTTPClient("CreateTarget", err)
+	}
+	defer resp.Body.Close()
+
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("read CreateTarget response: %s", err))
+	}
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return nil, httpError("CreateTarget", resp.StatusCode, respBytes)
+	}
+
+	var result TargetResponse
+	if err := json.Unmarshal(respBytes, &result); err != nil {
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("unmarshal CreateTarget response: %s", err))
+	}
+
+	c.logger.Debug().Str("targetID", result.ID).Msg("target created")
+	return &result, nil
+}
+
+func (c *ClientImpl) DeleteTarget(ctx context.Context, targetID string) error {
+	urlStr := fmt.Sprintf(
+		"%s/hidden/tenants/%s/targets/%s?version=%s",
+		c.baseURL, c.tenantID, targetID, APIVersion,
+	)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, urlStr, http.NoBody)
+	if err != nil {
+		return redteam_errors.NewInternalError(fmt.Sprintf("build DeleteTarget request: %s", err))
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return utils.ErrorFromHTTPClient("DeleteTarget", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
+		respBytes, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return httpError("DeleteTarget", resp.StatusCode, nil)
+		}
+		return httpError("DeleteTarget", resp.StatusCode, respBytes)
+	}
+
+	c.logger.Debug().Str("targetID", targetID).Msg("target deleted")
+	return nil
 }

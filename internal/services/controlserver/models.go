@@ -105,3 +105,23 @@ type EnumEntry struct {
 	DisplayOrder int      `json:"display_order"`
 	Strategies   []string `json:"strategies,omitempty"`
 }
+
+type TargetCreateRequest struct {
+	Name   string         `json:"name"`
+	Config map[string]any `json:"config"`
+}
+
+type TargetResponse struct {
+	ID        string         `json:"id"`
+	Name      string         `json:"name"`
+	Config    map[string]any `json:"config"`
+	CreatedAt string         `json:"created_at"`
+	UpdatedAt string         `json:"updated_at"`
+}
+
+type TargetListItem struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}

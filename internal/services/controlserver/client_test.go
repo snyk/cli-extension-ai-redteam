@@ -382,3 +382,151 @@ func TestGetResult_NotFound(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
+
+// ---------------------------------------------------------------------------
+// Targets
+// ---------------------------------------------------------------------------
+
+const testTargetID = "aaaaaaaa-1111-2222-3333-444444444444"
+
+func TestListTargets_Happy(t *testing.T) {
+	items := []controlserver.TargetListItem{
+		{ID: testTargetID, Name: "my-chatbot", CreatedAt: "2026-04-01T10:00:00Z", UpdatedAt: "2026-04-01T10:00:00Z"},
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "/hidden/tenants/"+testTenantID+"/targets", r.URL.Path)
+		assert.Contains(t, r.URL.RawQuery, "version="+controlserver.APIVersion)
+		json.NewEncoder(w).Encode(items)
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	result, err := client.ListTargets(t.Context())
+	require.NoError(t, err)
+	require.Len(t, result, 1)
+	assert.Equal(t, "my-chatbot", result[0].Name)
+	assert.Equal(t, testTargetID, result[0].ID)
+}
+
+func TestListTargets_ServerError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`error`))
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	_, err := client.ListTargets(t.Context())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "500")
+}
+
+func TestGetTarget_Happy(t *testing.T) {
+	target := controlserver.TargetResponse{
+		ID:        testTargetID,
+		Name:      "my-chatbot",
+		Config:    map[string]any{"target": map[string]any{"name": "my-chatbot"}},
+		CreatedAt: "2026-04-01T10:00:00Z",
+		UpdatedAt: "2026-04-01T10:00:00Z",
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "/hidden/tenants/"+testTenantID+"/targets/"+testTargetID, r.URL.Path)
+		json.NewEncoder(w).Encode(target)
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	result, err := client.GetTarget(t.Context(), testTargetID)
+	require.NoError(t, err)
+	assert.Equal(t, "my-chatbot", result.Name)
+	assert.Equal(t, testTargetID, result.ID)
+}
+
+func TestGetTarget_NotFound(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`{"detail": "Target not found"}`))
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	_, err := client.GetTarget(t.Context(), "nonexistent")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+func TestCreateTarget_Happy(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/hidden/tenants/"+testTenantID+"/targets", r.URL.Path)
+
+		var req controlserver.TargetCreateRequest
+		body, _ := io.ReadAll(r.Body)
+		require.NoError(t, json.Unmarshal(body, &req))
+		assert.Equal(t, "my-chatbot", req.Name)
+		assert.NotNil(t, req.Config)
+
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(controlserver.TargetResponse{
+			ID:        testTargetID,
+			Name:      req.Name,
+			Config:    req.Config,
+			CreatedAt: "2026-04-01T10:00:00Z",
+			UpdatedAt: "2026-04-01T10:00:00Z",
+		})
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	result, err := client.CreateTarget(t.Context(), &controlserver.TargetCreateRequest{
+		Name:   "my-chatbot",
+		Config: map[string]any{"goals": []any{"system_prompt_extraction"}},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, testTargetID, result.ID)
+	assert.Equal(t, "my-chatbot", result.Name)
+}
+
+func TestCreateTarget_Conflict(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusConflict)
+		w.Write([]byte(`{"errors": [{"detail": "already exists"}]}`))
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	_, err := client.CreateTarget(t.Context(), &controlserver.TargetCreateRequest{
+		Name:   "my-chatbot",
+		Config: map[string]any{},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "409")
+}
+
+func TestDeleteTarget_Happy(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method)
+		assert.Equal(t, "/hidden/tenants/"+testTenantID+"/targets/"+testTargetID, r.URL.Path)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	err := client.DeleteTarget(t.Context(), testTargetID)
+	require.NoError(t, err)
+}
+
+func TestDeleteTarget_NotFound(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`{"detail": "Target not found"}`))
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	err := client.DeleteTarget(t.Context(), "nonexistent")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
