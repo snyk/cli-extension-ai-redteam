@@ -352,7 +352,7 @@ func runClientDrivenScan(
 
 		responses = make([]controlserver.ChatResponse, 0, len(chats))
 		for _, chat := range chats {
-			resp, tgtErr := targetClient.SendPrompt(ctx, chat.Prompt)
+			resp, tgtErr := targetClient.SendPrompt(ctx, chat.Prompt, chat.ChatID)
 			if tgtErr != nil {
 				if errors.Is(tgtErr, target.ErrCircuitOpen) {
 					return nil, redteam_errors.NewNetworkError(fmt.Sprintf("aborting scan: %s", tgtErr))

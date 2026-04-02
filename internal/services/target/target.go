@@ -29,7 +29,7 @@ const (
 var ErrCircuitOpen = errors.New("target appears unreachable, aborting after too many consecutive failures")
 
 type Client interface {
-	SendPrompt(ctx context.Context, prompt string) (string, error)
+	SendPrompt(ctx context.Context, prompt string, chatID string) (string, error)
 	Ping(ctx context.Context) PingResult
 }
 
@@ -64,12 +64,12 @@ func NewHTTPClient(
 	}
 }
 
-func (c *HTTPClient) SendPrompt(ctx context.Context, prompt string) (string, error) {
+func (c *HTTPClient) SendPrompt(ctx context.Context, prompt string, chatID string) (string, error) {
 	if c.consecutiveFailures >= ConsecutiveFailureMax {
 		return "", fmt.Errorf("%w: last error: %w", ErrCircuitOpen, c.lastErr)
 	}
 
-	body, err := buildRequestBody(c.requestBodyTemplate, prompt)
+	body, err := buildRequestBody(c.requestBodyTemplate, prompt, chatID)
 	if err != nil {
 		return "", fmt.Errorf("build request body: %w", err)
 	}
@@ -162,13 +162,14 @@ func retryDelay(attempt int) time.Duration {
 	return delay + jitter
 }
 
-func buildRequestBody(template, prompt string) ([]byte, error) {
+func buildRequestBody(template, prompt, chatID string) ([]byte, error) {
 	escaped, err := json.Marshal(prompt)
 	if err != nil {
 		return nil, fmt.Errorf("json escape prompt: %w", err)
 	}
 	inner := string(escaped[1 : len(escaped)-1])
 	result := strings.ReplaceAll(template, "{{prompt}}", inner)
+	result = strings.ReplaceAll(result, "{{chat_id}}", chatID)
 
 	var check json.RawMessage
 	if err := json.Unmarshal([]byte(result), &check); err != nil {

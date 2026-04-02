@@ -35,7 +35,7 @@ func TestSendPrompt_DefaultTemplate(t *testing.T) {
 	defer server.Close()
 
 	client := target.NewHTTPClient(nil, server.URL, nil, defaultBodyTemplate, defaultSelector)
-	result, err := client.SendPrompt(t.Context(), "hello world")
+	result, err := client.SendPrompt(t.Context(), "hello world", "")
 	require.NoError(t, err)
 	assert.Equal(t, "hi there", result)
 }
@@ -51,7 +51,7 @@ func TestSendPrompt_NestedResponseSelector(t *testing.T) {
 	defer server.Close()
 
 	client := target.NewHTTPClient(nil, server.URL, nil, defaultBodyTemplate, "data.reply")
-	result, err := client.SendPrompt(t.Context(), testPrompt)
+	result, err := client.SendPrompt(t.Context(), testPrompt, "")
 	require.NoError(t, err)
 	assert.Equal(t, "nested value", result)
 }
@@ -69,7 +69,7 @@ func TestSendPrompt_CustomHeaders(t *testing.T) {
 		"X-Custom":      "custom-value",
 	}
 	client := target.NewHTTPClient(nil, server.URL, headers, defaultBodyTemplate, defaultSelector)
-	result, err := client.SendPrompt(t.Context(), testPrompt)
+	result, err := client.SendPrompt(t.Context(), testPrompt, "")
 	require.NoError(t, err)
 	assert.Equal(t, "ok", result)
 }
@@ -85,7 +85,7 @@ func TestSendPrompt_SpecialCharactersInPrompt(t *testing.T) {
 	defer server.Close()
 
 	client := target.NewHTTPClient(nil, server.URL, nil, defaultBodyTemplate, defaultSelector)
-	result, err := client.SendPrompt(t.Context(), "line1\nline2\t\"quoted\"\nend")
+	result, err := client.SendPrompt(t.Context(), "line1\nline2\t\"quoted\"\nend", "")
 	require.NoError(t, err)
 	assert.Equal(t, "ok", result)
 }
@@ -113,7 +113,7 @@ func TestSendPrompt_ComplexTemplate(t *testing.T) {
 
 	template := `{"model": "gpt-4", "messages": [{"role": "user", "content": "{{prompt}}"}]}`
 	client := target.NewHTTPClient(nil, server.URL, nil, template, "choices")
-	result, err := client.SendPrompt(t.Context(), "say hello")
+	result, err := client.SendPrompt(t.Context(), "say hello", "")
 	require.NoError(t, err)
 	assert.Contains(t, result, "Hello!")
 }
@@ -128,7 +128,7 @@ func TestSendPrompt_ServerError_RetriesAndFails(t *testing.T) {
 	defer server.Close()
 
 	client := target.NewHTTPClient(nil, server.URL, nil, defaultBodyTemplate, defaultSelector)
-	_, err := client.SendPrompt(t.Context(), testPrompt)
+	_, err := client.SendPrompt(t.Context(), testPrompt, "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "500")
 	assert.Contains(t, err.Error(), "after 3 attempts")
@@ -149,7 +149,7 @@ func TestSendPrompt_RetriesOnServerError_ThenSucceeds(t *testing.T) {
 	defer server.Close()
 
 	client := target.NewHTTPClient(nil, server.URL, nil, defaultBodyTemplate, defaultSelector)
-	result, err := client.SendPrompt(t.Context(), testPrompt)
+	result, err := client.SendPrompt(t.Context(), testPrompt, "")
 	require.NoError(t, err)
 	assert.Equal(t, "recovered", result)
 	assert.Equal(t, int32(3), attempts.Load())
@@ -165,7 +165,7 @@ func TestSendPrompt_RetriesOn4xx(t *testing.T) {
 	defer server.Close()
 
 	client := target.NewHTTPClient(nil, server.URL, nil, defaultBodyTemplate, defaultSelector)
-	_, err := client.SendPrompt(t.Context(), testPrompt)
+	_, err := client.SendPrompt(t.Context(), testPrompt, "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "400")
 	assert.Equal(t, int32(3), attempts.Load(), "should retry on 4xx")
@@ -182,7 +182,7 @@ func TestSendPrompt_ArrayIndexSelector(t *testing.T) {
 	defer server.Close()
 
 	client := target.NewHTTPClient(nil, server.URL, nil, defaultBodyTemplate, "choices[0].message.content")
-	result, err := client.SendPrompt(t.Context(), testPrompt)
+	result, err := client.SendPrompt(t.Context(), testPrompt, "")
 	require.NoError(t, err)
 	assert.Equal(t, "Hello!", result)
 }
@@ -194,7 +194,7 @@ func TestSendPrompt_InvalidResponseSelector(t *testing.T) {
 	defer server.Close()
 
 	client := target.NewHTTPClient(nil, server.URL, nil, defaultBodyTemplate, defaultSelector)
-	_, err := client.SendPrompt(t.Context(), testPrompt)
+	_, err := client.SendPrompt(t.Context(), testPrompt, "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no match found")
 }
