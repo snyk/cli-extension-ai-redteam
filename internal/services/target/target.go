@@ -29,7 +29,7 @@ const (
 var ErrCircuitOpen = errors.New("target appears unreachable, aborting after too many consecutive failures")
 
 type Client interface {
-	SendPrompt(ctx context.Context, prompt string, chatID string) (string, error)
+	SendPrompt(ctx context.Context, prompt, chatID string) (string, error)
 	Ping(ctx context.Context) PingResult
 }
 
@@ -64,7 +64,7 @@ func NewHTTPClient(
 	}
 }
 
-func (c *HTTPClient) SendPrompt(ctx context.Context, prompt string, chatID string) (string, error) {
+func (c *HTTPClient) SendPrompt(ctx context.Context, prompt, chatID string) (string, error) {
 	if c.consecutiveFailures >= ConsecutiveFailureMax {
 		return "", fmt.Errorf("%w: last error: %w", ErrCircuitOpen, c.lastErr)
 	}

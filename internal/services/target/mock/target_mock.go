@@ -27,7 +27,7 @@ func (m *MockClient) Ping(_ context.Context) target.PingResult {
 	}
 }
 
-func (m *MockClient) SendPrompt(_ context.Context, prompt string, _ string) (string, error) {
+func (m *MockClient) SendPrompt(_ context.Context, prompt, _ string) (string, error) {
 	m.Calls = append(m.Calls, prompt)
 	if m.Error != nil {
 		m.failureCount++
