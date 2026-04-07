@@ -1,10 +1,12 @@
 package redteam
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -42,7 +44,7 @@ type liveProgress struct {
 	done   chan struct{}
 }
 
-func newLiveProgress(theme *cliTheme, width int) *liveProgress {
+func newLiveProgress(ctx context.Context, theme *cliTheme, width int) *liveProgress {
 	fd := os.Stdout.Fd()
 	tty := false
 	if fd <= uintptr(math.MaxInt) {
@@ -50,6 +52,7 @@ func newLiveProgress(theme *cliTheme, width int) *liveProgress {
 	}
 	lp := &liveProgress{theme: theme, width: width, isTTY: tty, done: make(chan struct{})}
 	if tty {
+		lp.setStdinEcho(ctx, false)
 		go lp.spin()
 	}
 	return lp
@@ -97,9 +100,26 @@ func (lp *liveProgress) update(status *controlserver.ScanStatus) {
 	}
 }
 
+// setStdinEcho toggles terminal echo so stray keypresses don't inject
+// newlines that desync the ANSI cursor-movement line count.
+func (lp *liveProgress) setStdinEcho(ctx context.Context, on bool) {
+	arg := "-echo"
+	if on {
+		arg = "echo"
+	}
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	c := exec.CommandContext(ctx, "stty", arg)
+	c.Stdin = os.Stdin
+	_ = c.Run() //nolint:errcheck // best-effort terminal tweak
+}
+
 // finish renders the final state of the table and stops the spinner goroutine.
 func (lp *liveProgress) finish(status *controlserver.ScanStatus) {
 	close(lp.done)
+	if lp.isTTY {
+		lp.setStdinEcho(context.Background(), true)
+	}
 	if status == nil || len(status.Attacks) == 0 {
 		return
 	}

@@ -427,7 +427,7 @@ func setupScanUI(
 	}
 	_ = displayScanBanner(userInterface, theme, rtConfig, &bannerOpts) //nolint:errcheck // best-effort UI
 
-	live := newLiveProgress(theme, terminalWidth())
+	live := newLiveProgress(ctx, theme, terminalWidth())
 	fmt.Fprint(os.Stdout, "\n")
 
 	if initStatus, err := csClient.GetStatus(ctx, scanID); err == nil {
