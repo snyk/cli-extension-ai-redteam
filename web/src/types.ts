@@ -3,6 +3,23 @@ export interface ConfigHeader {
   value: string;
 }
 
+export interface SessionEndpoint {
+  url: string;
+  method?: string;
+  headers?: ConfigHeader[];
+  request_body?: string;
+  response_selector?: string;
+}
+
+export interface SessionConfig {
+  /** Session strategy: "none", "client", "server", or "endpoint". */
+  mode: "none" | "client" | "server" | "endpoint";
+  /** For "server" mode: "header:<name>", "body:<jmespath>", or "cookie:<name>". */
+  extract_from?: string;
+  /** For "endpoint" mode: session creation endpoint. */
+  endpoint?: SessionEndpoint;
+}
+
 export interface ConfigSettings {
   url: string;
   headers?: ConfigHeader[];
@@ -10,6 +27,8 @@ export interface ConfigSettings {
   request_body_template: string;
   /** Per-request HTTP timeout in seconds. Omit or 0 for default (60). */
   timeout?: number;
+  /** Session management configuration. */
+  session?: SessionConfig;
 }
 
 export interface ConfigGroundTruth {

@@ -35,7 +35,7 @@ type (
 	) controlserver.Client
 	TargetFactory func(
 		httpClient *http.Client, url string, headers map[string]string,
-		bodyTemplate, responseSelector string,
+		bodyTemplate, responseSelector string, opts ...target.ClientOption,
 	) target.Client
 )
 
@@ -46,9 +46,10 @@ var DefaultSnykAPIFactory ControlServerFactory = func(
 }
 
 var DefaultTargetFactory TargetFactory = func(
-	httpClient *http.Client, url string, headers map[string]string, bodyTemplate, responseSelector string,
+	httpClient *http.Client, url string, headers map[string]string,
+	bodyTemplate, responseSelector string, opts ...target.ClientOption,
 ) target.Client {
-	return target.NewHTTPClient(httpClient, url, headers, bodyTemplate, responseSelector)
+	return target.NewHTTPClient(httpClient, url, headers, bodyTemplate, responseSelector, opts...)
 }
 
 func RegisterWorkflows(e workflow.Engine) error {
@@ -147,12 +148,20 @@ func RunRedTeamWorkflow(
 
 	userInterface := invocationCtx.GetUserInterface()
 	displayBanner(userInterface, rtConfig, profileName)
+
+	var targetOpts []target.ClientOption
+	if rtConfig.Target.Settings.Session != nil {
+		store := target.NewSessionStore(toSessionStoreConfig(rtConfig.Target.Settings.Session), targetHTTPClient)
+		targetOpts = append(targetOpts, target.WithSessionStore(store))
+	}
+
 	targetClient := targetFactory(
 		targetHTTPClient,
 		rtConfig.Target.Settings.URL,
 		rtConfig.HeadersMap(),
 		rtConfig.Target.Settings.RequestBodyTemplate,
 		rtConfig.Target.Settings.ResponseSelector,
+		targetOpts...,
 	)
 
 	results, scanErr := runClientDrivenScan(invocationCtx, controlServerClient, targetClient, rtConfig)
@@ -352,7 +361,11 @@ func runClientDrivenScan(
 
 		responses = make([]controlserver.ChatResponse, 0, len(chats))
 		for _, chat := range chats {
-			resp, tgtErr := targetClient.SendPrompt(ctx, chat.Prompt)
+			promptCtx := target.WithChatContext(ctx, target.ChatContext{
+				ChatID: chat.ChatID,
+				Seq:    chat.Seq,
+			})
+			resp, tgtErr := targetClient.SendPrompt(promptCtx, chat.Prompt)
 			if tgtErr != nil {
 				if errors.Is(tgtErr, target.ErrCircuitOpen) {
 					return nil, redteam_errors.NewNetworkError(fmt.Sprintf("aborting scan: %s", tgtErr))
@@ -415,6 +428,25 @@ func outputStatus(userInterface ui.UserInterface, logger *zerolog.Logger, status
 	if err := userInterface.Output(msg); err != nil {
 		logger.Debug().Err(err).Msg("failed to output status")
 	}
+}
+
+// toSessionStoreConfig converts the YAML-layer SessionConfig into the
+// service-layer config consumed by target.SessionStore.
+func toSessionStoreConfig(cfg *SessionConfig) target.SessionStoreConfig {
+	sc := target.SessionStoreConfig{
+		Mode:        cfg.Mode,
+		ExtractFrom: cfg.ExtractFrom,
+	}
+	if cfg.Endpoint != nil {
+		sc.Endpoint = &target.SessionEndpointConfig{
+			URL:              cfg.Endpoint.URL,
+			Method:           cfg.Endpoint.Method,
+			Headers:          HeadersToMap(cfg.Endpoint.Headers),
+			RequestBody:      cfg.Endpoint.RequestBody,
+			ResponseSelector: cfg.Endpoint.ResponseSelector,
+		}
+	}
+	return sc
 }
 
 //nolint:ireturn // workflow.Data is the framework's expected return type

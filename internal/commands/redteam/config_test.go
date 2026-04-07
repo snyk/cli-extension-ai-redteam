@@ -638,3 +638,232 @@ target:
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), errTargetURLRequired)
 }
+
+// ---------------------------------------------------------------------------
+// Session config validation
+// ---------------------------------------------------------------------------
+
+func TestValidateConfig_SessionModeClient(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.Session = &redteam.SessionConfig{Mode: redteam.SessionModeClient}
+	require.NoError(t, redteam.ValidateConfig(cfg))
+}
+
+func TestValidateConfig_SessionModeNone(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.Session = &redteam.SessionConfig{Mode: redteam.SessionModeNone}
+	require.NoError(t, redteam.ValidateConfig(cfg))
+}
+
+func TestValidateConfig_SessionModeInvalid(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.Session = &redteam.SessionConfig{Mode: "magic"}
+	err := redteam.ValidateConfig(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "session.mode")
+	assert.Contains(t, err.Error(), "magic")
+}
+
+func TestValidateConfig_SessionServerRequiresExtractFrom(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.Session = &redteam.SessionConfig{Mode: redteam.SessionModeServer}
+	err := redteam.ValidateConfig(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "extract_from")
+}
+
+func TestValidateConfig_SessionServerValidExtractFrom(t *testing.T) {
+	for _, spec := range []string{"header:X-Session-ID", "body:session_id", "cookie:sid"} {
+		cfg := validConfig()
+		cfg.Target.Settings.Session = &redteam.SessionConfig{
+			Mode:        redteam.SessionModeServer,
+			ExtractFrom: spec,
+		}
+		require.NoError(t, redteam.ValidateConfig(cfg), "spec=%q should be valid", spec)
+	}
+}
+
+func TestValidateConfig_SessionServerInvalidExtractFromPrefix(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.Session = &redteam.SessionConfig{
+		Mode:        redteam.SessionModeServer,
+		ExtractFrom: "query:param",
+	}
+	err := redteam.ValidateConfig(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "extract_from")
+}
+
+func TestValidateConfig_SessionServerInvalidExtractFromNoColon(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.Session = &redteam.SessionConfig{
+		Mode:        redteam.SessionModeServer,
+		ExtractFrom: "headeronly",
+	}
+	err := redteam.ValidateConfig(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "extract_from")
+}
+
+func TestValidateConfig_SessionServerInvalidJMESPath(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.Session = &redteam.SessionConfig{
+		Mode:        redteam.SessionModeServer,
+		ExtractFrom: "body:[.invalid",
+	}
+	err := redteam.ValidateConfig(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "JMESPath")
+}
+
+func TestValidateConfig_SessionEndpointRequiresEndpoint(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.Session = &redteam.SessionConfig{Mode: redteam.SessionModeEndpoint}
+	err := redteam.ValidateConfig(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "session.endpoint")
+}
+
+func TestValidateConfig_SessionEndpointRequiresValidURL(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.Session = &redteam.SessionConfig{
+		Mode: redteam.SessionModeEndpoint,
+		Endpoint: &redteam.SessionEndpoint{
+			URL: "not-a-url",
+		},
+	}
+	err := redteam.ValidateConfig(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "session.endpoint.url")
+}
+
+func TestValidateConfig_SessionEndpointValid(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.Session = &redteam.SessionConfig{
+		Mode: redteam.SessionModeEndpoint,
+		Endpoint: &redteam.SessionEndpoint{
+			URL: "https://example.com/sessions",
+		},
+	}
+	require.NoError(t, redteam.ValidateConfig(cfg))
+}
+
+func TestValidateConfig_SessionIDVarWithoutSessionConfig(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.RequestBodyTemplate = `{"sid": "{{sessionId}}", "msg": "{{prompt}}"}`
+	err := redteam.ValidateConfig(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "{{sessionId}}")
+}
+
+func TestValidateConfig_SessionIDVarInHeaderWithoutSessionConfig(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.Headers = []redteam.ConfigHeader{
+		{Name: "X-Session", Value: "{{sessionId}}"},
+	}
+	err := redteam.ValidateConfig(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "{{sessionId}}")
+}
+
+func TestValidateConfig_SessionIDVarWithModeNone(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.RequestBodyTemplate = `{"sid": "{{sessionId}}", "msg": "{{prompt}}"}`
+	cfg.Target.Settings.Session = &redteam.SessionConfig{Mode: redteam.SessionModeNone}
+	err := redteam.ValidateConfig(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "{{sessionId}}")
+	assert.Contains(t, err.Error(), `"none"`)
+}
+
+func TestValidateConfig_SessionIDVarWithModeClient(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.RequestBodyTemplate = `{"sid": "{{sessionId}}", "msg": "{{prompt}}"}`
+	cfg.Target.Settings.Session = &redteam.SessionConfig{Mode: redteam.SessionModeClient}
+	require.NoError(t, redteam.ValidateConfig(cfg))
+}
+
+// ---------------------------------------------------------------------------
+// Session config YAML loading
+// ---------------------------------------------------------------------------
+
+func TestLoadAndValidateConfig_SessionFromYAML(t *testing.T) {
+	path := writeTestConfig(t, `
+target:
+  name: test
+  type: http
+  settings:
+    url: "https://example.com"
+    request_body_template: '{"sid": "{{sessionId}}", "msg": "{{prompt}}"}'
+    session:
+      mode: "client"
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	require.NotNil(t, rtCfg.Target.Settings.Session)
+	assert.Equal(t, "client", rtCfg.Target.Settings.Session.Mode)
+}
+
+func TestLoadAndValidateConfig_SessionServerModeFromYAML(t *testing.T) {
+	path := writeTestConfig(t, `
+target:
+  name: test
+  type: http
+  settings:
+    url: "https://example.com"
+    request_body_template: '{"msg": "{{prompt}}"}'
+    session:
+      mode: "server"
+      extract_from: "header:X-Session-ID"
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	require.NotNil(t, rtCfg.Target.Settings.Session)
+	assert.Equal(t, "server", rtCfg.Target.Settings.Session.Mode)
+	assert.Equal(t, "header:X-Session-ID", rtCfg.Target.Settings.Session.ExtractFrom)
+}
+
+func TestLoadAndValidateConfig_SessionEndpointModeFromYAML(t *testing.T) {
+	path := writeTestConfig(t, `
+target:
+  name: test
+  type: http
+  settings:
+    url: "https://example.com"
+    request_body_template: '{"sid": "{{sessionId}}", "msg": "{{prompt}}"}'
+    session:
+      mode: "endpoint"
+      endpoint:
+        url: "https://example.com/sessions"
+        method: "POST"
+        request_body: '{"action": "create"}'
+        response_selector: "session_id"
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	require.NotNil(t, rtCfg.Target.Settings.Session)
+	assert.Equal(t, "endpoint", rtCfg.Target.Settings.Session.Mode)
+	require.NotNil(t, rtCfg.Target.Settings.Session.Endpoint)
+	assert.Equal(t, "https://example.com/sessions", rtCfg.Target.Settings.Session.Endpoint.URL)
+	assert.Equal(t, "POST", rtCfg.Target.Settings.Session.Endpoint.Method)
+	assert.Equal(t, "session_id", rtCfg.Target.Settings.Session.Endpoint.ResponseSelector)
+}
+
+func TestLoadAndValidateConfig_NoSessionConfig(t *testing.T) {
+	path := writeTestConfig(t, baseTargetYAML)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	assert.Nil(t, rtCfg.Target.Settings.Session)
+}

@@ -40,7 +40,7 @@ func mockCSFactory(mock *controlservermock.MockClient) redteam.ControlServerFact
 }
 
 func mockTargetFactory(mock *targetmock.MockClient) redteam.TargetFactory {
-	return func(_ *http.Client, _ string, _ map[string]string, _, _ string) target.Client {
+	return func(_ *http.Client, _ string, _ map[string]string, _, _ string, _ ...target.ClientOption) target.Client {
 		return mock
 	}
 }

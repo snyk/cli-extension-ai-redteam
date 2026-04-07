@@ -40,6 +40,17 @@ const (
 	ScanModeExhaustive = "exhaustive"
 )
 
+const (
+	// SessionModeNone disables session management (default).
+	SessionModeNone = "none"
+	// SessionModeClient generates a UUID per chat on the client side.
+	SessionModeClient = "client"
+	// SessionModeServer extracts a session ID from the target's response.
+	SessionModeServer = "server"
+	// SessionModeEndpoint calls a separate endpoint to create sessions.
+	SessionModeEndpoint = "endpoint"
+)
+
 type ConfigScan struct {
 	Mode string `yaml:"mode" json:"mode,omitempty"`
 }
@@ -74,7 +85,28 @@ type ConfigSettings struct {
 	ResponseSelector    string         `yaml:"response_selector" json:"response_selector"`
 	RequestBodyTemplate string         `yaml:"request_body_template" json:"request_body_template"`
 	// Timeout is the per-request HTTP timeout in seconds. Zero or unset uses defaultTargetTimeoutSeconds.
-	Timeout int `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	Timeout int            `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	Session *SessionConfig `yaml:"session,omitempty" json:"session,omitempty"`
+}
+
+// SessionConfig controls how the client manages sessions across multi-turn conversations.
+type SessionConfig struct {
+	// Mode selects the session strategy: "none", "client", "server", or "endpoint".
+	Mode string `yaml:"mode" json:"mode"`
+	// ExtractFrom specifies where to extract the session ID from the target response (server mode only).
+	// Formats: "header:<name>", "body:<jmespath>", "cookie:<name>".
+	ExtractFrom string `yaml:"extract_from,omitempty" json:"extract_from,omitempty"`
+	// Endpoint configures a separate HTTP endpoint used to create sessions (endpoint mode only).
+	Endpoint *SessionEndpoint `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
+}
+
+// SessionEndpoint describes a separate HTTP endpoint that returns a session ID.
+type SessionEndpoint struct {
+	URL              string         `yaml:"url" json:"url"`
+	Method           string         `yaml:"method,omitempty" json:"method,omitempty"`
+	Headers          []ConfigHeader `yaml:"headers,omitempty" json:"headers,omitempty"`
+	RequestBody      string         `yaml:"request_body,omitempty" json:"request_body,omitempty"`
+	ResponseSelector string         `yaml:"response_selector,omitempty" json:"response_selector,omitempty"`
 }
 
 type ConfigHeader struct {
@@ -257,11 +289,86 @@ func ValidateConfig(cfg *Config) error {
 		errs = append(errs, fmt.Sprintf("scan.mode must be %q or %q, got %q", ScanModeEager, ScanModeExhaustive, cfg.Scan.Mode))
 	}
 
+	errs = append(errs, validateSessionConfig(cfg)...)
+
 	if len(errs) == 0 {
 		return nil
 	}
 	msg := fmt.Sprintf("invalid configuration:\n  - %s", strings.Join(errs, "\n  - "))
 	return redteam_errors.NewConfigValidationError(msg)
+}
+
+func validateSessionConfig(cfg *Config) []string {
+	sess := cfg.Target.Settings.Session
+	if sess == nil {
+		if usesSessionIDVariable(cfg) {
+			return []string{"{{sessionId}} is used in request template or headers but no session config is defined"}
+		}
+		return nil
+	}
+
+	var errs []string
+	switch sess.Mode {
+	case SessionModeNone, SessionModeClient, SessionModeServer, SessionModeEndpoint:
+		// valid
+	default:
+		errs = append(errs, fmt.Sprintf(
+			"session.mode must be %q, %q, %q, or %q, got %q",
+			SessionModeNone, SessionModeClient, SessionModeServer, SessionModeEndpoint, sess.Mode,
+		))
+	}
+
+	if sess.Mode == SessionModeNone && usesSessionIDVariable(cfg) {
+		errs = append(errs, "{{sessionId}} is used in request template or headers but session.mode is \"none\"")
+	}
+
+	if sess.Mode == SessionModeServer {
+		if sess.ExtractFrom == "" {
+			errs = append(errs, "session.extract_from is required when session.mode is \"server\"")
+		} else if err := validateExtractFrom(sess.ExtractFrom); err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
+
+	if sess.Mode == SessionModeEndpoint {
+		if sess.Endpoint == nil {
+			errs = append(errs, "session.endpoint is required when session.mode is \"endpoint\"")
+		} else if err := validateURL(sess.Endpoint.URL, "session.endpoint.url"); err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
+
+	return errs
+}
+
+func validateExtractFrom(spec string) error {
+	prefix, value, found := strings.Cut(spec, ":")
+	if !found || value == "" {
+		return fmt.Errorf("session.extract_from must be \"header:<name>\", \"body:<jmespath>\", or \"cookie:<name>\", got %q", spec)
+	}
+	switch prefix {
+	case "header", "cookie":
+		// name is required but free-form
+	case "body":
+		if _, err := jmespath.Compile(value); err != nil {
+			return fmt.Errorf("session.extract_from body JMESPath is invalid: %w", err)
+		}
+	default:
+		return fmt.Errorf("session.extract_from must start with \"header:\", \"body:\", or \"cookie:\", got %q", spec)
+	}
+	return nil
+}
+
+func usesSessionIDVariable(cfg *Config) bool {
+	if strings.Contains(cfg.Target.Settings.RequestBodyTemplate, "{{sessionId}}") {
+		return true
+	}
+	for _, h := range cfg.Target.Settings.Headers {
+		if strings.Contains(h.Value, "{{sessionId}}") {
+			return true
+		}
+	}
+	return false
 }
 
 func validateURL(rawURL, label string) error {
@@ -426,6 +533,14 @@ func getInvalidConfigMessage() string {
 			response_selector: '<optional, JMESPath expression; omit for plain text>'
 			request_body_template: '<optional, default: {"message": "{{prompt}}"}'
 			timeout: '<optional, seconds; default: 60>'
+		session:
+			mode: '<optional, "none" | "client" | "server" | "endpoint">'
+			extract_from: '<for server mode: "header:<name>", "body:<jmespath>", or "cookie:<name>">'
+			endpoint:
+				url: '<for endpoint mode: session creation URL>'
+				method: '<optional, default: POST>'
+				request_body: '<optional, JSON body for session creation>'
+				response_selector: '<optional, JMESPath to extract session ID>'
 	goals:
 		- '<optional, default: system_prompt_extraction>'
 	attacks:
