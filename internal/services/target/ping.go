@@ -29,7 +29,7 @@ type PingResult struct {
 }
 
 func (c *HTTPClient) Ping(ctx context.Context) PingResult {
-	body, err := buildRequestBody(c.requestBodyTemplate, PingMessage)
+	body, err := buildRequestBody(c.requestBodyTemplate, PingMessage, "")
 	if err != nil {
 		return PingResult{
 			Error:      err.Error(),

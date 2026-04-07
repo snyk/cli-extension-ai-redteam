@@ -69,7 +69,9 @@ func (c *HTTPClient) SendPrompt(ctx context.Context, prompt string) (string, err
 		return "", fmt.Errorf("%w: last error: %w", ErrCircuitOpen, c.lastErr)
 	}
 
-	body, err := buildRequestBody(c.requestBodyTemplate, prompt)
+	sessionID := sessionIDFrom(ctx)
+
+	body, err := buildRequestBody(c.requestBodyTemplate, prompt, sessionID)
 	if err != nil {
 		return "", fmt.Errorf("build request body: %w", err)
 	}
@@ -77,7 +79,7 @@ func (c *HTTPClient) SendPrompt(ctx context.Context, prompt string) (string, err
 	var lastErr error
 
 	for attempt := range maxRetries {
-		result, err := c.doRequest(ctx, body)
+		result, err := c.doRequest(ctx, body, sessionID)
 		if err == nil {
 			c.consecutiveFailures = 0
 			return result, nil
@@ -104,13 +106,14 @@ func (c *HTTPClient) SendPrompt(ctx context.Context, prompt string) (string, err
 	return "", fmt.Errorf("target request failed after %d attempts: %w", maxRetries, lastErr)
 }
 
-func (c *HTTPClient) doRequest(ctx context.Context, body []byte) (string, error) {
+func (c *HTTPClient) doRequest(ctx context.Context, body []byte, sessionID string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url, bytes.NewReader(body))
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	for k, v := range c.headers {
+	headers := resolveHeaders(c.headers, sessionID)
+	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
 
@@ -162,13 +165,14 @@ func retryDelay(attempt int) time.Duration {
 	return delay + jitter
 }
 
-func buildRequestBody(template, prompt string) ([]byte, error) {
+func buildRequestBody(template, prompt, sessionID string) ([]byte, error) {
 	escaped, err := json.Marshal(prompt)
 	if err != nil {
 		return nil, fmt.Errorf("json escape prompt: %w", err)
 	}
 	inner := string(escaped[1 : len(escaped)-1])
 	result := strings.ReplaceAll(template, "{{prompt}}", inner)
+	result = strings.ReplaceAll(result, "{{sessionId}}", sessionID)
 
 	var check json.RawMessage
 	if err := json.Unmarshal([]byte(result), &check); err != nil {
@@ -176,6 +180,14 @@ func buildRequestBody(template, prompt string) ([]byte, error) {
 	}
 
 	return []byte(result), nil
+}
+
+func resolveHeaders(headers map[string]string, sessionID string) map[string]string {
+	out := make(map[string]string, len(headers))
+	for k, v := range headers {
+		out[k] = strings.ReplaceAll(v, "{{sessionId}}", sessionID)
+	}
+	return out
 }
 
 func extractResponse(respBytes []byte, selector string) (string, error) {

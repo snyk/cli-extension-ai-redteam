@@ -638,3 +638,93 @@ target:
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), errTargetURLRequired)
 }
+
+// ---------------------------------------------------------------------------
+// Session config validation
+// ---------------------------------------------------------------------------
+
+func TestValidateConfig_SessionModeClient(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.Session = &redteam.SessionConfig{Mode: redteam.SessionModeClient}
+	require.NoError(t, redteam.ValidateConfig(cfg))
+}
+
+func TestValidateConfig_SessionModeNone(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.Session = &redteam.SessionConfig{Mode: redteam.SessionModeNone}
+	require.NoError(t, redteam.ValidateConfig(cfg))
+}
+
+func TestValidateConfig_SessionModeInvalid(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.Session = &redteam.SessionConfig{Mode: "magic"}
+	err := redteam.ValidateConfig(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "session.mode")
+	assert.Contains(t, err.Error(), "magic")
+}
+
+func TestValidateConfig_SessionIDVarWithoutSessionConfig_Valid(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.RequestBodyTemplate = `{"sid": "{{sessionId}}", "msg": "{{prompt}}"}`
+	require.NoError(t, redteam.ValidateConfig(cfg), "{{sessionId}} without session config should auto-enable client mode")
+}
+
+func TestValidateConfig_SessionIDVarInHeaderWithoutSessionConfig_Valid(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.Headers = []redteam.ConfigHeader{
+		{Name: "X-Session", Value: "{{sessionId}}"},
+	}
+	require.NoError(t, redteam.ValidateConfig(cfg), "{{sessionId}} in headers without session config should auto-enable client mode")
+}
+
+func TestValidateConfig_SessionIDVarWithModeNone(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.RequestBodyTemplate = `{"sid": "{{sessionId}}", "msg": "{{prompt}}"}`
+	cfg.Target.Settings.Session = &redteam.SessionConfig{Mode: redteam.SessionModeNone}
+	err := redteam.ValidateConfig(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "{{sessionId}}")
+	assert.Contains(t, err.Error(), `"none"`)
+}
+
+func TestValidateConfig_SessionIDVarWithModeClient(t *testing.T) {
+	cfg := validConfig()
+	cfg.Target.Settings.RequestBodyTemplate = `{"sid": "{{sessionId}}", "msg": "{{prompt}}"}`
+	cfg.Target.Settings.Session = &redteam.SessionConfig{Mode: redteam.SessionModeClient}
+	require.NoError(t, redteam.ValidateConfig(cfg))
+}
+
+// ---------------------------------------------------------------------------
+// Session config YAML loading
+// ---------------------------------------------------------------------------
+
+func TestLoadAndValidateConfig_SessionFromYAML(t *testing.T) {
+	path := writeTestConfig(t, `
+target:
+  name: test
+  type: http
+  settings:
+    url: "https://example.com"
+    request_body_template: '{"sid": "{{sessionId}}", "msg": "{{prompt}}"}'
+    session:
+      mode: "client"
+`)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	require.NotNil(t, rtCfg.Target.Settings.Session)
+	assert.Equal(t, "client", rtCfg.Target.Settings.Session.Mode)
+}
+
+func TestLoadAndValidateConfig_NoSessionConfig(t *testing.T) {
+	path := writeTestConfig(t, baseTargetYAML)
+	cfg := configuration.New()
+	cfg.Set(utils.FlagConfig, path)
+
+	rtCfg, _, err := redteam.LoadAndValidateConfig(testLogger(), cfg)
+	require.NoError(t, err)
+	assert.Nil(t, rtCfg.Target.Settings.Session)
+}

@@ -40,6 +40,13 @@ const (
 	ScanModeExhaustive = "exhaustive"
 )
 
+const (
+	// SessionModeNone disables session management (default).
+	SessionModeNone = "none"
+	// SessionModeClient generates a UUID per chat on the client side.
+	SessionModeClient = "client"
+)
+
 type ConfigScan struct {
 	Mode string `yaml:"mode" json:"mode,omitempty"`
 }
@@ -74,7 +81,14 @@ type ConfigSettings struct {
 	ResponseSelector    string         `yaml:"response_selector" json:"response_selector"`
 	RequestBodyTemplate string         `yaml:"request_body_template" json:"request_body_template"`
 	// Timeout is the per-request HTTP timeout in seconds. Zero or unset uses defaultTargetTimeoutSeconds.
-	Timeout int `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	Timeout int            `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	Session *SessionConfig `yaml:"session,omitempty" json:"session,omitempty"`
+}
+
+// SessionConfig controls how the client manages sessions across multi-turn conversations.
+type SessionConfig struct {
+	// Mode selects the session strategy: "none" or "client".
+	Mode string `yaml:"mode" json:"mode"`
 }
 
 type ConfigHeader struct {
@@ -257,6 +271,8 @@ func ValidateConfig(cfg *Config) error {
 		errs = append(errs, fmt.Sprintf("scan.mode must be %q or %q, got %q", ScanModeEager, ScanModeExhaustive, cfg.Scan.Mode))
 	}
 
+	errs = append(errs, validateSessionConfig(cfg)...)
+
 	if len(errs) == 0 {
 		return nil
 	}
@@ -270,6 +286,42 @@ func validateURL(rawURL, label string) error {
 		return fmt.Errorf("%s must be a valid HTTP(S) URL, got: %q", label, rawURL)
 	}
 	return nil
+}
+
+func validateSessionConfig(cfg *Config) []string {
+	sess := cfg.Target.Settings.Session
+	if sess == nil {
+		return nil
+	}
+
+	var errs []string
+	switch sess.Mode {
+	case SessionModeNone, SessionModeClient:
+		// valid
+	default:
+		errs = append(errs, fmt.Sprintf(
+			"session.mode must be %q or %q, got %q",
+			SessionModeNone, SessionModeClient, sess.Mode,
+		))
+	}
+
+	if sess.Mode == SessionModeNone && usesSessionIDVariable(cfg) {
+		errs = append(errs, "{{sessionId}} is used in request template or headers but session.mode is \"none\"")
+	}
+
+	return errs
+}
+
+func usesSessionIDVariable(cfg *Config) bool {
+	if strings.Contains(cfg.Target.Settings.RequestBodyTemplate, "{{sessionId}}") {
+		return true
+	}
+	for _, h := range cfg.Target.Settings.Headers {
+		if strings.Contains(h.Value, "{{sessionId}}") {
+			return true
+		}
+	}
+	return false
 }
 
 // NeedsDefaultProfile returns true when no goals or attacks are configured.
@@ -426,6 +478,8 @@ func getInvalidConfigMessage() string {
 			response_selector: '<optional, JMESPath expression; omit for plain text>'
 			request_body_template: '<optional, default: {"message": "{{prompt}}"}'
 			timeout: '<optional, seconds; default: 60>'
+		session:
+			mode: '<optional, "none" | "client">'
 	goals:
 		- '<optional, default: system_prompt_extraction>'
 	attacks:

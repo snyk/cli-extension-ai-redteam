@@ -16,7 +16,8 @@ By default the CLI looks for `redteam.yaml` in the current directory. Use `--con
 | **target.settings.url** | Yes | URL of the target to scan (e.g. chat/completions endpoint). |
 | **target.settings.headers** | No | List of `name`/`value` request headers. |
 | **target.settings.response_selector** | No | JMESPath to extract the response from target JSON. Omit for plain text targets (raw body used as-is). |
-| **target.settings.request_body_template** | No | JSON template with `{{prompt}}` placeholder (default: `{"message": "{{prompt}}"}`). |
+| **target.settings.request_body_template** | No | JSON template with `{{prompt}}` placeholder (default: `{"message": "{{prompt}}"}`). Supports `{{sessionId}}` for session management. |
+| **target.settings.session.mode** | No | Session strategy: `"none"` (default) or `"client"` (generates a UUID per conversation). Auto-enabled when `{{sessionId}}` is used in the template or headers. |
 | **goals** | No | List of attack goals. Each goal runs with all registered strategies. Ignored when `attacks` is present. |
 | **attacks** | No | Explicit list of `{goal, strategy?}` entries. Overrides `goals` when present. Strategy is optional; omitting it runs all registered strategies for that goal. |
 | **scan.mode** | No | Set to `exhaustive` to run all attack attempts even after one succeeds. Default: stops remaining attempts after first success. |
@@ -60,6 +61,41 @@ attacks:
 scan:
   mode: exhaustive
 ```
+
+## Sessions
+
+Multi-turn attacks (e.g. crescendo) send multiple prompts to the same conversation. If your target requires a session identifier to maintain conversation state, use the `{{sessionId}}` template variable. A unique UUID is generated per conversation and stays stable across turns.
+
+In the request body:
+
+```yaml
+target:
+  settings:
+    url: "https://example.com/chat"
+    request_body_template: '{"session_id": "{{sessionId}}", "message": "{{prompt}}"}'
+```
+
+In a header:
+
+```yaml
+target:
+  settings:
+    url: "https://example.com/chat"
+    headers:
+      - name: X-Session-ID
+        value: "{{sessionId}}"
+```
+
+Using `{{sessionId}}` anywhere in the template or headers automatically enables client-generated session IDs. You can also set this explicitly:
+
+```yaml
+target:
+  settings:
+    session:
+      mode: "client"
+```
+
+If your target does not need sessions (e.g. it uses cookies or is stateless), omit `{{sessionId}}` — the default behavior is unchanged.
 
 ## Profiles
 

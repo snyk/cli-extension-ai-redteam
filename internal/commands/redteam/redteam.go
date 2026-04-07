@@ -147,6 +147,18 @@ func RunRedTeamWorkflow(
 
 	userInterface := invocationCtx.GetUserInterface()
 	displayBanner(userInterface, rtConfig, profileName)
+
+	var sessionStore *target.SessionStore
+	if rtConfig.Target.Settings.Session != nil {
+		sessionStore = target.NewSessionStore(target.SessionStoreConfig{
+			Mode: rtConfig.Target.Settings.Session.Mode,
+		})
+	} else if usesSessionIDVariable(rtConfig) {
+		sessionStore = target.NewSessionStore(target.SessionStoreConfig{
+			Mode: SessionModeClient,
+		})
+	}
+
 	targetClient := targetFactory(
 		targetHTTPClient,
 		rtConfig.Target.Settings.URL,
@@ -155,7 +167,7 @@ func RunRedTeamWorkflow(
 		rtConfig.Target.Settings.ResponseSelector,
 	)
 
-	results, scanErr := runClientDrivenScan(invocationCtx, controlServerClient, targetClient, rtConfig)
+	results, scanErr := runClientDrivenScan(invocationCtx, controlServerClient, targetClient, rtConfig, sessionStore)
 	if scanErr != nil {
 		return nil, scanErr
 	}
@@ -324,6 +336,7 @@ func runClientDrivenScan(
 	csClient controlserver.Client,
 	targetClient target.Client,
 	rtConfig *Config,
+	sessionStore *target.SessionStore,
 ) ([]workflow.Data, error) {
 	logger := invocationCtx.GetEnhancedLogger()
 	userInterface := invocationCtx.GetUserInterface()
@@ -352,7 +365,15 @@ func runClientDrivenScan(
 
 		responses = make([]controlserver.ChatResponse, 0, len(chats))
 		for _, chat := range chats {
-			resp, tgtErr := targetClient.SendPrompt(ctx, chat.Prompt)
+			promptCtx := ctx
+			if sessionStore != nil {
+				sid, sidErr := sessionStore.GetOrCreate(chat.ChatID)
+				if sidErr != nil {
+					return nil, redteam_errors.NewNetworkError(fmt.Sprintf("resolve session: %s", sidErr))
+				}
+				promptCtx = target.WithSessionID(promptCtx, sid)
+			}
+			resp, tgtErr := targetClient.SendPrompt(promptCtx, chat.Prompt)
 			if tgtErr != nil {
 				if errors.Is(tgtErr, target.ErrCircuitOpen) {
 					return nil, redteam_errors.NewNetworkError(fmt.Sprintf("aborting scan: %s", tgtErr))
