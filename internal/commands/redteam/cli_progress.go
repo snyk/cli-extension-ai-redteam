@@ -198,7 +198,7 @@ func renderAttackRow(theme *cliTheme, a *controlserver.AttackStatus, frame int, 
 	}
 	done := a.TotalChats > 0 && a.Completed >= a.TotalChats
 	mark := rowStatusMark(theme, done, isActive && !done, a.Successful > 0, frame)
-	label := truncateRunes(humanizeAttackType(a.AttackType), 40)
+	label := truncateRunes(humanizeAttackType(a.AttackType), 50)
 
 	var sb strings.Builder
 	sb.WriteString("  ")
