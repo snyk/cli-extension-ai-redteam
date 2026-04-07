@@ -406,6 +406,25 @@ func parseHeaderFlags(config configuration.Configuration) []ConfigHeader {
 	return headers
 }
 
+// EffectiveConfigDisplayPath returns the config file path shown in the CLI, mirroring loadConfigFromFile.
+func EffectiveConfigDisplayPath(config configuration.Configuration) string {
+	p := config.GetString(utils.FlagConfig)
+	if p != "" {
+		return p
+	}
+	if _, err := os.Stat("redteam.yaml"); err == nil {
+		return "redteam.yaml"
+	}
+	return "(inline)"
+}
+
+func deriveScanModeLabel(profileName string) string {
+	if profileName != "" {
+		return profileName
+	}
+	return "custom"
+}
+
 func getInvalidConfigMessage() string {
 	return `
 	Configuration file is invalid. Please refer to the following example:

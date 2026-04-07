@@ -1,31 +1,71 @@
 package redteam
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/snyk/go-application-framework/pkg/ui"
 )
 
-const (
-	bred  = "\033[91m"
-	bold  = "\033[1m"
-	reset = "\033[0m"
-)
-
-func displayBanner(userInterface ui.UserInterface, cfg *Config, profileName string) {
+func renderEVOLogo(theme *cliTheme) string {
+	lp := theme.logoFallback()
+	w := theme.subtitle()
 	var sb strings.Builder
+	fmt.Fprintf(&sb, "  %s\n", lp.Render(" ▄▄▄▄  ▄   ▄   ▄▄▄▄"))
+	fmt.Fprintf(&sb, "  %s\n", lp.Render("█▄▄▄█  █   █  █    █"))
+	fmt.Fprintf(&sb, "  %s\n", lp.Render("█       █ █   █    █"))
+	fmt.Fprintf(&sb, "  %s  %s", lp.Render(" ▀▀▀▀    ▀     ▀▀▀▀"), w.Render("by Snyk"))
+	return sb.String()
+}
 
-	fmt.Fprintf(&sb, "\n")
-	fmt.Fprintf(&sb, "  %s%sSnyk Agent Red Teaming%s\n", bold, bred, reset)
-	fmt.Fprintf(&sb, "\n")
-	fmt.Fprintf(&sb, "  Target:     %s\n", cfg.Target.Settings.URL)
-	if profileName != "" {
-		fmt.Fprintf(&sb, "  Profile:    %s\n", profileName)
+// scanBannerOptions configures the post-scan-creation header.
+type scanBannerOptions struct {
+	ScanID      string
+	ProfileName string
+	ConfigPath  string
+	ScanMode    string
+	TenantID    string
+}
+
+func displayScanBanner(userInterface ui.UserInterface, theme *cliTheme, cfg *Config, opts *scanBannerOptions) error {
+	if opts == nil {
+		return fmt.Errorf("scan banner: %w", errNilBannerOptions)
 	}
-	fmt.Fprintf(&sb, "  Mode:       %s\n", cfg.Scan.Mode)
-	fmt.Fprintf(&sb, "  Goals:      %s\n", strings.Join(cfg.UniqueGoals(), ", "))
-	fmt.Fprintf(&sb, "\n")
+	tw := terminalWidth()
+	var sb strings.Builder
+	sb.WriteString("\n")
+	sb.WriteString(renderEVOLogo(theme))
+	sb.WriteString("\n\n")
+	sb.WriteString("  ")
+	sb.WriteString(theme.title().Render("AI Red Teaming"))
+	sb.WriteString("\n  ")
+	sb.WriteString(theme.subtitle().Render("Adversarial testing for AI-native applications"))
+	sb.WriteString("\n  ")
+	sb.WriteString(theme.subtitle().Render("scan id "))
+	sb.WriteString(theme.muted().Render(opts.ScanID))
+	sb.WriteString("\n\n")
 
-	_ = userInterface.Output(sb.String()) //nolint:errcheck // best-effort banner output
+	sb.WriteString(horizontalRule(theme, "scan configuration", tw))
+	sb.WriteString("\n")
+	sb.WriteString(kvLine(theme, "Target", theme.accent().Render(cfg.Target.Settings.URL)))
+	goals := strings.Join(cfg.UniqueGoals(), ", ")
+	if goals != "" {
+		sb.WriteString(kvLine(theme, "Goals", theme.subtitle().Render(goals)))
+	}
+	sb.WriteString(kvLine(theme, "Mode", theme.subtitle().Render(cfg.Scan.Mode)))
+	sb.WriteString(kvLine(theme, "Config", theme.subtitle().Render(opts.ConfigPath)))
+	if opts.ProfileName != "" {
+		sb.WriteString(kvLine(theme, "Profile", theme.subtitle().Render(opts.ProfileName)))
+	}
+	if err := userInterface.Output(sb.String()); err != nil {
+		return fmt.Errorf("scan banner output: %w", err)
+	}
+	return nil
+}
+
+var errNilBannerOptions = errors.New("nil banner options")
+
+func kvLine(theme *cliTheme, key, valueStyled string) string {
+	return fmt.Sprintf("  %s %s\n", theme.label().Render(key+":"), valueStyled)
 }
