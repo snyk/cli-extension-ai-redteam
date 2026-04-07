@@ -3,6 +3,7 @@
 package redteam
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -388,9 +389,19 @@ func runClientDrivenScan(
 
 	if live != nil {
 		outputResultsSummary(userInterface, logger, live.theme, status, reportJSON, time.Since(scanStart))
+		reportJSON = prettyJSON(reportJSON)
 	}
 
 	return []workflow.Data{newWorkflowData("application/json", reportJSON)}, nil
+}
+
+func prettyJSON(data []byte) []byte {
+	var buf bytes.Buffer
+	if err := json.Indent(&buf, data, "", "  "); err != nil {
+		return data
+	}
+	buf.WriteByte('\n')
+	return buf.Bytes()
 }
 
 // setupScanUI initializes the branded banner and live progress when not in
