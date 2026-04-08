@@ -1,21 +1,10 @@
-GO_BIN?=$(shell pwd)/.bin/go
-PYTHON_PATH?=$(shell pwd)/.bin/python
+GOCI_LINT_V?=v1.64.7
+PRE_COMMIT_V?=3.8.0
 
-GOCI_LINT_V?=v2.11.3
-PRE_COMMIT_V?=v3.8
-
-
-export PYTHONPATH=$(PYTHON_PATH)
-export GOFLAGS?=-buildvcs=false
-SHELL:=env PATH=$(GO_BIN):$(PYTHON_PATH)/bin:$(PATH) $(SHELL)
-
-.PHONY: install-tools
-install-tools: ## Install golangci-lint, pre-commit & everything in tools.go
-	mkdir -p ${GO_BIN}
-	@cat tools.go | grep _ | awk -F'"' '{print $$2}' | xargs -tI % sh -c 'GOBIN=${GO_BIN} go install %'
-	curl -sSfL 'https://raw.githubusercontent.com/golangci/golangci-lint/${GOCI_LINT_V}/install.sh' | sh -s -- -b ${GO_BIN} ${GOCI_LINT_V}
-	uv venv ${PYTHON_PATH}
-	uv pip install --python ${PYTHON_PATH}/bin/python pre-commit==${PRE_COMMIT_V}
+.PHONY: setup
+setup: ## Install golangci-lint & pre-commit (Go tools are managed via go.mod tool directives)
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@${GOCI_LINT_V}
+	uv tool install pre-commit==${PRE_COMMIT_V}
 	pre-commit install --hook-type commit-msg --hook-type pre-commit
 
 .PHONY: lint
