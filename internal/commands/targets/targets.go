@@ -101,19 +101,24 @@ func RunTargetsWorkflow(
 		return handleList(ctx, csClient)
 	case "get":
 		if arg == "" {
-			return nil, redteam_errors.NewBadRequestError("usage: snyk redteam targets get <name-or-id>")
+			return nil, redteam_errors.NewBadRequestError("usage: snyk redteam targets get <name>")
 		}
 		return handleGet(ctx, invocationCtx, csClient, arg, config)
 	case "save":
 		return handleSave(ctx, csClient, config)
+	case "update":
+		if arg == "" {
+			return nil, redteam_errors.NewBadRequestError("usage: snyk redteam targets update <name>")
+		}
+		return handleUpdate(ctx, csClient, arg, config)
 	case "delete":
 		if arg == "" {
-			return nil, redteam_errors.NewBadRequestError("usage: snyk redteam targets delete <name-or-id>")
+			return nil, redteam_errors.NewBadRequestError("usage: snyk redteam targets delete <name>")
 		}
 		return handleDelete(ctx, csClient, arg)
 	default:
 		return nil, redteam_errors.NewBadRequestError(
-			"usage: snyk redteam targets [list|get|save|delete]",
+			"usage: snyk redteam targets [list|get|save|update|delete]",
 		)
 	}
 }
@@ -184,15 +189,10 @@ func handleGet(
 	ctx context.Context,
 	invocationCtx workflow.InvocationContext,
 	client controlserver.Client,
-	nameOrID string,
+	name string,
 	config configuration.Configuration,
 ) ([]workflow.Data, error) {
-	targetID, err := resolveTargetID(ctx, client, nameOrID)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := client.GetTarget(ctx, targetID)
+	resp, err := client.GetTarget(ctx, name)
 	if err != nil {
 		return nil, err //nolint:wrapcheck // RedTeamError from controlserver
 	}
@@ -298,60 +298,63 @@ func handleSave(
 	return textOutput(msg), nil
 }
 
-func handleDelete(
+func handleUpdate(
 	ctx context.Context,
 	client controlserver.Client,
-	nameOrID string,
+	name string,
+	config configuration.Configuration,
 ) ([]workflow.Data, error) {
-	targetID, err := resolveTargetID(ctx, client, nameOrID)
-	if err != nil {
-		return nil, err
+	configPath := config.GetString(utils.FlagConfig)
+	if configPath == "" {
+		configPath = "redteam.yaml"
 	}
 
-	if err := client.DeleteTarget(ctx, targetID); err != nil {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, redteam_errors.NewConfigValidationError(
+			fmt.Sprintf("failed to read config file %s: %s", configPath, err),
+		)
+	}
+
+	var rtConfig redteam.Config
+	if unmarshalErr := yaml.Unmarshal(data, &rtConfig); unmarshalErr != nil {
+		return nil, redteam_errors.NewConfigValidationError(
+			fmt.Sprintf("failed to parse %s: %s", configPath, unmarshalErr),
+		)
+	}
+
+	configMap, err := structToMap(&rtConfig)
+	if err != nil {
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("serialize config: %s", err))
+	}
+
+	stripHeaders(configMap)
+
+	req := &controlserver.TargetUpdateRequest{Config: configMap}
+	if newName := config.GetString(utils.FlagTargetName); newName != "" {
+		req.Name = newName
+	}
+
+	resp, err := client.UpdateTarget(ctx, name, req)
+	if err != nil {
 		return nil, err //nolint:wrapcheck // RedTeamError from controlserver
 	}
 
-	msg := fmt.Sprintf("Target %q deleted\n", nameOrID)
+	msg := fmt.Sprintf("Target %q updated\n", resp.Name)
 	return textOutput(msg), nil
 }
 
-// resolveTargetID resolves a name-or-id string to a UUID target ID.
-// If nameOrID looks like a UUID it is returned as-is; otherwise the target
-// list is fetched and the first matching name is used.
-func resolveTargetID(ctx context.Context, client controlserver.Client, nameOrID string) (string, error) {
-	if looksLikeUUID(nameOrID) {
-		return nameOrID, nil
+func handleDelete(
+	ctx context.Context,
+	client controlserver.Client,
+	name string,
+) ([]workflow.Data, error) {
+	if err := client.DeleteTarget(ctx, name); err != nil {
+		return nil, err //nolint:wrapcheck // RedTeamError from controlserver
 	}
 
-	items, err := client.ListTargets(ctx)
-	if err != nil {
-		return "", err //nolint:wrapcheck // RedTeamError from controlserver
-	}
-
-	for _, item := range items {
-		if item.Name == nameOrID {
-			return item.ID, nil
-		}
-	}
-
-	return "", redteam_errors.NewNotFoundError(fmt.Sprintf("target %q not found", nameOrID))
-}
-
-func looksLikeUUID(s string) bool {
-	if len(s) != 36 {
-		return false
-	}
-	for i, c := range s {
-		if i == 8 || i == 13 || i == 18 || i == 23 {
-			if c != '-' {
-				return false
-			}
-		} else if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
-			return false
-		}
-	}
-	return true
+	msg := fmt.Sprintf("Target %q deleted\n", name)
+	return textOutput(msg), nil
 }
 
 func configFromMap(m map[string]any) (*redteam.Config, error) {

@@ -1,6 +1,7 @@
 package targets_test
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -27,6 +28,10 @@ const (
 	cmdSnyk        = "snyk"
 	cmdRedteam     = "redteam"
 	cmdTargets     = "targets"
+	errUsage       = "usage"
+	errNotFound    = "not found"
+	flagConfig     = "--config"
+	cfgKeyConfig   = "config"
 )
 
 func mockCSFactory(mock *controlservermock.MockClient) targets.ControlServerFactory {
@@ -125,7 +130,7 @@ func TestTargetsWorkflow_Get_MissingArg(t *testing.T) {
 
 	_, err := targets.RunTargetsWorkflow(ictx, mockCSFactory(&controlservermock.MockClient{}))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "usage")
+	assert.Contains(t, err.Error(), errUsage)
 }
 
 func TestTargetsWorkflow_Get_NotFound(t *testing.T) {
@@ -133,18 +138,18 @@ func TestTargetsWorkflow_Get_NotFound(t *testing.T) {
 	ictx := baseCtx(t)
 
 	mock := &controlservermock.MockClient{
-		Targets: []controlserver.TargetListItem{},
+		TargetErr: errors.New(errNotFound),
 	}
 
 	_, err := targets.RunTargetsWorkflow(ictx, mockCSFactory(mock))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
+	assert.Contains(t, err.Error(), errNotFound)
 }
 
 func TestTargetsWorkflow_Get_OutputFlag(t *testing.T) {
 	outputPath := t.TempDir() + "/downloaded.yaml"
 
-	defer setArgs(cmdSnyk, cmdRedteam, cmdTargets, "get", testTargetID, "--output", outputPath)()
+	defer setArgs(cmdSnyk, cmdRedteam, cmdTargets, "get", testTargetName, "--output", outputPath)()
 	ictx := baseCtx(t)
 	ictx.GetConfiguration().Set("output", outputPath)
 
@@ -186,7 +191,7 @@ func TestTargetsWorkflow_Get_OutputFlag(t *testing.T) {
 func TestTargetsWorkflow_Get_OutputFlag_WritesValidConfig(t *testing.T) {
 	outputPath := t.TempDir() + "/config.yaml"
 
-	defer setArgs(cmdSnyk, cmdRedteam, cmdTargets, "get", testTargetID, "--output", outputPath)()
+	defer setArgs(cmdSnyk, cmdRedteam, cmdTargets, "get", testTargetName, "--output", outputPath)()
 	ictx := baseCtx(t)
 	ictx.GetConfiguration().Set("output", outputPath)
 
@@ -246,9 +251,9 @@ goals:
 `, testTargetName)
 	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0o600))
 
-	defer setArgs(cmdSnyk, cmdRedteam, cmdTargets, "save", "--config", configPath)()
+	defer setArgs(cmdSnyk, cmdRedteam, cmdTargets, "save", flagConfig, configPath)()
 	ictx := baseCtx(t)
-	ictx.GetConfiguration().Set("config", configPath)
+	ictx.GetConfiguration().Set(cfgKeyConfig, configPath)
 
 	mock := &controlservermock.MockClient{
 		CreatedTarget: &controlserver.TargetResponse{
@@ -292,9 +297,9 @@ goals:
 `
 	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0o600))
 
-	defer setArgs(cmdSnyk, cmdRedteam, cmdTargets, "save", "--config", configPath, "--target-name", "flag-name")()
+	defer setArgs(cmdSnyk, cmdRedteam, cmdTargets, "save", flagConfig, configPath, "--target-name", "flag-name")()
 	ictx := baseCtx(t)
-	ictx.GetConfiguration().Set("config", configPath)
+	ictx.GetConfiguration().Set(cfgKeyConfig, configPath)
 	ictx.GetConfiguration().Set("target-name", "flag-name")
 
 	mock := &controlservermock.MockClient{
@@ -328,9 +333,9 @@ goals:
 `
 	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0o600))
 
-	defer setArgs(cmdSnyk, cmdRedteam, cmdTargets, "save", "--config", configPath)()
+	defer setArgs(cmdSnyk, cmdRedteam, cmdTargets, "save", flagConfig, configPath)()
 	ictx := baseCtx(t)
-	ictx.GetConfiguration().Set("config", configPath)
+	ictx.GetConfiguration().Set(cfgKeyConfig, configPath)
 
 	_, err := targets.RunTargetsWorkflow(ictx, mockCSFactory(&controlservermock.MockClient{}))
 	require.Error(t, err)
@@ -338,7 +343,7 @@ goals:
 }
 
 func TestTargetsWorkflow_Save_ConfigFileNotFound(t *testing.T) {
-	defer setArgs(cmdSnyk, cmdRedteam, cmdTargets, "save", "--config", "/nonexistent/redteam.yaml")()
+	defer setArgs(cmdSnyk, cmdRedteam, cmdTargets, "save", flagConfig, "/nonexistent/redteam.yaml")()
 	ictx := baseCtx(t)
 
 	_, err := targets.RunTargetsWorkflow(ictx, mockCSFactory(&controlservermock.MockClient{}))
@@ -347,11 +352,134 @@ func TestTargetsWorkflow_Save_ConfigFileNotFound(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// update
+// ---------------------------------------------------------------------------
+
+func TestTargetsWorkflow_Update_Happy(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/redteam.yaml"
+	configContent := fmt.Sprintf(`target:
+  name: %s
+  type: http
+  settings:
+    url: http://localhost:8080
+    request_body_template: '{"message": "{{prompt}}"}'
+    headers:
+      - name: Authorization
+        value: Bearer secret-token
+goals:
+  - capability_extraction
+`, testTargetName)
+	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0o600))
+
+	defer setArgs(cmdSnyk, cmdRedteam, cmdTargets, "update", testTargetName, flagConfig, configPath)()
+	ictx := baseCtx(t)
+	ictx.GetConfiguration().Set(cfgKeyConfig, configPath)
+
+	mock := &controlservermock.MockClient{
+		UpdatedTarget: &controlserver.TargetResponse{
+			ID:        testTargetID,
+			Name:      testTargetName,
+			Config:    map[string]any{},
+			CreatedAt: "2026-04-01T10:00:00Z",
+			UpdatedAt: "2026-04-01T12:00:00Z",
+		},
+	}
+
+	results, err := targets.RunTargetsWorkflow(ictx, mockCSFactory(mock))
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	payload, ok := results[0].GetPayload().([]byte)
+	require.True(t, ok)
+	output := string(payload)
+	assert.Contains(t, output, testTargetName)
+	assert.Contains(t, output, "updated")
+
+	require.NotNil(t, mock.UpdateTargetRequest)
+	assert.Equal(t, testTargetName, mock.UpdateTargetName)
+	targetMap, _ := mock.UpdateTargetRequest.Config["target"].(map[string]any)
+	settingsMap, _ := targetMap["settings"].(map[string]any)
+	assert.Nil(t, settingsMap["headers"], "headers should be stripped before update")
+}
+
+func TestTargetsWorkflow_Update_WithRename(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/redteam.yaml"
+	configContent := `target:
+  type: http
+  settings:
+    url: http://localhost:8080
+    request_body_template: '{"message": "{{prompt}}"}'
+goals:
+  - system_prompt_extraction
+`
+	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0o600))
+
+	defer setArgs(cmdSnyk, cmdRedteam, cmdTargets, "update", testTargetName, flagConfig, configPath, "--target-name", "renamed-bot")()
+	ictx := baseCtx(t)
+	ictx.GetConfiguration().Set(cfgKeyConfig, configPath)
+	ictx.GetConfiguration().Set("target-name", "renamed-bot")
+
+	mock := &controlservermock.MockClient{
+		UpdatedTarget: &controlserver.TargetResponse{
+			ID:        testTargetID,
+			Name:      "renamed-bot",
+			Config:    map[string]any{},
+			CreatedAt: "2026-04-01T10:00:00Z",
+			UpdatedAt: "2026-04-01T12:00:00Z",
+		},
+	}
+
+	results, err := targets.RunTargetsWorkflow(ictx, mockCSFactory(mock))
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	require.NotNil(t, mock.UpdateTargetRequest)
+	assert.Equal(t, testTargetName, mock.UpdateTargetName)
+	assert.Equal(t, "renamed-bot", mock.UpdateTargetRequest.Name)
+}
+
+func TestTargetsWorkflow_Update_MissingArg(t *testing.T) {
+	defer setArgs(cmdSnyk, cmdRedteam, cmdTargets, "update")()
+	ictx := baseCtx(t)
+
+	_, err := targets.RunTargetsWorkflow(ictx, mockCSFactory(&controlservermock.MockClient{}))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), errUsage)
+}
+
+func TestTargetsWorkflow_Update_NotFound(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/redteam.yaml"
+	configContent := `target:
+  type: http
+  settings:
+    url: http://localhost:8080
+goals:
+  - system_prompt_extraction
+`
+	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0o600))
+
+	defer setArgs(cmdSnyk, cmdRedteam, cmdTargets, "update", "nonexistent", flagConfig, configPath)()
+	ictx := baseCtx(t)
+	ictx.GetConfiguration().Set(cfgKeyConfig, configPath)
+
+	mock := &controlservermock.MockClient{
+		UpdateTgtErr: errors.New(errNotFound),
+	}
+
+	_, err := targets.RunTargetsWorkflow(ictx, mockCSFactory(mock))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), errNotFound)
+}
+
+// ---------------------------------------------------------------------------
 // delete
 // ---------------------------------------------------------------------------
 
 func TestTargetsWorkflow_Delete_Happy(t *testing.T) {
-	defer setArgs(cmdSnyk, cmdRedteam, cmdTargets, "delete", testTargetID)()
+	defer setArgs(cmdSnyk, cmdRedteam, cmdTargets, "delete", testTargetName)()
 	ictx := baseCtx(t)
 
 	mock := &controlservermock.MockClient{}
@@ -363,23 +491,7 @@ func TestTargetsWorkflow_Delete_Happy(t *testing.T) {
 	payload, ok := results[0].GetPayload().([]byte)
 	require.True(t, ok)
 	assert.Contains(t, string(payload), "deleted")
-	assert.Equal(t, testTargetID, mock.DeletedTargetID)
-}
-
-func TestTargetsWorkflow_Delete_ByName(t *testing.T) {
-	defer setArgs(cmdSnyk, cmdRedteam, cmdTargets, "delete", testTargetName)()
-	ictx := baseCtx(t)
-
-	mock := &controlservermock.MockClient{
-		Targets: []controlserver.TargetListItem{
-			{ID: testTargetID, Name: testTargetName},
-		},
-	}
-
-	results, err := targets.RunTargetsWorkflow(ictx, mockCSFactory(mock))
-	require.NoError(t, err)
-	require.Len(t, results, 1)
-	assert.Equal(t, testTargetID, mock.DeletedTargetID)
+	assert.Equal(t, testTargetName, mock.DeletedTargetName)
 }
 
 func TestTargetsWorkflow_Delete_MissingArg(t *testing.T) {
@@ -388,7 +500,7 @@ func TestTargetsWorkflow_Delete_MissingArg(t *testing.T) {
 
 	_, err := targets.RunTargetsWorkflow(ictx, mockCSFactory(&controlservermock.MockClient{}))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "usage")
+	assert.Contains(t, err.Error(), errUsage)
 }
 
 func TestTargetsWorkflow_Delete_NotFound(t *testing.T) {
@@ -396,12 +508,12 @@ func TestTargetsWorkflow_Delete_NotFound(t *testing.T) {
 	ictx := baseCtx(t)
 
 	mock := &controlservermock.MockClient{
-		Targets: []controlserver.TargetListItem{},
+		DeleteTgtErr: errors.New(errNotFound),
 	}
 
 	_, err := targets.RunTargetsWorkflow(ictx, mockCSFactory(mock))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
+	assert.Contains(t, err.Error(), errNotFound)
 }
 
 // ---------------------------------------------------------------------------
@@ -414,7 +526,7 @@ func TestTargetsWorkflow_UnknownAction(t *testing.T) {
 
 	_, err := targets.RunTargetsWorkflow(ictx, mockCSFactory(&controlservermock.MockClient{}))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "usage")
+	assert.Contains(t, err.Error(), errUsage)
 }
 
 func TestTargetsWorkflow_NoAction(t *testing.T) {
@@ -423,5 +535,5 @@ func TestTargetsWorkflow_NoAction(t *testing.T) {
 
 	_, err := targets.RunTargetsWorkflow(ictx, mockCSFactory(&controlservermock.MockClient{}))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "usage")
+	assert.Contains(t, err.Error(), errUsage)
 }

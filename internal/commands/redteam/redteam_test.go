@@ -1028,6 +1028,24 @@ func TestRunRedTeamWorkflow_ListStrategiesJSON(t *testing.T) {
 	assert.Equal(t, "directly_asking", first["value"])
 }
 
+func TestRunRedTeamWorkflow_PassesTargetNameInScanRequest(t *testing.T) {
+	ictx := frameworkmock.NewMockInvocationContext(t)
+	ictx.GetConfiguration().Set(experimentalKey, true)
+	ictx.GetConfiguration().Set(tenantIDKey, testTenantID)
+	ictx.GetConfiguration().Set(configFlag, redteamTestConfigFile)
+
+	mockCS := defaultMockCS()
+
+	originalArgs := os.Args
+	os.Args = []string{"snyk", "redteam"}
+	defer func() { os.Args = originalArgs }()
+
+	_, err := redteam.RunRedTeamWorkflow(ictx, mockCSFactory(mockCS), mockTargetFactory(defaultMockTarget()))
+	require.NoError(t, err)
+	require.NotNil(t, mockCS.CreateScanRequest)
+	assert.Equal(t, "Default Config", mockCS.CreateScanRequest.TargetName)
+}
+
 func TestRunRedTeamWorkflow_ListBothJSON(t *testing.T) {
 	ictx := frameworkmock.NewMockInvocationContext(t)
 	ictx.GetConfiguration().Set(experimentalKey, true)

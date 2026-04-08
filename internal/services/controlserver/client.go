@@ -30,9 +30,10 @@ type Client interface { //nolint:interfacebloat // API surface for a single back
 	ListStrategies(ctx context.Context) ([]EnumEntry, error)
 	ListProfiles(ctx context.Context) ([]ProfileResponse, error)
 	ListTargets(ctx context.Context) ([]TargetListItem, error)
-	GetTarget(ctx context.Context, targetID string) (*TargetResponse, error)
+	GetTarget(ctx context.Context, targetName string) (*TargetResponse, error)
 	CreateTarget(ctx context.Context, req *TargetCreateRequest) (*TargetResponse, error)
-	DeleteTarget(ctx context.Context, targetID string) error
+	UpdateTarget(ctx context.Context, targetName string, req *TargetUpdateRequest) (*TargetResponse, error)
+	DeleteTarget(ctx context.Context, targetName string) error
 }
 
 type ClientImpl struct {
@@ -268,10 +269,10 @@ func (c *ClientImpl) ListTargets(ctx context.Context) ([]TargetListItem, error) 
 	return items, nil
 }
 
-func (c *ClientImpl) GetTarget(ctx context.Context, targetID string) (*TargetResponse, error) {
+func (c *ClientImpl) GetTarget(ctx context.Context, targetName string) (*TargetResponse, error) {
 	url := fmt.Sprintf(
 		"%s/hidden/tenants/%s/targets/%s?version=%s",
-		c.baseURL, c.tenantID, targetID, APIVersion,
+		c.baseURL, c.tenantID, targetName, APIVersion,
 	)
 	respBytes, err := c.doGet(ctx, "GetTarget", url)
 	if err != nil {
@@ -323,10 +324,50 @@ func (c *ClientImpl) CreateTarget(ctx context.Context, req *TargetCreateRequest)
 	return &result, nil
 }
 
-func (c *ClientImpl) DeleteTarget(ctx context.Context, targetID string) error {
+func (c *ClientImpl) UpdateTarget(ctx context.Context, targetName string, req *TargetUpdateRequest) (*TargetResponse, error) {
+	reqBytes, err := json.Marshal(req)
+	if err != nil {
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("marshal UpdateTarget request: %s", err))
+	}
+
 	urlStr := fmt.Sprintf(
 		"%s/hidden/tenants/%s/targets/%s?version=%s",
-		c.baseURL, c.tenantID, targetID, APIVersion,
+		c.baseURL, c.tenantID, targetName, APIVersion,
+	)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, urlStr, bytes.NewReader(reqBytes))
+	if err != nil {
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("build UpdateTarget request: %s", err))
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, utils.ErrorFromHTTPClient("UpdateTarget", err)
+	}
+	defer resp.Body.Close()
+
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("read UpdateTarget response: %s", err))
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, httpError("UpdateTarget", resp.StatusCode, respBytes)
+	}
+
+	var result TargetResponse
+	if err := json.Unmarshal(respBytes, &result); err != nil {
+		return nil, redteam_errors.NewInternalError(fmt.Sprintf("unmarshal UpdateTarget response: %s", err))
+	}
+
+	c.logger.Debug().Str("targetName", targetName).Msg("target updated")
+	return &result, nil
+}
+
+func (c *ClientImpl) DeleteTarget(ctx context.Context, targetName string) error {
+	urlStr := fmt.Sprintf(
+		"%s/hidden/tenants/%s/targets/%s?version=%s",
+		c.baseURL, c.tenantID, targetName, APIVersion,
 	)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, urlStr, http.NoBody)
 	if err != nil {
@@ -347,6 +388,6 @@ func (c *ClientImpl) DeleteTarget(ctx context.Context, targetID string) error {
 		return httpError("DeleteTarget", resp.StatusCode, respBytes)
 	}
 
-	c.logger.Debug().Str("targetID", targetID).Msg("target deleted")
+	c.logger.Debug().Str("targetName", targetName).Msg("target deleted")
 	return nil
 }

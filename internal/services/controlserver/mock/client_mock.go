@@ -31,14 +31,19 @@ type MockClient struct {
 	TargetsErr    error
 	TargetErr     error
 	CreateTgtErr  error
+	UpdatedTarget *controlserver.TargetResponse
+	UpdateTgtErr  error
 	DeleteTgtErr  error
 
 	// Capture CreateScan arguments for tests (set when CreateScan is called).
 	CreateScanRequest *controlserver.CreateScanRequest
 	// Capture CreateTarget arguments for tests.
 	CreateTargetRequest *controlserver.TargetCreateRequest
-	// Capture DeleteTarget target ID.
-	DeletedTargetID string
+	// Capture UpdateTarget arguments for tests.
+	UpdateTargetName    string
+	UpdateTargetRequest *controlserver.TargetUpdateRequest
+	// Capture DeleteTarget target name.
+	DeletedTargetName string
 }
 
 var _ controlserver.Client = (*MockClient)(nil)
@@ -129,8 +134,17 @@ func (m *MockClient) CreateTarget(_ context.Context, req *controlserver.TargetCr
 	return m.CreatedTarget, nil
 }
 
-func (m *MockClient) DeleteTarget(_ context.Context, targetID string) error {
-	m.DeletedTargetID = targetID
+func (m *MockClient) UpdateTarget(_ context.Context, targetName string, req *controlserver.TargetUpdateRequest) (*controlserver.TargetResponse, error) {
+	m.UpdateTargetName = targetName
+	m.UpdateTargetRequest = req
+	if m.UpdateTgtErr != nil {
+		return nil, m.UpdateTgtErr
+	}
+	return m.UpdatedTarget, nil
+}
+
+func (m *MockClient) DeleteTarget(_ context.Context, targetName string) error {
+	m.DeletedTargetName = targetName
 	if m.DeleteTgtErr != nil {
 		return m.DeleteTgtErr
 	}
