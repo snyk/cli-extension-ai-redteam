@@ -309,6 +309,10 @@ func validateSessionConfig(cfg *Config) []string {
 		errs = append(errs, "{{sessionId}} is used in request template or headers but session.mode is \"none\"")
 	}
 
+	if sess.Mode == SessionModeClient && !usesSessionIDVariable(cfg) {
+		errs = append(errs, "session.mode is \"client\" but {{sessionId}} is not used in request template or headers")
+	}
+
 	return errs
 }
 

@@ -643,10 +643,13 @@ target:
 // Session config validation
 // ---------------------------------------------------------------------------
 
-func TestValidateConfig_SessionModeClient(t *testing.T) {
+func TestValidateConfig_SessionModeClient_WithoutSessionIDVar(t *testing.T) {
 	cfg := validConfig()
 	cfg.Target.Settings.Session = &redteam.SessionConfig{Mode: redteam.SessionModeClient}
-	require.NoError(t, redteam.ValidateConfig(cfg))
+	err := redteam.ValidateConfig(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "{{sessionId}}")
+	assert.Contains(t, err.Error(), `"client"`)
 }
 
 func TestValidateConfig_SessionModeNone(t *testing.T) {
