@@ -9,6 +9,11 @@ import (
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteam"
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/redteamget"
 	"github.com/snyk/cli-extension-ai-redteam/internal/commands/setup"
+	targetsdelete "github.com/snyk/cli-extension-ai-redteam/internal/commands/targets/delete"
+	targetsget "github.com/snyk/cli-extension-ai-redteam/internal/commands/targets/get"
+	targetslist "github.com/snyk/cli-extension-ai-redteam/internal/commands/targets/list"
+	targetssave "github.com/snyk/cli-extension-ai-redteam/internal/commands/targets/save"
+	targetsupdate "github.com/snyk/cli-extension-ai-redteam/internal/commands/targets/update"
 	"github.com/snyk/cli-extension-ai-redteam/internal/utils"
 )
 
@@ -26,6 +31,21 @@ func Init(e workflow.Engine) error {
 	}
 	if err := ping.RegisterPingWorkflow(e); err != nil {
 		return fmt.Errorf("error registering ping workflow: %w", err)
+	}
+	if err := targetslist.RegisterWorkflow(e); err != nil {
+		return fmt.Errorf("error registering targets list workflow: %w", err)
+	}
+	if err := targetsget.RegisterWorkflow(e); err != nil {
+		return fmt.Errorf("error registering targets get workflow: %w", err)
+	}
+	if err := targetssave.RegisterWorkflow(e); err != nil {
+		return fmt.Errorf("error registering targets save workflow: %w", err)
+	}
+	if err := targetsupdate.RegisterWorkflow(e); err != nil {
+		return fmt.Errorf("error registering targets update workflow: %w", err)
+	}
+	if err := targetsdelete.RegisterWorkflow(e); err != nil {
+		return fmt.Errorf("error registering targets delete workflow: %w", err)
 	}
 	return nil
 }

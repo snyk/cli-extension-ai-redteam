@@ -30,7 +30,7 @@ func (m *mockUI) Output(output string) error {
 
 func (m *mockUI) OutputError(_ error, _ ...ui.Opts) error { return nil }
 
-//nolint:ireturn // mock must satisfy the interface
+//nolint:ireturn // mock implements interface
 func (m *mockUI) NewProgressBar() ui.ProgressBar { return nil }
 func (m *mockUI) Input(_ string) (string, error) { return "", nil }
 

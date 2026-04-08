@@ -18,6 +18,7 @@ type CreateScanRequest struct {
 	GroundTruth *GroundTruth  `json:"ground_truth,omitempty"`
 	TargetURL   string        `json:"target_url,omitempty"`
 	Mode        string        `json:"mode,omitempty"`
+	TargetName  string        `json:"target_name,omitempty"`
 }
 
 // GroundTruth is optional context for judging: system prompt and tools of the target.
@@ -104,4 +105,29 @@ type EnumEntry struct {
 	Description  string   `json:"description"`
 	DisplayOrder int      `json:"display_order"`
 	Strategies   []string `json:"strategies,omitempty"`
+}
+
+type TargetCreateRequest struct {
+	Name   string         `json:"name"`
+	Config map[string]any `json:"config"`
+}
+
+type TargetUpdateRequest struct {
+	Name   string         `json:"name,omitempty"`
+	Config map[string]any `json:"config,omitempty"`
+}
+
+type TargetResponse struct {
+	ID        string         `json:"id"`
+	Name      string         `json:"name"`
+	Config    map[string]any `json:"config"`
+	CreatedAt string         `json:"created_at"`
+	UpdatedAt string         `json:"updated_at"`
+}
+
+type TargetListItem struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
