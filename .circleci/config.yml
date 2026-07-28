@@ -95,11 +95,13 @@ workflows:
           name: Scan repository for secrets
           context:
             - snyk-bot-slack
+            - prodsec-orb-runtime
           channel: p-redteaming-alerts
       - security-scans:
           name: Security Scans
           context:
             - << pipeline.parameters.snyk-scan-context >>
+            - prodsec-orb-runtime
       - unit-test:
           name: Unit Test
       - lint:
